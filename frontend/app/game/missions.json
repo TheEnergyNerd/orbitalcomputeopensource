@@ -1,0 +1,409 @@
+[
+  {
+    "id": "mission_latency_desert",
+    "title": "Latency Desert Breaker",
+    "description": "Fix severe compute latency in underserved regions by deploying LEO orbital compute. Ground infrastructure cannot reach these areas effectively.",
+    "difficulty": "EASY",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 1,
+      "launchProvider": "F9",
+      "densityMode": "Safe",
+      "offloadPct": 10,
+      "unitsAvailable": 50,
+      "budgetMillionUsd": 200
+    },
+    "objectives": [
+      {
+        "metric": "latency.regional.avgMs",
+        "comparator": "<=",
+        "target": 120,
+        "region": "AFRICA"
+      },
+      {
+        "metric": "coverage.underservedPct",
+        "comparator": ">=",
+        "target": 60
+      }
+    ],
+    "constraints": [
+      {
+        "type": "MAX_UNITS",
+        "value": 100
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_surge_response"
+      },
+      {
+        "type": "UNLOCK_TECH",
+        "value": "tech_level_2"
+      }
+    ]
+  },
+  {
+    "id": "mission_surge_response",
+    "title": "Surge Event Response",
+    "description": "Handle a simulated global AI surge event hitting ground data centers. Orbital compute must absorb the spike.",
+    "difficulty": "EASY",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 2,
+      "launchProvider": "F9",
+      "densityMode": "Optimized",
+      "offloadPct": 20,
+      "unitsAvailable": 75,
+      "budgetMillionUsd": 300
+    },
+    "objectives": [
+      {
+        "metric": "ground.overloadPct",
+        "comparator": "<=",
+        "target": 20
+      },
+      {
+        "metric": "availability.pct",
+        "comparator": ">=",
+        "target": 97
+      }
+    ],
+    "constraints": [
+      {
+        "type": "BUDGET",
+        "value": 300
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false,
+      "surgeEvent": true
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_cooling_crisis"
+      }
+    ]
+  },
+  {
+    "id": "mission_cooling_crisis",
+    "title": "Cooling Crisis",
+    "description": "Ground DC cooling costs explode due to heatwaves. Move compute to orbit to eliminate cooling overhead.",
+    "difficulty": "MEDIUM",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 2,
+      "launchProvider": "F9",
+      "densityMode": "Optimized",
+      "offloadPct": 30,
+      "unitsAvailable": 100,
+      "budgetMillionUsd": 400
+    },
+    "objectives": [
+      {
+        "metric": "coolingCost.reductionPct",
+        "comparator": ">=",
+        "target": 30
+      },
+      {
+        "metric": "latency.changePct",
+        "comparator": "<=",
+        "target": 10
+      }
+    ],
+    "constraints": [
+      {
+        "type": "NO_NEW_GROUND",
+        "value": true
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": true
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_solar_storm"
+      },
+      {
+        "type": "UNLOCK_ORBIT_MODE",
+        "value": "MEO"
+      },
+      {
+        "type": "UNLOCK_ORBIT_MODE",
+        "value": "GEO"
+      }
+    ]
+  },
+  {
+    "id": "mission_solar_storm",
+    "title": "Solar Storm Survival",
+    "description": "A massive solar storm knocks out part of MEO constellation and damages ground infrastructure. Maintain compute availability through redundancy.",
+    "difficulty": "MEDIUM",
+    "startingState": {
+      "orbitBand": "MEO",
+      "techLevel": 2,
+      "launchProvider": "F9",
+      "densityMode": "Safe",
+      "offloadPct": 40,
+      "unitsAvailable": 150,
+      "budgetMillionUsd": 500
+    },
+    "objectives": [
+      {
+        "metric": "availability.pct",
+        "comparator": ">=",
+        "target": 95
+      },
+      {
+        "metric": "resilienceScore",
+        "comparator": ">=",
+        "target": 85
+      }
+    ],
+    "constraints": [
+      {
+        "type": "RESILIENCE_MODE",
+        "value": true
+      }
+    ],
+    "scenario": {
+      "solarStorm": true,
+      "groundOutage": ["nova_hub", "dfw_hub"],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_energy_blackout"
+      },
+      {
+        "type": "UNLOCK_TECH",
+        "value": "resilience_tech"
+      }
+    ]
+  },
+  {
+    "id": "mission_energy_blackout",
+    "title": "Energy Blackout",
+    "description": "Fossil energy shortage makes ground compute extremely expensive. Orbital solar power becomes the only viable option.",
+    "difficulty": "MEDIUM",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 3,
+      "launchProvider": "Starship",
+      "densityMode": "Optimized",
+      "offloadPct": 50,
+      "unitsAvailable": 200,
+      "budgetMillionUsd": 600
+    },
+    "objectives": [
+      {
+        "metric": "energyCost.perUnitReductionPct",
+        "comparator": ">=",
+        "target": 40
+      },
+      {
+        "metric": "carbon.reductionPct",
+        "comparator": ">=",
+        "target": 50
+      }
+    ],
+    "constraints": [
+      {
+        "type": "ENERGY_MULTIPLIER",
+        "value": 3.0
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_global_south"
+      },
+      {
+        "type": "UNLOCK_TECH",
+        "value": "green_tech"
+      }
+    ]
+  },
+  {
+    "id": "mission_global_south",
+    "title": "Global South Compute Lift",
+    "description": "Unlock compute access for billions in underserved regions. Orbital compute bridges the digital divide.",
+    "difficulty": "HARD",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 3,
+      "launchProvider": "Starship",
+      "densityMode": "Optimized",
+      "offloadPct": 60,
+      "unitsAvailable": 300,
+      "budgetMillionUsd": 800
+    },
+    "objectives": [
+      {
+        "metric": "populationServed.billions",
+        "comparator": ">=",
+        "target": 3
+      },
+      {
+        "metric": "coverage.lowIncomeRegionsPct",
+        "comparator": ">=",
+        "target": 70
+      },
+      {
+        "metric": "latency.regional.avgMs",
+        "comparator": "<=",
+        "target": 150,
+        "region": "GLOBAL_SOUTH"
+      }
+    ],
+    "constraints": [
+      {
+        "type": "MAX_UNITS",
+        "value": 500
+      },
+      {
+        "type": "BUDGET",
+        "value": 800
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_orbital_industrialization"
+      }
+    ]
+  },
+  {
+    "id": "mission_orbital_industrialization",
+    "title": "Orbital Industrialization",
+    "description": "Ramp to a megaconstellation with falling cost/time. Mass production and learning curves make orbital compute affordable at scale.",
+    "difficulty": "HARD",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 4,
+      "launchProvider": "Starship",
+      "densityMode": "Aggressive",
+      "offloadPct": 70,
+      "unitsAvailable": 500,
+      "budgetMillionUsd": 1200
+    },
+    "objectives": [
+      {
+        "metric": "launchTime.months",
+        "comparator": "<=",
+        "target": 2
+      },
+      {
+        "metric": "launchCost.reductionPct",
+        "comparator": ">=",
+        "target": 60
+      },
+      {
+        "metric": "unitsDeployed.count",
+        "comparator": ">=",
+        "target": 2000
+      }
+    ],
+    "constraints": [
+      {
+        "type": "DEBRIS_RISK_THRESHOLD",
+        "value": 0.15
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MISSION",
+        "value": "mission_100_orbit"
+      },
+      {
+        "type": "UNLOCK_LAUNCH_PROVIDER",
+        "value": "NuclearTug"
+      },
+      {
+        "type": "UNLOCK_TECH",
+        "value": "mass_production"
+      }
+    ]
+  },
+  {
+    "id": "mission_100_orbit",
+    "title": "The 100% Orbit World",
+    "description": "Move all compute to orbit. This is the endgame—prove orbital compute can replace ground infrastructure entirely.",
+    "difficulty": "EXTREME",
+    "startingState": {
+      "orbitBand": "LEO",
+      "techLevel": 4,
+      "launchProvider": "NuclearTug",
+      "densityMode": "Optimized",
+      "offloadPct": 100,
+      "unitsAvailable": 1000,
+      "budgetMillionUsd": 2000
+    },
+    "objectives": [
+      {
+        "metric": "latency.avgMs",
+        "comparator": "<=",
+        "target": 90
+      },
+      {
+        "metric": "resilienceScore",
+        "comparator": ">=",
+        "target": 90
+      },
+      {
+        "metric": "carbon.reductionPct",
+        "comparator": ">=",
+        "target": 90
+      },
+      {
+        "metric": "populationServed.billions",
+        "comparator": ">=",
+        "target": 5
+      }
+    ],
+    "constraints": [
+      {
+        "type": "MAX_GROUND_PCT",
+        "value": 5
+      }
+    ],
+    "scenario": {
+      "solarStorm": false,
+      "groundOutage": [],
+      "heatwave": false
+    },
+    "rewards": [
+      {
+        "type": "UNLOCK_MODE",
+        "value": "free_rein"
+      }
+    ]
+  }
+]
