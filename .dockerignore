@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+out/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Railway
+.railway/
+
+# Vercel
+.vercel/
+
+# Frontend (not needed in backend Docker image)
+frontend/
+
+# Documentation
+*.md
+!README.md
+
+# Scripts
+scripts/
+*.sh
+
+# Cesium (not needed in backend)
+cesium/
+
