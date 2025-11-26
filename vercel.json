@@ -5,6 +5,8 @@
       "source": "/api/:path*",
       "destination": "https://your-railway-app.railway.app/:path*"
     }
-  ]
+  ],
+  "buildCommand": null,
+  "installCommand": null
 }
 
