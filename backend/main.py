@@ -1148,6 +1148,23 @@ async def startup():
     asyncio.create_task(advance_world_time())
 
 
+@app.get("/")
+async def root():
+    """Root endpoint - API information"""
+    return {
+        "name": "Orbital Compute Control Room API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "state": "/state",
+            "snapshot": "/snapshot",
+            "scenario": "/scenario (POST)",
+            "docs": "/docs",
+            "api": "/api/*"
+        }
+    }
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
