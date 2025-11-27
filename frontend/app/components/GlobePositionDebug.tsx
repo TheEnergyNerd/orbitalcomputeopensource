@@ -11,11 +11,11 @@ export default function GlobePositionDebug({ viewerRef }: { viewerRef?: React.Mu
         return;
       }
 
-      const container = viewer.container?.parentElement;
-      const canvas = viewer.canvas;
-      const viewerContainer = viewer.container;
+      const container = viewer.container?.parentElement as HTMLElement | null;
+      const canvas = viewer.canvas as HTMLCanvasElement | null;
+      const viewerContainer = viewer.container as HTMLElement | null;
       const widget = (viewer as any).cesiumWidget;
-      const widgetContainer = widget?.container;
+      const widgetContainer = (widget?.container ?? null) as HTMLElement | null;
 
       const containerRect = container?.getBoundingClientRect();
       const canvasRect = canvas?.getBoundingClientRect();

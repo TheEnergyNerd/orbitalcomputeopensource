@@ -223,7 +223,7 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
       if (mission) {
         const state = get();
         const newCompleted = state.completedMissions.includes(missionId)
-          ? state.completedMissions
+        ? state.completedMissions
           : [...state.completedMissions, missionId];
         
         // Apply rewards

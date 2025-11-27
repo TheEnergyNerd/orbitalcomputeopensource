@@ -117,7 +117,9 @@ export default function SimulationFeedback() {
 
     // Check if any lever changed and trigger pulse
     const leverKeys = `${selectedPodTier}-${orbitMode}-${offloadPct}-${densityMode}-${groundDCReduction}`;
-    const leverChanged = prevLeverKeysRef.current && prevLeverKeysRef.current !== leverKeys;
+    const leverChanged = !!(
+      prevLeverKeysRef.current && prevLeverKeysRef.current !== leverKeys
+    );
     
     // Cluster 1: Performance
     const performanceCluster: MetricCluster = {

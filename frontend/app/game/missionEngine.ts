@@ -6,7 +6,7 @@ import {
 } from "./simTypes";
 
 export const MISSIONS: MissionDefinition[] =
-  missionsJson as MissionDefinition[];
+  missionsJson as unknown as MissionDefinition[];
 
 export function getMissionById(
   id: string | undefined

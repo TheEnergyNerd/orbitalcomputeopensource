@@ -154,7 +154,7 @@ export default function SandboxTutorial() {
       </div>
 
       {/* Step 1: Highlight metrics cards */}
-      {config.highlightMetrics && (
+      {(config as any).highlightMetrics && (
         <div className="fixed top-20 left-6 z-40 pointer-events-none">
           <div className="panel-glass rounded-lg p-2 text-xs text-gray-300 border border-accent-blue/50 animate-pulse">
             <div className="flex items-center gap-2">

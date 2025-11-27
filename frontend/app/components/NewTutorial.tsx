@@ -31,12 +31,15 @@ export default function NewTutorial() {
   const highlightRef = useRef<HTMLDivElement | null>(null);
 
   // Step configuration - defined early so it can be used in useEffects
-  const stepConfig: Record<number, {
-    highlight?: string;
-    text: string;
-    action?: string;
-    color?: "blue" | "yellow" | "red";
-  }> = {
+  const stepConfig: Record<
+    number,
+    {
+      highlight?: string;
+      text: string;
+      action?: string | null;
+      color?: "blue" | "yellow" | "red";
+    }
+  > = {
     1: {
       highlight: "globe",
       text: "Ground compute dominates the world. It's fast, but fragile.",

@@ -569,10 +569,10 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           }
           deployedPodSatellitesRef.current.set(unit.id, { unitId: unit.id, entityIds });
           console.log(`[SandboxGlobe] Created ${entityIds.length} satellites for LEO pod ${unit.id}`);
-          } else {
-            // Update existing LEO pod satellites
-            const podData = deployedPodSatellitesRef.current.get(unit.id);
-            if (podData) {
+        } else {
+          // Update existing LEO pod satellites
+          const podData = deployedPodSatellitesRef.current.get(unit.id);
+          if (podData) {
               // Generate consistent seed from unit ID
               let seed = 0;
               for (let j = 0; j < unit.id.length; j++) {
@@ -580,7 +580,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 seed = seed & seed;
               }
               
-              podData.entityIds.forEach((podSatId, i) => {
+            podData.entityIds.forEach((podSatId, i) => {
                 // Recalculate position using same logic as creation
                 const planeIndex = Math.floor(i / 10);
                 const satInPlane = i % 10;
@@ -647,9 +647,9 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                   (newEntity as any)._deployedUnitId = unit.id;
                   (newEntity as any)._unitType = unit.type;
                 }
-              });
-            }
+            });
           }
+        }
         } else if (unit.type === "server_farm") {
           // Server farms: Create multiple satellites in sun-synchronous orbits
           // Each server farm = 50 satellites spread across realistic sun-sync orbits
@@ -1011,19 +1011,19 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         entities.remove(existingMesh);
       }
       
-      const meshPositions = state.satellites.slice(0, Math.min(200, state.satellites.length)).map((sat) =>
-        Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
-      );
+        const meshPositions = state.satellites.slice(0, Math.min(200, state.satellites.length)).map((sat) =>
+          Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
+        );
 
-      // Create a simple mesh visualization
-      entities.add({
-        id: "orbital_mesh",
-        polyline: {
-          positions: meshPositions,
-          material: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.2),
-          width: 1,
-        },
-      });
+        // Create a simple mesh visualization
+        entities.add({
+          id: "orbital_mesh",
+          polyline: {
+            positions: meshPositions,
+            material: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.2),
+            width: 1,
+          },
+        });
     } else {
       // Remove mesh when not in mostly space mode
       const existingMesh = entities.getById("orbital_mesh");

@@ -90,7 +90,7 @@
       {
         "type": "UNLOCK_MISSION",
         "value": "mission_cooling_crisis"
-      }
+    }
     ]
   },
   {
@@ -142,7 +142,7 @@
       {
         "type": "UNLOCK_ORBIT_MODE",
         "value": "GEO"
-      }
+    }
     ]
   },
   {
@@ -238,7 +238,7 @@
       {
         "type": "UNLOCK_TECH",
         "value": "green_tech"
-      }
+    }
     ]
   },
   {
@@ -403,7 +403,7 @@
       {
         "type": "UNLOCK_MODE",
         "value": "free_rein"
-      }
-    ]
+  }
+]
   }
 ]

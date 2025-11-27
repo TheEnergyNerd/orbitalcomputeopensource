@@ -151,8 +151,12 @@ export default function TutorialGlobe({
       jobFlowRef.current.forEach((entity, idx) => {
         if (entity.polyline) {
           const alpha = 0.4 + Math.sin(pulsePhase + idx * 0.8) * 0.4;
-          entity.polyline.material = Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
-          entity.polyline.width = 3 + Math.sin(pulsePhase + idx) * 1;
+          const color = Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
+          // Wrap in ColorMaterialProperty / ConstantProperty to satisfy Cesium typings
+          entity.polyline.material = new Cesium.ColorMaterialProperty(color);
+          entity.polyline.width = new Cesium.ConstantProperty(
+            3 + Math.sin(pulsePhase + idx) * 1
+          );
         }
       });
 
@@ -160,10 +164,11 @@ export default function TutorialGlobe({
         const glow = entities.getById(`${site.id}_glow`);
         if (glow && glow.ellipse) {
           const scale = 1 + Math.sin(pulsePhase + idx) * 0.3;
-          glow.ellipse.semiMajorAxis = 50000 * scale;
-          glow.ellipse.semiMinorAxis = 50000 * scale;
+          glow.ellipse.semiMajorAxis = new Cesium.ConstantProperty(50000 * scale);
+          glow.ellipse.semiMinorAxis = new Cesium.ConstantProperty(50000 * scale);
           const alpha = 0.2 + Math.sin(pulsePhase * 2 + idx) * 0.15;
-          glow.ellipse.material = Cesium.Color.fromCssColorString("#00ff88").withAlpha(alpha);
+          const color = Cesium.Color.fromCssColorString("#00ff88").withAlpha(alpha);
+          glow.ellipse.material = new Cesium.ColorMaterialProperty(color);
         }
       });
     }, 50);
@@ -257,8 +262,11 @@ export default function TutorialGlobe({
       jobFlowRef.current.forEach((entity, idx) => {
         if (entity.polyline) {
           const alpha = 0.5 + Math.sin(pulsePhase * 3 + idx) * 0.4;
-          entity.polyline.material = Cesium.Color.fromCssColorString("#ff0000").withAlpha(alpha);
-          entity.polyline.width = 5 + Math.sin(pulsePhase * 2 + idx) * 2;
+          const color = Cesium.Color.fromCssColorString("#ff0000").withAlpha(alpha);
+          entity.polyline.material = new Cesium.ColorMaterialProperty(color);
+          entity.polyline.width = new Cesium.ConstantProperty(
+            5 + Math.sin(pulsePhase * 2 + idx) * 2
+          );
         }
       });
 
@@ -266,10 +274,11 @@ export default function TutorialGlobe({
         const glow = entities.getById(`${site.id}_warning`);
         if (glow && glow.ellipse) {
           const scale = 1 + Math.sin(pulsePhase * 2 + idx) * 0.5;
-          glow.ellipse.semiMajorAxis = 60000 * scale;
-          glow.ellipse.semiMinorAxis = 60000 * scale;
+          glow.ellipse.semiMajorAxis = new Cesium.ConstantProperty(60000 * scale);
+          glow.ellipse.semiMinorAxis = new Cesium.ConstantProperty(60000 * scale);
           const alpha = 0.3 + Math.sin(pulsePhase * 4 + idx) * 0.3;
-          glow.ellipse.material = Cesium.Color.fromCssColorString("#ff0000").withAlpha(alpha);
+          const color = Cesium.Color.fromCssColorString("#ff0000").withAlpha(alpha);
+          glow.ellipse.material = new Cesium.ColorMaterialProperty(color);
         }
       });
     }, 30);
@@ -383,8 +392,11 @@ export default function TutorialGlobe({
       jobFlowRef.current.forEach((entity, idx) => {
         if (entity.polyline) {
           const alpha = 0.6 + Math.sin(pulsePhase + idx * 0.5) * 0.3;
-          entity.polyline.material = Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
-          entity.polyline.width = 4 + Math.sin(pulsePhase * 2 + idx) * 2;
+          const color = Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
+          entity.polyline.material = new Cesium.ColorMaterialProperty(color);
+          entity.polyline.width = new Cesium.ConstantProperty(
+            4 + Math.sin(pulsePhase * 2 + idx) * 2
+          );
         }
       });
 
@@ -392,13 +404,14 @@ export default function TutorialGlobe({
         const halo = entities.getById(`${sat.id}_halo`);
         if (halo && halo.ellipse) {
           const scale = 1 + Math.sin(pulsePhase + idx * 0.3) * 0.4;
-          halo.ellipse.semiMajorAxis = 20000 * scale;
-          halo.ellipse.semiMinorAxis = 20000 * scale;
+          halo.ellipse.semiMajorAxis = new Cesium.ConstantProperty(20000 * scale);
+          halo.ellipse.semiMinorAxis = new Cesium.ConstantProperty(20000 * scale);
           const alpha = 0.2 + Math.sin(pulsePhase * 2 + idx) * 0.15;
-          const color = sat.sunlit
+          const baseColor = sat.sunlit
             ? Cesium.Color.fromCssColorString("#ffd700")
             : Cesium.Color.fromCssColorString("#00d4ff");
-          halo.ellipse.material = color.withAlpha(alpha);
+          const color = baseColor.withAlpha(alpha);
+          halo.ellipse.material = new Cesium.ColorMaterialProperty(color);
         }
       });
     }, 50);

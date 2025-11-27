@@ -74,7 +74,7 @@ export default function SandboxMetrics() {
     const baselineCarbonPerGW = 350; // kg CO2/MWh per GW  
     const baselineCarbon = baselineCarbonPerGW * BASE_GROUND_CAPACITY_GW * 8760 / 1000; // Annual in metric tons
     const baselineCooling = baselineEnergy * 0.4; // 40% of energy cost
-
+    
     // Calculate orbital density
     const orbitalDensity = deployedUnits.length * 50; // Each pod = 50 satellites
     
