@@ -475,7 +475,6 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
 
     // Orbital satellites - render all of them (no limit for now)
     const deployedUnits = getDeployedUnits();
-    const numVisibleSats = sampledSats.length; // For use in job flows below
 
     // Create persistent satellite entities for deployed units
     // LEO pods: Each pod = 50 satellites
