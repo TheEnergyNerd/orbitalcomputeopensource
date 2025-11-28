@@ -890,7 +890,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
     if (visibleGroundSites.length > 0 && state.satellites.length > 0) {
       for (let i = 0; i < numOrbitalFlows; i++) {
         const site = visibleGroundSites[i % visibleGroundSites.length];
-        const sat = state.satellites[i % Math.min(numVisibleSats, state.satellites.length)];
+        const sat = state.satellites[i % state.satellites.length];
         const flowId = `orbital_flow_${i}`;
         
         // Check if flow already exists, update it instead of creating new
