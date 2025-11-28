@@ -125,7 +125,6 @@ export default function DetailPanel() {
           <Metric label="Capacity" value={`${sat.capacityMw >= 0.001 ? sat.capacityMw.toFixed(3) : sat.capacityMw.toFixed(4)} MW`} />
           <Metric label="Latency" value={`${sat.latencyMs.toFixed(1)} ms`} />
           <Metric label="Gateway" value={sat.nearestGatewayId} />
-          <Metric label="Status" value={sat.sunlit ? "Sunlit" : "In Shadow"} />
         </div>
       </div>
     );
