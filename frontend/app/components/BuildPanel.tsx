@@ -81,8 +81,8 @@ export default function BuildPanel({ isOpen, onClose }: BuildPanelProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-2 sm:p-4">
-      <div className="panel-glass rounded-2xl p-3 sm:p-6 w-full max-w-2xl min-w-[280px] shadow-2xl pointer-events-auto border-2 border-accent-blue/50 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none p-0 sm:p-2 sm:p-4">
+      <div className="panel-glass rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 w-full sm:max-w-2xl sm:min-w-[280px] shadow-2xl pointer-events-auto border-2 border-accent-blue/50 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-accent-blue">Deploy Orbital Compute Unit</h2>
           <button

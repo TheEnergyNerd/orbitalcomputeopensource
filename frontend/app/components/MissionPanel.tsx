@@ -70,7 +70,7 @@ export default function MissionPanel() {
   }
 
   return (
-    <div className="fixed top-[280px] left-6 z-40 panel-glass rounded-xl p-4 w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10 max-h-[60vh] overflow-y-auto" data-tutorial-target="missions">
+    <div className="hidden sm:block fixed top-[280px] left-6 z-40 panel-glass rounded-xl p-4 w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10 max-h-[60vh] overflow-y-auto" data-tutorial-target="missions">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-accent-blue">Missions</h2>
         <button

@@ -57,7 +57,7 @@ export default function DetailPanel() {
     if (!site) return null;
 
     return (
-      <div className="fixed bottom-6 left-6 panel-glass rounded-2xl p-4 sm:p-5 w-72 sm:w-80 max-w-[calc(100vw-12px)] z-[120] shadow-2xl border border-white/10">
+      <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-6 sm:right-auto sm:w-72 sm:w-80 panel-glass rounded-t-2xl sm:rounded-2xl p-4 sm:p-5 max-w-full sm:max-w-[calc(100vw-12px)] z-[120] shadow-2xl border border-white/10">
         <div className="text-xs uppercase text-gray-400 tracking-[0.2em] mb-1">Ground Site</div>
         <h2 className="text-2xl font-semibold text-white mb-4">{site.label}</h2>
 

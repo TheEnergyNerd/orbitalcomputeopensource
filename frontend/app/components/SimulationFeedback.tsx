@@ -281,9 +281,9 @@ export default function SimulationFeedback() {
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-30" data-tutorial-target="metrics">
-      <div className="panel-glass rounded-xl p-4 shadow-2xl border border-white/10">
-        <div className="flex gap-4">
+    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:right-auto sm:transform sm:-translate-x-1/2 z-30 px-2 sm:px-0" data-tutorial-target="metrics">
+      <div className="panel-glass rounded-t-xl sm:rounded-xl p-2 sm:p-4 shadow-2xl border border-white/10">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 overflow-x-auto">
           {clusters.map((cluster) => (
             <div
               key={cluster.title}
@@ -293,10 +293,10 @@ export default function SimulationFeedback() {
                   : "border-gray-700/50 bg-gray-800/30"
               }`}
             >
-              <div className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">
+              <div className="text-xs font-semibold text-gray-400 mb-1 sm:mb-2 uppercase tracking-wide">
                 {cluster.title}
               </div>
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
                 {cluster.metrics.map((metric) => (
                   <div key={metric.label} className="min-w-[100px]">
                     <div className="text-xs text-gray-500 mb-1">{metric.label}</div>

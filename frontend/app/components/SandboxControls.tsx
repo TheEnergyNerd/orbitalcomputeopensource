@@ -111,7 +111,7 @@ export default function SandboxControls() {
   };
 
   return (
-    <div className="fixed top-6 right-6 z-40 panel-glass rounded-xl p-4 w-64 sm:w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10">
+    <div className="hidden sm:block fixed top-6 right-6 z-40 panel-glass rounded-xl p-4 w-64 sm:w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10">
       {/* Primary CTA */}
       <button
         onClick={() => setBuildPanelOpen(true)}
@@ -391,6 +391,7 @@ export default function SandboxControls() {
         Reset Sandbox
       </button>
     </div>
+    </>
   );
 }
 
