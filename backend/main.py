@@ -1055,7 +1055,9 @@ async def update_simulation():
                     print(f"[Backend] ALWAYS (tick {control['tick']}): After SimState creation, all_satellites has {len(all_satellites)} items, sim_state.satellites has {actual_sat_count} items")
                 if actual_sat_count != len(all_satellites):
                     print(f"[Backend] CRITICAL ERROR: SimState truncated! all_satellites has {len(all_satellites)}, sim_state.satellites has {actual_sat_count}")
-                    # Force fix using multiple methods
+                    # BYPASS PYDANTIC: Store raw list in a non-Pydantic attribute
+                    object.__setattr__(sim_state, '_raw_satellites', list(all_satellites))
+                    # Also try to fix the Pydantic field
                     try:
                         object.__setattr__(sim_state, 'satellites', list(all_satellites))
                         actual_sat_count = len(sim_state.satellites)
@@ -1067,19 +1069,10 @@ async def update_simulation():
                             actual_sat_count = len(sim_state.satellites)
                         except:
                             pass
-                    # Final fix: directly modify the Pydantic model's internal dict
-                    if actual_sat_count != len(all_satellites):
-                        try:
-                            # Access Pydantic's internal __pydantic_fields__ and force update
-                            if hasattr(sim_state, '__pydantic_fields__'):
-                                # Force set the field value
-                                sim_state.__dict__['satellites'] = list(all_satellites)
-                                # Also update the model's __dict__ directly
-                                object.__setattr__(sim_state, 'satellites', list(all_satellites))
-                            actual_sat_count = len(sim_state.satellites)
-                        except Exception as fix_error:
-                            print(f"[Backend] ERROR in final fix attempt: {fix_error}")
-                    print(f"[Backend] CRITICAL FIX: After fixes, sim_state.satellites has {actual_sat_count} items (target: {len(all_satellites)})")
+                    print(f"[Backend] CRITICAL FIX: After fixes, sim_state.satellites has {actual_sat_count} items (target: {len(all_satellites)}). Stored {len(all_satellites)} in _raw_satellites")
+                else:
+                    # Even if not truncated, store raw list for get_state to use
+                    object.__setattr__(sim_state, '_raw_satellites', list(all_satellites))
                 
                 if control["tick"] == 1:
                     print(f"[Backend] CRITICAL: sim_state.satellites length after creation = {len(sim_state.satellites)}")
@@ -1431,62 +1424,42 @@ async def get_state(mode: str = "simulator"):
         # Yield control periodically during dict conversion to prevent blocking
         await asyncio.sleep(0)
         
-        return_dict = state.dict() if hasattr(state, 'dict') else state.__dict__
-        return_dict_sat_count = len(return_dict.get('satellites', [])) if isinstance(return_dict, dict) else 0
-        print(f"[get_state] RETURNING DICT: satellites count = {return_dict_sat_count}, final_sat_count = {final_sat_count}")
+        # BYPASS PYDANTIC: Build response dict manually to avoid truncation
+        return_dict = {
+            "time": sim_state.time,
+            "groundSites": [s.dict() if hasattr(s, 'dict') else s.__dict__ for s in sim_state.groundSites],
+            "workload": sim_state.workload.dict() if hasattr(sim_state.workload, 'dict') else sim_state.workload.__dict__,
+            "metrics": sim_state.metrics.dict() if hasattr(sim_state.metrics, 'dict') else sim_state.metrics.__dict__,
+            "events": sim_state.events,
+        }
         
-        # ALWAYS force the full list from state.satellites to avoid any truncation
-        if isinstance(return_dict, dict):
-            # Use state.satellites directly (which we just fixed with global)
-            # Batch convert to prevent blocking on large lists
-            satellites_list = state.satellites
-            if len(satellites_list) > 100:
-                # For large lists, convert in batches with yields
-                converted_sats = []
-                batch_size = 100
-                for i in range(0, len(satellites_list), batch_size):
-                    batch = satellites_list[i:i+batch_size]
-                    converted_sats.extend([s.dict() if hasattr(s, 'dict') else s.__dict__ for s in batch])
-                    if i + batch_size < len(satellites_list):
-                        await asyncio.sleep(0)  # Yield control between batches
-                return_dict['satellites'] = converted_sats
-            else:
-                return_dict['satellites'] = [s.dict() if hasattr(s, 'dict') else s.__dict__ for s in satellites_list]
-            
-            return_dict_sat_count = len(return_dict['satellites'])
-            print(f"[get_state] FORCED SATELLITES: Dict now has {return_dict_sat_count} satellites (state.satellites had {final_sat_count})")
-            if return_dict_sat_count != final_sat_count:
-                print(f"[get_state] CRITICAL ERROR: Dict conversion still truncated! Expected {final_sat_count}, got {return_dict_sat_count}")
+        # Use _raw_satellites if available (bypasses Pydantic), otherwise use global, otherwise use state
+        satellites_to_return = None
+        if hasattr(sim_state, '_raw_satellites') and sim_state._raw_satellites and len(sim_state._raw_satellites) > 20:
+            satellites_to_return = sim_state._raw_satellites
+            print(f"[get_state] Using _raw_satellites: {len(satellites_to_return)} items")
+        elif global_sat_count > 20:
+            satellites_to_return = all_satellites_global
+            print(f"[get_state] Using all_satellites_global: {len(satellites_to_return)} items")
+        else:
+            satellites_to_return = state.satellites if hasattr(state, 'satellites') and state.satellites else []
+            print(f"[get_state] Using state.satellites: {len(satellites_to_return)} items")
         
-        # FINAL FIX: Always use global if it has more satellites than the dict
-        # Note: all_satellites_global is already declared as global at line 1296
-        if isinstance(return_dict, dict):
-            final_dict_sat_count = len(return_dict.get('satellites', []))
-            global_sat_count = len(all_satellites_global) if all_satellites_global else 0
-            print(f"[get_state] FINAL FIX CHECK: Dict has {final_dict_sat_count}, global has {global_sat_count}")
-            # ALWAYS use global if it has more than 20 (the truncation limit we're seeing)
-            if global_sat_count > 20:
-                print(f"[get_state] FINAL FIX: Using global ({global_sat_count} items) instead of dict ({final_dict_sat_count} items)")
-                # Batch convert global satellites too
-                if global_sat_count > 100:
-                    converted_global = []
-                    batch_size = 100
-                    for i in range(0, global_sat_count, batch_size):
-                        batch = all_satellites_global[i:i+batch_size]
-                        converted_global.extend([s.dict() if hasattr(s, 'dict') else s.__dict__ for s in batch])
-                        if i + batch_size < global_sat_count:
-                            await asyncio.sleep(0)  # Yield control between batches
-                    return_dict['satellites'] = converted_global
-                else:
-                    return_dict['satellites'] = [s.dict() if hasattr(s, 'dict') else s.__dict__ for s in all_satellites_global]
-                final_after_fix = len(return_dict['satellites'])
-                print(f"[get_state] FINAL FIX: Dict now has {final_after_fix} satellites from global")
-                if final_after_fix != global_sat_count:
-                    print(f"[get_state] CRITICAL ERROR: After FINAL FIX, dict has {final_after_fix} but global has {global_sat_count}!")
-            elif global_sat_count > 0 and global_sat_count <= 20:
-                print(f"[get_state] WARNING: Global only has {global_sat_count} items! The loop may have stopped early.")
-            elif global_sat_count == 0:
-                print(f"[get_state] WARNING: Global is empty! all_satellites_global was never populated.")
+        # Convert satellites to dicts in batches
+        if len(satellites_to_return) > 100:
+            converted_sats = []
+            batch_size = 100
+            for i in range(0, len(satellites_to_return), batch_size):
+                batch = satellites_to_return[i:i+batch_size]
+                converted_sats.extend([s.dict() if hasattr(s, 'dict') else s.__dict__ for s in batch])
+                if i + batch_size < len(satellites_to_return):
+                    await asyncio.sleep(0)  # Yield control between batches
+            return_dict['satellites'] = converted_sats
+        else:
+            return_dict['satellites'] = [s.dict() if hasattr(s, 'dict') else s.__dict__ for s in satellites_to_return]
+        
+        final_dict_sat_count = len(return_dict['satellites'])
+        print(f"[get_state] FINAL: Returning {final_dict_sat_count} satellites in response")
         
         # Final yield before returning
         await asyncio.sleep(0)
