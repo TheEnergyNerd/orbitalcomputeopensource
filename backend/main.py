@@ -1038,13 +1038,31 @@ async def update_simulation():
                     print(f"[Backend] ALWAYS (tick {control['tick']}): After SimState creation, all_satellites has {len(all_satellites)} items, sim_state.satellites has {actual_sat_count} items")
                 if actual_sat_count != len(all_satellites):
                     print(f"[Backend] CRITICAL ERROR: SimState truncated! all_satellites has {len(all_satellites)}, sim_state.satellites has {actual_sat_count}")
-                    # Try multiple methods to fix
-                    object.__setattr__(sim_state, 'satellites', list(all_satellites))
-                    actual_sat_count = len(sim_state.satellites)
-                    if actual_sat_count != len(all_satellites):
-                        sim_state.__dict__['satellites'] = list(all_satellites)
+                    # Force fix using multiple methods
+                    try:
+                        object.__setattr__(sim_state, 'satellites', list(all_satellites))
                         actual_sat_count = len(sim_state.satellites)
-                    print(f"[Backend] CRITICAL FIX: After fixes, sim_state.satellites has {actual_sat_count} items")
+                    except:
+                        pass
+                    if actual_sat_count != len(all_satellites):
+                        try:
+                            sim_state.__dict__['satellites'] = list(all_satellites)
+                            actual_sat_count = len(sim_state.satellites)
+                        except:
+                            pass
+                    # Final fix: directly modify the Pydantic model's internal dict
+                    if actual_sat_count != len(all_satellites):
+                        try:
+                            # Access Pydantic's internal __pydantic_fields__ and force update
+                            if hasattr(sim_state, '__pydantic_fields__'):
+                                # Force set the field value
+                                sim_state.__dict__['satellites'] = list(all_satellites)
+                                # Also update the model's __dict__ directly
+                                object.__setattr__(sim_state, 'satellites', list(all_satellites))
+                            actual_sat_count = len(sim_state.satellites)
+                        except Exception as fix_error:
+                            print(f"[Backend] ERROR in final fix attempt: {fix_error}")
+                    print(f"[Backend] CRITICAL FIX: After fixes, sim_state.satellites has {actual_sat_count} items (target: {len(all_satellites)})")
                 
                 if control["tick"] == 1:
                     print(f"[Backend] CRITICAL: sim_state.satellites length after creation = {len(sim_state.satellites)}")
@@ -1111,13 +1129,38 @@ async def startup():
                     satellites.append(sat)
                 except Exception as sat_error:
                     error_count += 1
-                    if error_count <= 5:  # Only log first 5 errors
-                        print(f"Error creating dummy satellite {i}: {sat_error}")
+                    if error_count <= 10:  # Log first 10 errors to debug
+                        print(f"[startup] Error creating dummy satellite {i}: {sat_error}")
+                        if error_count == 1:
+                            import traceback
+                            traceback.print_exc()
+                    # Don't continue - if we can't create satellites, something is wrong
+                    # But continue anyway to try to create as many as possible
                     continue
         print(f"[startup] Created {len(satellites)} dummy satellites for testing (errors: {error_count})")
         if len(satellites) < 100:
             print(f"[startup] WARNING: Only {len(satellites)} satellites created! Expected ~9000.")
             print(f"[startup] ERROR: Dummy satellite creation may have failed. Check error_count: {error_count}")
+            print(f"[startup] ERROR: This is a problem - only {len(satellites)} satellites available, but we need thousands!")
+            # Force create more satellites if we have too few
+            if len(satellites) < 1000:
+                print(f"[startup] FORCING: Creating additional dummy satellites to reach 9000...")
+                initial_count = len(satellites)
+                for i in range(initial_count, 9000):
+                    try:
+                        name = f"STARLINK-{i+1000}"
+                        norad_id = 50000 + i
+                        epoch_day = 325.0
+                        mean_motion = 15.0
+                        inclination = 53.0
+                        raan = i * 3.6
+                        line1 = f"1 {norad_id:05d}U 23001A   {epoch_day:012.8f}  .00000000  00000+0  00000+0 0  9999"
+                        line2 = f"2 {norad_id:05d} {inclination:8.4f} {raan:08.4f} 0000000   0.0000 270.0000 {mean_motion:11.8f}"
+                        sat = EarthSatellite(line1, line2, name, ts)
+                        satellites.append(sat)
+                    except Exception:
+                        continue
+                print(f"[startup] FORCED: Now have {len(satellites)} satellites (added {len(satellites) - initial_count})")
         else:
             print(f"[startup] SUCCESS: Created {len(satellites)} dummy satellites (expected ~9000)")
 
