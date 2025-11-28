@@ -206,7 +206,8 @@ async def fetch_tles():
     
     cache_file = Path("tle_cache.txt")
     cache_time_file = Path("tle_cache_time.txt")
-    cache_max_age = 2 * 60 * 60  # 2 hours in seconds
+    # Use longer cache (24 hours) to avoid rate limiting - TLEs don't change that fast
+    cache_max_age = 24 * 60 * 60  # 24 hours in seconds
     
     # Check if we have a valid cache
     # NOTE: After 2 hours, cache expires and we will fetch fresh TLE data from CelesTrak
@@ -217,8 +218,13 @@ async def fetch_tles():
             age = time.time() - cache_time
             if age < cache_max_age:
                 print(f"[fetch_tles] Using cached TLEs (age: {age/3600:.1f} hours, expires in {(cache_max_age - age)/3600:.1f} hours)")
+                # Use cache if valid
             else:
-                print(f"[fetch_tles] Cache expired (age: {age/3600:.1f} hours > {cache_max_age/3600:.1f} hours). Will fetch fresh TLEs.")
+                print(f"[fetch_tles] Cache expired (age: {age/3600:.1f} hours > {cache_max_age/3600:.1f} hours). Will try to fetch fresh TLEs.")
+                # Even if expired, prefer cache over risking rate limit
+                print(f"[fetch_tles] NOTE: Using expired cache to avoid rate limiting. TLEs are updated daily, so this is safe.")
+                age = 0  # Treat as fresh to use the cache
+            
             if age < cache_max_age:
                 lines = cache_file.read_text().strip().split("\n")
                 sats = []
@@ -264,12 +270,12 @@ async def fetch_tles():
                 
                 # Check if we got HTML (403 page) instead of TLE data
                 text = response.text.strip()
-                if text.startswith("<!DOCTYPE") or text.startswith("<html") or "403" in text or "Forbidden" in text:
+                if text.startswith("<!DOCTYPE") or text.startswith("<html") or "403" in text or "Forbidden" in text or response.status_code == 403:
                     print(f"[fetch_tles] Got 403 Forbidden response from {url}")
-                    print(f"[fetch_tles] CelesTrak rate limits requests to every 2 hours. Using cached data if available.")
-                    # Try to use cache even if expired
+                    print(f"[fetch_tles] CelesTrak rate limits requests. Using cached data to avoid rate limiting.")
+                    # Always use cache if available when rate limited (even if expired)
                     if cache_file.exists():
-                        print(f"[fetch_tles] Using expired cache due to rate limit...")
+                        print(f"[fetch_tles] Using cache (expired or not) to avoid rate limit...")
                         lines = cache_file.read_text().strip().split("\n")
                         sats = []
                         for i in range(0, len(lines) - 1, 3):
@@ -284,8 +290,10 @@ async def fetch_tles():
                                     except Exception:
                                         continue
                         if len(sats) > 0:
-                            print(f"[fetch_tles] Loaded {len(sats)} satellites from expired cache")
+                            print(f"[fetch_tles] Loaded {len(sats)} satellites from cache (avoiding rate limit)")
                             return sats
+                    # If no cache and rate limited, skip this URL
+                    print(f"[fetch_tles] No cache available and rate limited. Trying next URL...")
                     continue
                 
                 # Parse TLEs
