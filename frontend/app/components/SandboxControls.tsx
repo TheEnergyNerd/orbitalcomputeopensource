@@ -111,7 +111,26 @@ export default function SandboxControls() {
   };
 
   return (
-    <div className="hidden sm:block fixed top-6 right-6 z-40 panel-glass rounded-xl p-4 w-64 sm:w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10">
+    <>
+      {/* Mobile: Floating action button */}
+      <button
+        onClick={() => setBuildPanelOpen(true)}
+        disabled={isDeployDisabled}
+        data-tutorial-target="build-panel-button"
+        className={`sm:hidden fixed bottom-20 right-4 z-50 w-16 h-16 bg-accent-blue hover:bg-accent-blue/80 text-dark-bg rounded-full font-semibold text-2xl transition-all shadow-lg flex items-center justify-center ${
+          shouldHighlightDeployButton 
+            ? 'ring-4 ring-accent-blue ring-offset-2 ring-offset-dark-bg animate-pulse' 
+            : ''
+        } ${isDeployDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={shouldHighlightDeployButton ? {
+          boxShadow: '0 0 20px rgba(0, 212, 255, 0.8), 0 0 40px rgba(0, 212, 255, 0.4)',
+        } : {}}
+      >
+        🚀
+      </button>
+      
+      {/* Desktop: Full panel */}
+      <div className="hidden sm:block fixed top-6 right-6 z-40 panel-glass rounded-xl p-4 w-64 sm:w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10">
       {/* Primary CTA */}
       <button
         onClick={() => setBuildPanelOpen(true)}
