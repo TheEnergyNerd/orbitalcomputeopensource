@@ -332,7 +332,6 @@ async def fetch_tles():
                     return sats
                 else:
                     print(f"[fetch_tles] WARNING: Parsed 0 satellites from {url}. Response length: {len(text)} chars, lines: {len(lines)}")
-                else:
                     print(f"[fetch_tles] No valid satellites found in response from {url}")
             except Exception as e:
                 error_msg = str(e) if e else "Unknown error"
