@@ -88,7 +88,7 @@ export default function StrategyDeck() {
   const budgetRemaining = activeMissionId ? 200 : null;
   const maxSatellites = activeMissionId ? 100 : null;
   const debrisRisk = densityMode === "Aggressive" ? "HIGH" : densityMode === "Optimized" ? "MED" : "LOW";
-  const energyCostMultiplier: number = 1.0;
+  const energyCostMultiplier = 1.0;
 
   return (
     <>
