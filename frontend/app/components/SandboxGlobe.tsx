@@ -549,8 +549,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               id: podSatId,
               position: Cesium.Cartesian3.fromDegrees(lon, lat, alt * 1000),
               point: {
-                pixelSize: 6,
-                color: Cesium.Color.fromCssColorString("#00ff00").withAlpha(0.9),
+                pixelSize: 8,
+                color: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.9), // Cyan for deployed LEO pods
                 outlineColor: Cesium.Color.WHITE,
                 outlineWidth: 2,
                 heightReference: Cesium.HeightReference.NONE,
@@ -614,8 +614,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                       id: podSatId,
                       position: Cesium.Cartesian3.fromDegrees(lon, lat, altitude * 1000),
                       point: {
-                        pixelSize: 6,
-                        color: Cesium.Color.fromCssColorString("#00ff00").withAlpha(0.9),
+                        pixelSize: 8,
+                        color: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.9), // Cyan for deployed LEO pods
                         outlineColor: Cesium.Color.WHITE,
                         outlineWidth: 2,
                         heightReference: Cesium.HeightReference.NONE,
@@ -633,8 +633,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                     id: podSatId,
                     position: Cesium.Cartesian3.fromDegrees(lon, lat, altitude * 1000),
                     point: {
-                      pixelSize: 6,
-                      color: Cesium.Color.fromCssColorString("#00ff00").withAlpha(0.9),
+                      pixelSize: 8,
+                      color: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.9), // Cyan for deployed LEO pods
                       outlineColor: Cesium.Color.WHITE,
                       outlineWidth: 2,
                       heightReference: Cesium.HeightReference.NONE,
@@ -665,9 +665,9 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 id: farmSatId,
                 position: Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000),
                 point: {
-                  pixelSize: 4,
-                  color: Cesium.Color.fromCssColorString("#ff6b35").withAlpha(0.9), // Orange for server farms
-                  outlineColor: Cesium.Color.WHITE,
+                      pixelSize: 6,
+                      color: Cesium.Color.fromCssColorString("#00ff88").withAlpha(0.9), // Green for deployed server farms
+                      outlineColor: Cesium.Color.WHITE,
                   outlineWidth: 1,
                   heightReference: Cesium.HeightReference.NONE,
                   scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
@@ -707,8 +707,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                       id: farmSatId,
                       position: Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000),
                       point: {
-                        pixelSize: 4,
-                        color: Cesium.Color.fromCssColorString("#ff6b35").withAlpha(0.9),
+                        pixelSize: 6,
+                        color: Cesium.Color.fromCssColorString("#00ff88").withAlpha(0.9), // Green for deployed server farms
                         outlineColor: Cesium.Color.WHITE,
                         outlineWidth: 1,
                         heightReference: Cesium.HeightReference.NONE,
@@ -727,8 +727,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                     id: farmSatId,
                     position: Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000),
                     point: {
-                      pixelSize: 4,
-                      color: Cesium.Color.fromCssColorString("#ff6b35").withAlpha(0.9),
+                      pixelSize: 6,
+                      color: Cesium.Color.fromCssColorString("#00ff88").withAlpha(0.9), // Green for deployed server farms
                       outlineColor: Cesium.Color.WHITE,
                       outlineWidth: 1,
                       heightReference: Cesium.HeightReference.NONE,
@@ -794,8 +794,10 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       }
     });
 
-    // Render all satellites (no sampling)
-    const sampledSats = state.satellites; // Show all satellites
+    // Render only 10% of background satellites for performance
+    const RENDER_RATIO = 0.1;
+    const totalSats = state.satellites.length;
+    const sampledSats = state.satellites.filter((_, idx) => idx % Math.ceil(1 / RENDER_RATIO) === 0);
     sampledSats.forEach((sat) => {
       // Eclipse simulation: darker when in shadow
       const color = sat.sunlit
