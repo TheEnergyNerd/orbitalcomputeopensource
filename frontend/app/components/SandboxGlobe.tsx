@@ -473,12 +473,11 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       (groundEntity as any)._entityType = "ground";
     });
 
-    // Orbital satellites - render only a fraction for performance
+    // Orbital satellites - render all of them (no limit for now)
     const deployedUnits = getDeployedUnits();
-    // Render only 1/10th of satellites for better performance
-    const RENDER_RATIO = 10; // Show 1 out of every 10 satellites
+    // Render all satellites (removed RENDER_RATIO limit)
     const totalSats = state.satellites.length;
-    const finalVisibleSats = Math.ceil(totalSats / RENDER_RATIO);
+    const finalVisibleSats = totalSats; // Show all satellites
     
     // Store for use in job flows below
     const numVisibleSats = finalVisibleSats;
@@ -795,8 +794,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       }
     });
 
-    // Sample satellites evenly across the array (every Nth satellite)
-    const sampledSats = state.satellites.filter((_, index) => index % RENDER_RATIO === 0);
+    // Render all satellites (no sampling)
+    const sampledSats = state.satellites; // Show all satellites
     sampledSats.forEach((sat) => {
       // Eclipse simulation: darker when in shadow
       const color = sat.sunlit

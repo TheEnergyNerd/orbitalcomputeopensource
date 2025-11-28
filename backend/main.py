@@ -1117,6 +1117,9 @@ async def startup():
         print(f"[startup] Created {len(satellites)} dummy satellites for testing (errors: {error_count})")
         if len(satellites) < 100:
             print(f"[startup] WARNING: Only {len(satellites)} satellites created! Expected ~9000.")
+            print(f"[startup] ERROR: Dummy satellite creation may have failed. Check error_count: {error_count}")
+        else:
+            print(f"[startup] SUCCESS: Created {len(satellites)} dummy satellites (expected ~9000)")
 
     # Initialize world instance with satellites
     print(f"[startup] About to initialize world with {len(satellites)} satellites")
