@@ -37,8 +37,10 @@ export function useSimPolling() {
           
           // Step new Factorio-style simulation (1 minute per poll, scaled by timeScale)
           try {
-            const { stepSimulation } = useSandboxStore.getState();
-            stepSimulation(1); // 1 minute per poll
+            const { stepSimulation, simState } = useSandboxStore.getState();
+            if (simState) {
+              stepSimulation(1); // 1 minute per poll
+            }
           } catch (e) {
             console.warn("[useSimPolling] stepSimulation failed:", e);
           }
