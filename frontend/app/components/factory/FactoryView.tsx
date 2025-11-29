@@ -13,6 +13,11 @@ interface LaunchEvent {
   createdAt: number;
 }
 
+interface FactoryViewProps {
+  selectedNodeId?: FactoryNodeId | null;
+  onSelectNode?: (nodeId: FactoryNodeId | null) => void;
+}
+
 /**
  * Get machine utilization from sim state
  */
@@ -39,18 +44,14 @@ function getResourceThroughput(id: ResourceId, sim: SimState): number {
 }
 
 /**
- * FactoryView - Top-down schematic view of the factory
+ * FactoryView - Top-down schematic view of the factory (PRIMARY VIEW)
  */
-interface FactoryViewProps {
-  selectedNodeId?: FactoryNodeId | null;
-  onSelectNode?: (nodeId: FactoryNodeId | null) => void;
-}
-
 export default function FactoryView({ selectedNodeId = null, onSelectNode }: FactoryViewProps = {}) {
-  const { simState } = useSandboxStore();
+  const { simState, timeScale } = useSandboxStore();
   const [launchEvents, setLaunchEvents] = useState<LaunchEvent[]>([]);
   const lastLaunchCountRef = useRef(0);
   const [internalSelectedNode, setInternalSelectedNode] = useState<FactoryNodeId | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   
   // Use prop if provided, otherwise use internal state
   const currentSelectedNode = selectedNodeId !== undefined ? selectedNodeId : internalSelectedNode;
@@ -68,7 +69,6 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
   useEffect(() => {
     const currentLaunchCount = Math.floor(simState.resources.launches?.buffer ?? 0);
     if (currentLaunchCount > lastLaunchCountRef.current && lastLaunchCountRef.current > 0) {
-      // New launch detected
       setLaunchEvents(prev => [...prev, {
         id: Date.now(),
         createdAt: Date.now(),
@@ -83,7 +83,7 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
       const now = Date.now();
       setLaunchEvents(prev => prev.filter(event => {
         const elapsed = (now - event.createdAt) / 1000;
-        return elapsed < 3; // 3 second animation
+        return elapsed < 3;
       }));
     }, 100);
     return () => clearInterval(interval);
@@ -91,6 +91,38 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
 
   const viewBoxWidth = 1000;
   const viewBoxHeight = 260;
+
+  // Calculate bottlenecks and overproduced resources for summary
+  const bottlenecks: Array<{ id: ResourceId; name: string; severity: number }> = [];
+  const overproduced: Array<{ id: ResourceId; name: string; netRate: number }> = [];
+  
+  for (const [resourceId, resource] of Object.entries(simState.resources)) {
+    const netRate = resource.prodPerMin - resource.consPerMin;
+    const status: NodeStatus = {
+      state: 'healthy',
+      utilization: resource.consPerMin > 0 ? resource.prodPerMin / resource.consPerMin : 0,
+      buffer: resource.buffer,
+    };
+    const classified = classifyNode(status);
+    
+    if (classified === 'starved' && resource.buffer <= 0.01) {
+      bottlenecks.push({
+        id: resourceId as ResourceId,
+        name: resource.name,
+        severity: Math.abs(netRate),
+      });
+    }
+    if (netRate > 10 && resource.buffer > 100) {
+      overproduced.push({
+        id: resourceId as ResourceId,
+        name: resource.name,
+        netRate,
+      });
+    }
+  }
+
+  // Get total launches per month
+  const launchesPerMonth = (simState.resources.launches?.prodPerMin ?? 0) * 60 * 24 * 30;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 h-[260px] bg-gray-900/95 border-t border-gray-700 z-30 overflow-hidden">
@@ -103,6 +135,12 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
             linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)
           `,
           backgroundSize: '20px 20px',
+        }}
+        onClick={(e) => {
+          // Clicking on background deselects
+          if (e.target === e.currentTarget) {
+            handleSelectNode(null);
+          }
         }}
       >
         {/* Edges (belts) - render first so nodes appear on top */}
@@ -117,15 +155,14 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
           const toY = toNode.y * viewBoxHeight + (toNode.height * viewBoxHeight) / 2;
 
           const throughput = getResourceThroughput(edge.resource, simState);
-          const speed = Math.min(1, throughput / 100); // Normalize to 0-1
+          const speed = Math.min(1, throughput / 100);
           const opacity = throughput > 0 ? 0.6 + (speed * 0.4) : 0.2;
           const color = getResourceColor(edge.resource);
+          const isSelected = currentSelectedNode === edge.from || currentSelectedNode === edge.to;
 
-          // Calculate path length for animation
-          const pathLength = Math.sqrt(Math.pow(toX - fromX, 2) + Math.pow(toY - fromY, 2));
           const dashLength = 8;
           const gapLength = 12;
-          const animationDuration = Math.max(0.5, 2 / (speed + 0.1)); // Faster when throughput is higher
+          const animationDuration = Math.max(0.5, 2 / (speed + 0.1));
 
           return (
             <g key={edge.id}>
@@ -136,8 +173,8 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
                 x2={toX}
                 y2={toY}
                 stroke={color}
-                strokeWidth="3"
-                opacity={opacity * 0.3}
+                strokeWidth={isSelected ? "4" : "3"}
+                opacity={isSelected ? opacity * 0.8 : opacity * 0.3}
               />
               {/* Animated flow */}
               {throughput > 0 && (
@@ -151,6 +188,9 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
                   opacity={opacity}
                   strokeDasharray={`${dashLength} ${gapLength}`}
                   strokeDashoffset={0}
+                  onMouseEnter={() => setHoveredEdge(edge.id)}
+                  onMouseLeave={() => setHoveredEdge(null)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <animate
                     attributeName="stroke-dashoffset"
@@ -160,6 +200,35 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
                     repeatCount="indefinite"
                   />
                 </line>
+              )}
+              {/* Hover tooltip */}
+              {hoveredEdge === edge.id && (
+                <g>
+                  <rect
+                    x={(fromX + toX) / 2 - 60}
+                    y={(fromY + toY) / 2 - 20}
+                    width="120"
+                    height="30"
+                    fill="rgba(0, 0, 0, 0.8)"
+                    rx="4"
+                  />
+                  <text
+                    x={(fromX + toX) / 2}
+                    y={(fromY + toY) / 2 - 5}
+                    textAnchor="middle"
+                    className="text-[10px] fill-white"
+                  >
+                    Flow: {formatSigFigs(throughput, 2)} {edge.resource}/min
+                  </text>
+                  <text
+                    x={(fromX + toX) / 2}
+                    y={(fromY + toY) / 2 + 8}
+                    textAnchor="middle"
+                    className="text-[8px] fill-gray-400"
+                  >
+                    {fromNode.label} → {toNode.label}
+                  </text>
+                </g>
               )}
             </g>
           );
@@ -176,6 +245,7 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
           let outputRate = 0;
           let bufferLevel = 0;
           let bufferCapacity = 100;
+          let netRate = 0;
 
           if (node.type === 'machine') {
             const machineId = node.id as MachineId;
@@ -184,9 +254,11 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
             if (machine) {
               const speedMultiplier = 1 + (machine.upgrades.speedLevel * 0.2);
               outputRate = machine.baseOutputPerLine * speedMultiplier * machine.lines;
+              // Net rate = output - input consumption
+              const totalInputConsumption = Object.values(machine.inputRates).reduce((sum, rate) => sum + (rate ?? 0), 0) * machine.lines;
+              netRate = outputRate - totalInputConsumption;
             }
           } else if (node.type === 'storage') {
-            // Map storage nodes to resources
             const resourceMap: Record<string, ResourceId> = {
               'methaneTank': 'methane',
               'loxTank': 'lox',
@@ -194,27 +266,44 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
             };
             const resourceId = resourceMap[node.id];
             if (resourceId) {
-              bufferLevel = getResourceBufferFromSim(resourceId, simState);
-              bufferCapacity = 1000; // Nominal capacity
+              const resource = simState.resources[resourceId];
+              bufferLevel = resource?.buffer ?? 0;
+              bufferCapacity = 1000;
+              netRate = (resource?.prodPerMin ?? 0) - (resource?.consPerMin ?? 0);
+            }
+          } else if (node.type === 'source') {
+            const resourceMap: Record<string, ResourceId> = {
+              'siliconSource': 'silicon',
+              'steelSource': 'steel',
+            };
+            const resourceId = resourceMap[node.id];
+            if (resourceId) {
+              const resource = simState.resources[resourceId];
+              bufferLevel = resource?.buffer ?? 0;
+              netRate = resource?.prodPerMin ?? 0;
             }
           }
 
-          const utilizationPercent = utilization * 100;
-          const isActive = utilizationPercent > 30;
-          const isBottlenecked = utilizationPercent > 80;
-
-          // Color based on utilization
-          let borderColor = '#4b5563'; // gray-600
-          if (isBottlenecked) {
-            borderColor = '#ef4444'; // red
-          } else if (utilizationPercent > 70) {
-            borderColor = '#f97316'; // orange
-          } else if (isActive) {
-            borderColor = '#3b82f6'; // blue
-          }
+          // Classify node status using semantics
+          const nodeStatus: NodeStatus = {
+            state: 'healthy',
+            utilization,
+            buffer: bufferLevel,
+          };
+          const status = classifyNode(nodeStatus);
+          const isSelected = currentSelectedNode === node.id;
+          const borderColor = getNodeBorderColor(status, isSelected);
+          const isStarved = status === 'starved';
 
           return (
-            <g key={node.id}>
+            <g
+              key={node.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectNode(node.id);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               {/* Building background */}
               <rect
                 x={x}
@@ -224,10 +313,15 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
                 rx={4}
                 fill={node.type === 'source' ? '#1e293b' : '#0f172a'}
                 stroke={borderColor}
-                strokeWidth={isBottlenecked ? 3 : 2}
-                opacity={isActive ? 1 : 0.5}
+                strokeWidth={isSelected ? 4 : isStarved ? 3 : 2}
+                opacity={status === 'idle' ? 0.5 : 1}
                 style={{
-                  filter: isBottlenecked ? 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.5))' : 'none',
+                  filter: isSelected
+                    ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8))'
+                    : isStarved
+                    ? 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.5))'
+                    : 'none',
+                  animation: isStarved ? 'pulse 2s ease-in-out infinite' : 'none',
                 }}
               />
 
@@ -247,44 +341,45 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
               {/* Label */}
               <text
                 x={x + width / 2}
-                y={y + height / 2 - 4}
+                y={y + height / 2 - 8}
                 textAnchor="middle"
                 className="text-[10px] fill-gray-300 font-semibold"
               >
                 {node.label}
               </text>
 
-              {/* Machine stats */}
-              {node.type === 'machine' && (
+              {/* Essential info: buf, rate, utilization */}
+              {node.type !== 'launch' && (
                 <>
                   <text
                     x={x + width / 2}
-                    y={y + height / 2 + 8}
+                    y={y + height / 2 + 4}
                     textAnchor="middle"
                     className="text-[8px] fill-gray-400"
                   >
-                    {formatDecimal(utilizationPercent, 0)}%
+                    buf: {formatDecimal(bufferLevel, 0)}
                   </text>
                   <text
                     x={x + width / 2}
-                    y={y + height / 2 + 16}
+                    y={y + height / 2 + 14}
                     textAnchor="middle"
-                    className="text-[8px] fill-gray-500"
+                    className="text-[8px]"
+                    fill={getNetRateColor(netRate)}
                   >
-                    {formatSigFigs(outputRate, 1)}/min
+                    rate: {netRate >= 0 ? '+' : ''}{formatSigFigs(netRate, 2)}/min
                   </text>
                 </>
               )}
 
-              {/* Storage buffer */}
-              {node.type === 'storage' && (
+              {/* Utilization for machines */}
+              {node.type === 'machine' && (
                 <text
                   x={x + width / 2}
-                  y={y + height / 2 + 8}
+                  y={y + height / 2 + 22}
                   textAnchor="middle"
-                  className="text-[8px] fill-gray-400"
+                  className="text-[7px] fill-gray-500"
                 >
-                  {formatDecimal(bufferLevel, 0)}
+                  {formatDecimal(utilization * 100, 0)}%
                 </text>
               )}
 
@@ -292,7 +387,7 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
               {node.type === 'launch' && (
                 <text
                   x={x + width / 2}
-                  y={y + height / 2 + 8}
+                  y={y + height / 2 + 4}
                   textAnchor="middle"
                   className="text-lg"
                 >
@@ -303,18 +398,18 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
           );
         })}
 
-        {/* Launch animations - rockets moving from launch complex to orbit */}
+        {/* Launch animations */}
         {launchEvents.map(event => {
           const launchNode = FACTORY_NODES.find(n => n.id === 'launchComplex');
           if (!launchNode) return null;
 
           const startX = launchNode.x * viewBoxWidth + (launchNode.width * viewBoxWidth) / 2;
           const startY = launchNode.y * viewBoxHeight;
-          const endX = viewBoxWidth - 20; // Right edge
-          const endY = 20; // Top corner (orbit)
+          const endX = viewBoxWidth - 20;
+          const endY = 20;
 
           const elapsed = (Date.now() - event.createdAt) / 1000;
-          const progress = Math.min(1, elapsed / 3); // 3 second animation
+          const progress = Math.min(1, elapsed / 3);
           const currentX = startX + (endX - startX) * progress;
           const currentY = startY + (endY - startY) * progress;
 
@@ -349,8 +444,72 @@ export default function FactoryView({ selectedNodeId = null, onSelectNode }: Fac
             </g>
           );
         })}
+
+        {/* Legend - bottom left */}
+        <g>
+          <rect
+            x="20"
+            y={viewBoxHeight - 80}
+            width="180"
+            height="60"
+            fill="rgba(0, 0, 0, 0.7)"
+            rx="4"
+            stroke="#374151"
+            strokeWidth="1"
+          />
+          <text
+            x="30"
+            y={viewBoxHeight - 65}
+            className="text-[9px] fill-gray-300 font-semibold"
+          >
+            Resources
+          </text>
+          {['chips', 'racks', 'pods', 'fuel'].map((resource, idx) => (
+            <g key={resource}>
+              <line
+                x1="30"
+                y1={viewBoxHeight - 55 + idx * 12}
+                x2="50"
+                y2={viewBoxHeight - 55 + idx * 12}
+                stroke={getResourceColor(resource as ResourceId)}
+                strokeWidth="3"
+              />
+              <text
+                x="55"
+                y={viewBoxHeight - 52 + idx * 12}
+                className="text-[8px] fill-gray-400 capitalize"
+              >
+                {resource}
+              </text>
+            </g>
+          ))}
+          <text
+            x="30"
+            y={viewBoxHeight - 10}
+            className="text-[7px] fill-gray-500"
+          >
+            Node colors: Idle / Healthy / Constrained / Starved
+          </text>
+        </g>
+
+        {/* Time scale indicator - bottom right */}
+        <text
+          x={viewBoxWidth - 20}
+          y={viewBoxHeight - 10}
+          textAnchor="end"
+          className="text-[8px] fill-gray-500"
+        >
+          {timeScale}×
+        </text>
       </svg>
+
+      {/* CSS for pulse animation */}
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+      `}</style>
     </div>
   );
 }
-

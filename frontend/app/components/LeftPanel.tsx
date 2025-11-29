@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
-import ResourceChainPanel from "./ResourceChainPanel";
-import MachineCard from "./MachineCard";
-import { getMachineUtilization } from "../lib/sim/engine";
-import type { MachineId } from "../lib/sim/model";
 import MissionPanel from "./MissionPanel";
+import FactorySidebar from "./FactorySidebar";
+import FactoryView from "./factory/FactoryView";
 
 type Mode = "factory" | "orbit" | "missions";
 
@@ -81,29 +79,10 @@ export default function LeftPanel() {
 
         {/* Content */}
         {activeMode === "factory" && (
-          <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-            <ResourceChainPanel />
-            
-            <div className="mt-6 pt-4 border-t border-gray-700/50">
-              <div className="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wide">
-                Machines
-              </div>
-              <div className="space-y-3">
-                {(Object.keys(machines) as MachineId[]).map((machineId) => {
-                  const machine = machines[machineId];
-                  const utilization = getMachineUtilization(machine, resources);
-                  return (
-                    <MachineCard
-                      key={machineId}
-                      machine={machine}
-                      utilization={utilization}
-                      onChangeLines={(lines) => updateMachineLines(machineId, lines)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <FactorySidebar
+            selectedNodeId={selectedNodeId as any}
+            onSelectNode={setSelectedNodeId}
+          />
         )}
 
         {activeMode === "orbit" && (
