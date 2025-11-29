@@ -240,9 +240,9 @@ export default function StrategyDeckNew() {
               {(Object.keys(FACTORY_RECIPES) as FactoryNodeId[]).map((nodeId) => {
                 const lines = factory.lines[nodeId] ?? 0;
                 const utilization = factory.utilization[nodeId] ?? 0;
-                const buffer = factory.buffers[nodeId] ?? 0;
                 const recipe = FACTORY_RECIPES[nodeId];
-                const outputResource = Object.keys(recipe.output)[0] as string;
+                const outputResourceKey = Object.keys(recipe.output)[0] as keyof typeof factory.buffers;
+                const buffer = factory.buffers[outputResourceKey] ?? 0;
 
                 return (
                   <div key={nodeId} className="space-y-1">
@@ -275,7 +275,7 @@ export default function StrategyDeckNew() {
                       className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent-blue"
                     />
                     <div className="text-[10px] text-gray-500">
-                      Buffer: {buffer.toFixed(0)} {outputResource}
+                      Buffer: {Math.round(buffer)} {outputResourceKey}
                     </div>
                   </div>
                 );
