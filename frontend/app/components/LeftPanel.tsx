@@ -14,7 +14,7 @@ interface LeftPanelProps {
 }
 
 export default function LeftPanel({ selectedNodeId: propSelectedNodeId, onSelectNode: propOnSelectNode }: LeftPanelProps = {}) {
-  const { simState, updateMachineLines, orbitMode, setOrbitMode, unlockedOrbitModes } = useSandboxStore();
+  const { simState, orbitMode, setOrbitMode, unlockedOrbitModes } = useSandboxStore();
   const [activeMode, setActiveMode] = useState<Mode>("factory");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [internalSelectedNode, setInternalSelectedNode] = useState<string | null>(null);
