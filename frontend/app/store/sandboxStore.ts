@@ -7,15 +7,23 @@ import type { PodTierId } from "../lib/deployment/podTiers";
 import type { LaunchProviderId } from "../lib/deployment/launchProviders";
 import type {
   FactoryState,
-  BottleneckSummary,
-  FacilityType,
-  FacilityState,
-} from "../lib/factory/factoryEngine";
+  FactoryNodeId,
+  Bottleneck,
+} from "../lib/factory/factoryRecipes";
 import {
   createDefaultFactoryState,
   runFactoryTick as runFactoryTickEngine,
-  reconcileDesiredLines,
-} from "../lib/factory/factoryEngine";
+  computeBottlenecks,
+} from "../lib/factory/factoryRecipes";
+import type {
+  LaunchState,
+  LaunchProviderId as NewLaunchProviderId,
+} from "../lib/launch/launchQueue";
+import {
+  createDefaultLaunchState,
+  processLaunchQueue,
+  calculateDeploymentRate,
+} from "../lib/launch/launchQueue";
 
 export type SandboxPreset = "all_earth" | "hybrid_2035" | "orbit_dominant_2060" | "extreme_100_orbit" | "custom";
 export type SandboxMode = "freeplay" | "missions";
@@ -51,9 +59,10 @@ interface SandboxStore {
   densityMode: DensityMode;
   // Deployment state
   totalPodsBuilt: number; // Total pods ever built (for tier unlocks)
-  // Factory / production engine
+  // Factory / production engine (new Factorio-style)
   factory: FactoryState;
-  factoryBottlenecks: BottleneckSummary[];
+  factoryBottlenecks: Bottleneck[];
+  launchState: LaunchState;
   setOrbitalComputeUnits: (units: number) => void;
   addOrbitalCompute: () => void;
   setGroundDCReduction: (percent: number) => void;
@@ -78,10 +87,10 @@ interface SandboxStore {
   setOffloadPct: (pct: number) => void;
   setDensityMode: (mode: DensityMode) => void;
   incrementTotalPodsBuilt: () => void;
-  // Factory controls
-  runFactoryTick: (days: number, targetPodsPerMonth: number) => void;
-  updateFactoryFacility: (type: FacilityType, changes: Partial<FacilityState>) => void;
-  upgradeFactoryFacility: (type: FacilityType) => boolean; // Returns true if upgrade succeeded
+  // Factory controls (new system)
+  runFactoryTick: (monthFraction: number) => void;
+  updateFactoryLines: (nodeId: FactoryNodeId, lines: number) => boolean; // Returns true if successful
+  toggleLaunchProvider: (providerId: NewLaunchProviderId) => void;
 }
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
@@ -378,78 +387,84 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   setOffloadPct: (pct) => set({ offloadPct: Math.max(0, Math.min(100, pct)) }),
   setDensityMode: (mode) => set({ densityMode: mode }),
   incrementTotalPodsBuilt: () => set((state) => ({ totalPodsBuilt: state.totalPodsBuilt + 1 })),
-  // Factory controls
-  runFactoryTick: (days, targetPodsPerMonth) => {
+  // Factory controls (new system)
+  runFactoryTick: (monthFraction) => {
     set((state) => {
-      const result = runFactoryTickEngine(state.factory, days, {
-        targetPodsPerMonth,
-      });
+      // Run factory production
+      const updatedFactory = runFactoryTickEngine(state.factory, monthFraction);
+      
+      // Process launch queue
+      const podsAvailable = updatedFactory.inventory.pods ?? 0;
+      const fuelAvailable = updatedFactory.inventory.fuel ?? 0;
+      const { newState: updatedLaunchState, podsLaunched } = processLaunchQueue(
+        state.launchState,
+        podsAvailable,
+        fuelAvailable
+      );
+      
+      // Consume pods and fuel for launches, add to orbit
+      if (podsLaunched > 0) {
+        updatedFactory.inventory.pods = Math.max(0, (updatedFactory.inventory.pods ?? 0) - podsLaunched);
+        updatedFactory.inventory.fuel = Math.max(0, (updatedFactory.inventory.fuel ?? 0) - podsLaunched * 10);
+        updatedFactory.inventory.orbitPods = (updatedFactory.inventory.orbitPods ?? 0) + podsLaunched;
+      }
+      
+      // Compute bottlenecks
+      const bottlenecks = computeBottlenecks(updatedFactory);
+      
       return {
-        factory: result.nextFactory,
-        factoryBottlenecks: result.bottlenecks,
-        // Keep totalPodsBuilt in sync with factory
-        totalPodsBuilt: result.nextFactory.podsBuiltTotal,
+        factory: updatedFactory,
+        factoryBottlenecks: bottlenecks,
+        launchState: updatedLaunchState,
+        totalPodsBuilt: updatedFactory.inventory.orbitPods ?? 0,
       };
     });
   },
-  updateFactoryFacility: (type, changes) =>
-    set((state) => {
-      const facilities = state.factory.facilities.map((f) =>
-        f.type === type ? { ...f, ...changes } : f
-      );
-      const updatedFactory: FactoryState = {
-        ...state.factory,
-        facilities,
-      };
-      // Reconcile desired lines into concrete build orders, using current cash
-      const reconciled = reconcileDesiredLines(
-        updatedFactory,
-        updatedFactory.inventory.cash ?? 0
-      );
-      return {
-        factory: reconciled,
-      };
-    }),
-  upgradeFactoryFacility: (type) =>
-    set((state) => {
-      const fac = state.factory.facilities.find((f) => f.type === type);
-      if (!fac) return false;
-
-      const currentLevel = fac.level;
-      const nextLevel = currentLevel + 1;
+  updateFactoryLines: (nodeId, newLines) => {
+    return set((state) => {
+      const currentLines = state.factory.lines[nodeId] ?? 0;
+      const delta = newLines - currentLines;
       
-      // Upgrade costs: cash + rdPoints scale with level
-      const cashCost = 50 * nextLevel; // $50M * level
-      const rdCost = 10 * nextLevel; // 10 RD points * level
-      
-      const currentCash = state.factory.inventory.cash ?? 0;
-      const currentRd = state.factory.inventory.rdPoints ?? 0;
-      
-      if (currentCash < cashCost || currentRd < rdCost) {
-        return false; // Can't afford upgrade
+      // Check infra cap
+      const newUsedInfra = state.factory.usedInfraPoints + delta;
+      if (newUsedInfra > state.factory.maxInfraPoints) {
+        return false; // Can't exceed infra cap
       }
       
-      // Deduct costs and upgrade
-      const updatedInventory = {
-        ...state.factory.inventory,
-        cash: currentCash - cashCost,
-        rdPoints: currentRd - rdCost,
+      // Update lines
+      const updatedLines = {
+        ...state.factory.lines,
+        [nodeId]: Math.max(0, newLines),
       };
       
-      const updatedFacilities = state.factory.facilities.map((f) =>
-        f.type === type ? { ...f, level: nextLevel } : f
-      );
-      
-      set({
+      return {
         factory: {
           ...state.factory,
-          inventory: updatedInventory,
-          facilities: updatedFacilities,
+          lines: updatedLines,
+          usedInfraPoints: newUsedInfra,
         },
-      });
+      };
+    });
+  },
+  toggleLaunchProvider: (providerId) => {
+    set((state) => {
+      const provider = state.launchState.providers[providerId];
+      if (!provider) return;
       
-      return true;
-    }),
+      return {
+        launchState: {
+          ...state.launchState,
+          providers: {
+            ...state.launchState.providers,
+            [providerId]: {
+              ...provider,
+              enabled: !provider.enabled,
+            },
+          },
+        },
+      };
+    });
+  },
 }));
 
 

@@ -28,14 +28,9 @@ export function useSimPolling() {
           setLoading(false);
           retryCount = 0; // Reset retry count on success
           console.log("[useSimPolling] State loaded successfully, loading set to false");
-          // Advance local factory engine by 1 simulated day per poll,
-          // targeting current pods/month from backend metrics if available.
-          const targetPodsPerMonth =
-            (response.data.metrics as any)?.podsPerMonth ??
-            (response.data.metrics as any)?.pods_per_month ??
-            10;
+          // Advance local factory engine by 1/30 month per poll (daily tick)
           try {
-            runFactoryTick(1, targetPodsPerMonth);
+            runFactoryTick(1 / 30); // 1 day = 1/30 month
           } catch (e) {
             console.warn("[useSimPolling] runFactoryTick failed:", e);
           }
