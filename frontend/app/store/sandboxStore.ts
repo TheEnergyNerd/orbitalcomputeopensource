@@ -24,6 +24,9 @@ import {
   processLaunchQueue,
   calculateDeploymentRate,
 } from "../lib/launch/launchQueue";
+import type { SimState } from "../lib/sim/model";
+import { createInitialSimState } from "../lib/sim/model";
+import { stepSim } from "../lib/sim/engine";
 
 export type SandboxPreset = "all_earth" | "hybrid_2035" | "orbit_dominant_2060" | "extreme_100_orbit" | "custom";
 export type SandboxMode = "freeplay" | "missions";
@@ -63,6 +66,8 @@ interface SandboxStore {
   factory: FactoryState;
   factoryBottlenecks: Bottleneck[];
   launchState: LaunchState;
+  // New Factorio-style sim state
+  simState: SimState | null;
   setOrbitalComputeUnits: (units: number) => void;
   addOrbitalCompute: () => void;
   setGroundDCReduction: (percent: number) => void;
@@ -125,6 +130,8 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   factory: createDefaultFactoryState(),
   factoryBottlenecks: [],
   launchState: createDefaultLaunchState(),
+  // New Factorio-style sim state
+  simState: createInitialSimState(),
   setOrbitalComputeUnits: (units) => {
     set({ orbitalComputeUnits: units });
     // Check if we've entered "mostly space" mode

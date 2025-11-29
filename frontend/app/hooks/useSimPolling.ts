@@ -34,6 +34,14 @@ export function useSimPolling() {
           } catch (e) {
             console.warn("[useSimPolling] runFactoryTick failed:", e);
           }
+          
+          // Step new Factorio-style simulation (1 minute per poll, scaled by timeScale)
+          try {
+            const { stepSimulation } = useSandboxStore.getState();
+            stepSimulation(1); // 1 minute per poll
+          } catch (e) {
+            console.warn("[useSimPolling] stepSimulation failed:", e);
+          }
         } else {
           console.error("Invalid state structure:", response.data);
           setError("Invalid state structure");

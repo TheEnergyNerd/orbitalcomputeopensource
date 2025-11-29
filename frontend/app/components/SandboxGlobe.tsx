@@ -97,6 +97,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
   const [countryLinesLoaded, setCountryLinesLoaded] = useState(false);
   const cameraInitializedRef = useRef(false);
   const mostlySpaceModeCameraFlewRef = useRef(false);
+  const launchArcsRef = useRef<Cesium.Entity[]>([]);
+  const lastLaunchCountRef = useRef(0);
 
   // Listen for surge events
   useEffect(() => {

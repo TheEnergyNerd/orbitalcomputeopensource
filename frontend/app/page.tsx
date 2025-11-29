@@ -6,9 +6,11 @@ import DetailPanel from "./components/DetailPanel";
 import SandboxVisualizations from "./components/SandboxVisualizations";
 import NewTutorial from "./components/NewTutorial";
 import MissionPanel from "./components/MissionPanel";
-import StrategyDeckNew from "./components/StrategyDeckNew";
+import LeftPanel from "./components/LeftPanel";
 import KpiBar from "./components/KpiBar";
-import LaunchQueuePanel from "./components/LaunchQueuePanel";
+import SunClockSimplified from "./components/SunClockSimplified";
+import FactoryStrip from "./components/FactoryStrip";
+import TimeScaleControl from "./components/TimeScaleControl";
 import SandboxModeSwitcher from "./components/SandboxModeSwitcher";
 import { useEffect } from "react";
 import { useSimStore } from "./store/simStore";
@@ -64,9 +66,10 @@ export default function Home() {
           <GlobePositionDebug viewerRef={viewerRef} />
           <ErrorPanel />
           <SandboxModeSwitcher />
-          <StrategyDeckNew />
-          <LaunchQueuePanel />
-          <MissionPanel />
+          <LeftPanel />
+          <SunClockSimplified />
+          <FactoryStrip />
+          <TimeScaleControl />
           <KpiBar />
           <SandboxVisualizations />
           <NewTutorial />
