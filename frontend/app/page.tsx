@@ -2,19 +2,14 @@
 
 import SandboxGlobe from "./components/SandboxGlobe";
 import DetailPanel from "./components/DetailPanel";
-import SandboxControls from "./components/SandboxControls";
-import SandboxMetrics from "./components/SandboxMetrics";
-// import SimulationFeedback from "./components/SimulationFeedback"; // Replaced by KpiBar
+// Removed old components: SandboxControls, SandboxMetrics, SimulationFeedback, DeploymentQueue, DeploymentTimeDisplay
 import SandboxVisualizations from "./components/SandboxVisualizations";
-import SandboxTutorial from "./components/SandboxTutorial";
 import NewTutorial from "./components/NewTutorial";
-import DeploymentQueue from "./components/DeploymentQueue";
 import MissionPanel from "./components/MissionPanel";
 import StrategyDeckNew from "./components/StrategyDeckNew";
 import KpiBar from "./components/KpiBar";
 import LaunchQueuePanel from "./components/LaunchQueuePanel";
 import SandboxModeSwitcher from "./components/SandboxModeSwitcher";
-import DeploymentTimeDisplay from "./components/DeploymentTimeDisplay";
 import { useEffect } from "react";
 import { useSimStore } from "./store/simStore";
 import { useSandboxStore } from "./store/sandboxStore";
