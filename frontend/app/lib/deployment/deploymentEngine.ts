@@ -12,6 +12,9 @@ export interface DeploymentState {
   totalPodsInOrbit: number;
   totalPodsInQueue: number;
   activeLaunchProviders: LaunchProviderId[];
+  // Factory outputs (if available)
+  podsReadyOnGround?: number;
+  launchSlotsAvailable?: number;
 }
 
 export interface DeploymentEngineOutput {
@@ -98,13 +101,19 @@ function calculateOrbitalDensity(totalPodsInOrbit: number): number {
  * Main deployment engine function
  */
 export function calculateDeploymentEngine(state: DeploymentState): DeploymentEngineOutput {
-  const { totalPodsBuilt, totalPodsInOrbit, totalPodsInQueue, activeLaunchProviders } = state;
+  const { totalPodsBuilt, totalPodsInOrbit, totalPodsInQueue, activeLaunchProviders, podsReadyOnGround, launchSlotsAvailable } = state;
   
-  // Manufacturing rate
-  const manufacturingRatePodsPerMonth = calculateManufacturingRate(totalPodsBuilt);
+  // Manufacturing rate: use factory output if available, otherwise fall back to calculated rate
+  const calculatedManufacturingRate = calculateManufacturingRate(totalPodsBuilt);
+  const manufacturingRatePodsPerMonth = podsReadyOnGround !== undefined
+    ? Math.min(calculatedManufacturingRate, podsReadyOnGround * 30) // Convert pods on ground to monthly rate
+    : calculatedManufacturingRate;
   
-  // Launch capacity
-  const launchCapacityPodsPerMonth = calculateLaunchCapacity(activeLaunchProviders);
+  // Launch capacity: use factory launch slots if available, otherwise use provider capacity
+  const calculatedLaunchCapacity = calculateLaunchCapacity(activeLaunchProviders);
+  const launchCapacityPodsPerMonth = launchSlotsAvailable !== undefined
+    ? Math.min(calculatedLaunchCapacity, launchSlotsAvailable * 30) // Convert slots to monthly rate
+    : calculatedLaunchCapacity;
   
   // Orbital density
   const orbitalDensity = calculateOrbitalDensity(totalPodsInOrbit);

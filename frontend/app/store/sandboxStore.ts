@@ -81,6 +81,7 @@ interface SandboxStore {
   // Factory controls
   runFactoryTick: (days: number, targetPodsPerMonth: number) => void;
   updateFactoryFacility: (type: FacilityType, changes: Partial<FacilityState>) => void;
+  upgradeFactoryFacility: (type: FacilityType) => boolean; // Returns true if upgrade succeeded
 }
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
@@ -408,6 +409,46 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
       return {
         factory: reconciled,
       };
+    }),
+  upgradeFactoryFacility: (type) =>
+    set((state) => {
+      const fac = state.factory.facilities.find((f) => f.type === type);
+      if (!fac) return false;
+
+      const currentLevel = fac.level;
+      const nextLevel = currentLevel + 1;
+      
+      // Upgrade costs: cash + rdPoints scale with level
+      const cashCost = 50 * nextLevel; // $50M * level
+      const rdCost = 10 * nextLevel; // 10 RD points * level
+      
+      const currentCash = state.factory.inventory.cash ?? 0;
+      const currentRd = state.factory.inventory.rdPoints ?? 0;
+      
+      if (currentCash < cashCost || currentRd < rdCost) {
+        return false; // Can't afford upgrade
+      }
+      
+      // Deduct costs and upgrade
+      const updatedInventory = {
+        ...state.factory.inventory,
+        cash: currentCash - cashCost,
+        rdPoints: currentRd - rdCost,
+      };
+      
+      const updatedFacilities = state.factory.facilities.map((f) =>
+        f.type === type ? { ...f, level: nextLevel } : f
+      );
+      
+      set({
+        factory: {
+          ...state.factory,
+          inventory: updatedInventory,
+          facilities: updatedFacilities,
+        },
+      });
+      
+      return true;
     }),
 }));
 

@@ -31,6 +31,7 @@ export default function StrategyDeck() {
     factory,
     factoryBottlenecks,
     updateFactoryFacility,
+    upgradeFactoryFacility,
   } = useSandboxStore();
 
   const { getDeployedUnits, getQueuedUnits } = useOrbitalUnitsStore();
@@ -86,6 +87,8 @@ export default function StrategyDeck() {
     totalPodsInOrbit,
     totalPodsInQueue,
     activeLaunchProviders,
+    podsReadyOnGround: factory.podsReadyOnGround,
+    launchSlotsAvailable: factory.inventory.launchSlots,
   };
 
   const engine = useMemo(() => calculateDeploymentEngine(deploymentState), [
@@ -93,6 +96,8 @@ export default function StrategyDeck() {
     totalPodsInOrbit,
     totalPodsInQueue,
     activeLaunchProviders,
+    factory.podsReadyOnGround,
+    factory.inventory.launchSlots,
   ]);
 
   // Get available pod tiers
@@ -441,13 +446,35 @@ export default function StrategyDeck() {
             Build queue: {factory.buildQueue.length} / {factory.maxConcurrentBuilds}
           </span>
         </div>
-        <div className="mb-2">
+        <div className="mb-2 space-y-1.5">
           <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
             <span>Infra</span>
             <span>
               {factory.infrastructurePointsUsed} / {factory.infrastructurePointsCap} pts
             </span>
           </div>
+          <div className="flex justify-between text-[10px] text-gray-400">
+            <span>RD Points</span>
+            <span className="text-accent-green font-semibold">
+              {Math.round(factory.inventory.rdPoints ?? 0)}
+            </span>
+          </div>
+          {factory.podsReadyOnGround > 0 && (
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>Pods Ready</span>
+              <span className="text-white font-semibold">
+                {factory.podsReadyOnGround}
+              </span>
+            </div>
+          )}
+          {factory.inventory.launchSlots > 0 && (
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>Launch Slots</span>
+              <span className="text-white font-semibold">
+                {factory.inventory.launchSlots}
+              </span>
+            </div>
+          )}
           <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div
               className={`h-1.5 rounded-full ${
@@ -485,18 +512,42 @@ export default function StrategyDeck() {
               <div key={fac.type} className="flex flex-col gap-1 text-xs">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300 capitalize">{fac.type}</span>
-                  <span className="text-gray-400">
-                    Lines:{" "}
-                    <span className="text-white font-semibold">
-                      {fac.lines}
-                    </span>
-                    {pendingAdds > 0 || pendingRemovals > 0 ? (
-                      <span className="ml-1 text-[10px] text-gray-500">
-                        (build +{pendingAdds} / -{pendingRemovals})
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">
+                      Lines:{" "}
+                      <span className="text-white font-semibold">
+                        {fac.lines}
                       </span>
-                    ) : null}{" "}
-                    · L{fac.level}
-                  </span>
+                      {pendingAdds > 0 || pendingRemovals > 0 ? (
+                        <span className="ml-1 text-[10px] text-gray-500">
+                          (build +{pendingAdds} / -{pendingRemovals})
+                        </span>
+                      ) : null}{" "}
+                      · L{fac.level}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const success = upgradeFactoryFacility(fac.type);
+                        if (!success) {
+                          // Show error flash
+                          setRejectionFlash(prev => ({
+                            ...prev,
+                            [fac.type]: { reason: "Not enough cash or RD points", timestamp: Date.now() },
+                          }));
+                          setTimeout(() => {
+                            setRejectionFlash(prev => ({
+                              ...prev,
+                              [fac.type]: null,
+                            }));
+                          }, 3000);
+                        }
+                      }}
+                      className="px-2 py-0.5 text-[10px] bg-accent-blue/20 hover:bg-accent-blue/30 border border-accent-blue/50 rounded transition"
+                      title={`Upgrade to L${fac.level + 1}: $${50 * (fac.level + 1)}M + ${10 * (fac.level + 1)} RD`}
+                    >
+                      ↑ L{fac.level + 1}
+                    </button>
+                  </div>
                 </div>
                 <div className="relative">
                   <input
@@ -600,6 +651,20 @@ export default function StrategyDeck() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {factory.activeEvents && factory.activeEvents.length > 0 && (
+          <div className="mt-3 text-xs space-y-1">
+            <div className="font-semibold text-red-400">Active Events</div>
+            {factory.activeEvents.map((event) => (
+              <div key={event.id} className="bg-red-900/20 border border-red-500/30 rounded px-2 py-1">
+                <div className="text-red-300 font-semibold text-[10px]">{event.label}</div>
+                <div className="text-gray-400 text-[9px]">{event.description}</div>
+                <div className="text-gray-500 text-[9px] mt-0.5">
+                  {Math.ceil(event.remainingDays)} days remaining
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

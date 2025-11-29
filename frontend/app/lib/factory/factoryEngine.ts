@@ -87,6 +87,7 @@ export type FactoryState = {
   maxConcurrentBuilds: number;
   infrastructurePointsUsed: number;
   infrastructurePointsCap: number;
+  activeEvents: RandomEvent[]; // Currently active random events
 };
 
 // ---------- Static recipes ----------
@@ -154,11 +155,31 @@ export type BottleneckSummary = {
   limitingResource?: ResourceId;
 };
 
+export type RandomEventType =
+  | "chipSupplyShock"
+  | "launchFailure"
+  | "fuelShortage"
+  | "debrisIncident";
+
+export type RandomEvent = {
+  id: string;
+  type: RandomEventType;
+  label: string;
+  description: string;
+  durationDays: number;
+  remainingDays: number;
+  affectedFacility?: FacilityType;
+  efficiencyPenalty: number; // 0-1, multiplies facility efficiency
+  deploymentBlocked?: boolean; // If true, blocks deployment for duration
+};
+
 export type FactoryTickResult = {
   nextFactory: FactoryState;
   podsCompletedThisTick: number;
   launchSlotsCreatedThisTick: number;
   bottlenecks: BottleneckSummary[];
+  activeEvents: RandomEvent[];
+  newEvents: RandomEvent[];
 };
 
 /**
@@ -450,7 +471,14 @@ export function runFactoryTick(
     }
   });
 
-  const bottlenecks = getBottlenecksSummary(withBuilds, requiredThroughput);
+  // Spawn and process random events
+  const { newEvents, updatedEvents } = spawnRandomEvents(withBuilds, days);
+  withBuilds.activeEvents = [...updatedEvents, ...newEvents];
+  
+  // Apply event effects to facilities
+  const withEvents = applyEventEffects(withBuilds, withBuilds.activeEvents);
+
+  const bottlenecks = getBottlenecksSummary(withEvents, requiredThroughput);
 
   // Soft efficiency penalties for overbuilt stages
   const stageToFacility: Record<BottleneckStage, FacilityType> = {
@@ -461,7 +489,7 @@ export function runFactoryTick(
   };
 
   bottlenecks.forEach((b) => {
-    const fac = withBuilds.facilities.find(
+    const fac = withEvents.facilities.find(
       (f) => f.type === stageToFacility[b.stage]
     );
     if (!fac) return;
@@ -472,17 +500,22 @@ export function runFactoryTick(
   });
 
   // If cash is deeply negative, degrade efficiency slightly to signal stress
-  if (withBuilds.inventory.cash < 0) {
-    withBuilds.facilities.forEach((f) => {
+  if (withEvents.inventory.cash < 0) {
+    withEvents.facilities.forEach((f) => {
       f.efficiency = Math.max(0.3, f.efficiency * 0.9);
     });
   }
 
+  // Earn RD points from pod production (1 point per pod)
+  withEvents.inventory.rdPoints = (withEvents.inventory.rdPoints ?? 0) + podsCompletedThisTick;
+
   return {
-    nextFactory: withBuilds,
+    nextFactory: withEvents,
     podsCompletedThisTick,
     launchSlotsCreatedThisTick,
     bottlenecks,
+    activeEvents: withEvents.activeEvents,
+    newEvents,
   };
 }
 
@@ -575,6 +608,7 @@ export function createDefaultFactoryState(): FactoryState {
       0
     ),
     infrastructurePointsCap: 40,
+    activeEvents: [],
   };
 }
 
