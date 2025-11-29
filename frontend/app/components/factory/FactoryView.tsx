@@ -5,7 +5,7 @@ import { useSandboxStore } from "../../store/sandboxStore";
 import { getMachineUtilization } from "../../lib/sim/engine";
 import type { SimState, ResourceId, MachineId } from "../../lib/sim/model";
 import { FACTORY_NODES, FACTORY_EDGES, getResourceColor, type FactoryNodeId } from "../../lib/factory/factoryLayout";
-import { formatSigFigs } from "../../lib/utils/formatNumber";
+import { formatSigFigs, formatDecimal } from "../../lib/utils/formatNumber";
 
 interface LaunchEvent {
   id: number;
@@ -252,7 +252,7 @@ export default function FactoryView() {
                     textAnchor="middle"
                     className="text-[8px] fill-gray-400"
                   >
-                    {formatSigFigs(utilizationPercent, 0)}%
+                    {formatDecimal(utilizationPercent, 0)}%
                   </text>
                   <text
                     x={x + width / 2}
