@@ -121,9 +121,10 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   densityMode: "Safe", // Start with Safe (first mission requirement)
   // Deployment state
   totalPodsBuilt: 0, // Start at 0 pods built
-  // Factory state
+  // Factory state (new system)
   factory: createDefaultFactoryState(),
   factoryBottlenecks: [],
+  launchState: createDefaultLaunchState(),
   setOrbitalComputeUnits: (units) => {
     set({ orbitalComputeUnits: units });
     // Check if we've entered "mostly space" mode

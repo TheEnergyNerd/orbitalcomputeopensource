@@ -33,7 +33,7 @@ export default function KpiBar() {
   });
 
   const queueLength = factory.inventory.pods ?? 0;
-  const maxQueue = 5; // TODO: get from launch state
+  const maxQueue = launchState?.maxQueue ?? 5;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-30 bg-gray-900/95 border-t border-gray-700/50 px-4 py-2">
