@@ -150,8 +150,23 @@ export function useSimPolling() {
 
     pollState();
     const interval = setInterval(pollState, 2000); // Poll every 2 seconds
-
-    return () => clearInterval(interval);
+    
+    // Step the Factorio simulation continuously (every 100ms = 10 times per second)
+    const simInterval = setInterval(() => {
+      try {
+        const { stepSimulation, simState } = useSandboxStore.getState();
+        if (simState) {
+          stepSimulation(1 / 60); // Step by 1/60 minute (1 second) each tick
+        }
+      } catch (e) {
+        console.warn("[useSimPolling] continuous stepSimulation failed:", e);
+      }
+    }, 100); // Run every 100ms
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(simInterval);
+    };
   }, [setState, setLoading, setError]);
 }
 
