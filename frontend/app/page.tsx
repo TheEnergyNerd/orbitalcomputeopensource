@@ -69,6 +69,7 @@ export default function Home() {
           <TimeScaleControl />
           <KpiBar />
           <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} />
+          <FactoryStatusBar />
           <FactoryHelpPanel />
           <SandboxVisualizations />
           <DetailPanel />
