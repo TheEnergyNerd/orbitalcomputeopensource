@@ -3,11 +3,13 @@
 import SandboxGlobe from "./components/SandboxGlobe";
 import DetailPanel from "./components/DetailPanel";
 // Removed old components: SandboxControls, SandboxMetrics, SimulationFeedback, DeploymentQueue, DeploymentTimeDisplay
-import OrbitalAdvantagePanel from "./components/OrbitalAdvantagePanel";
+import OrbitalAdvantagePanelV2 from "./components/OrbitalAdvantagePanelV2";
 import OnboardingTutorial from "./components/OnboardingTutorial";
+import ModeTabs from "./components/ModeTabs";
+import FactorySystemsPanelV2 from "./components/FactorySystemsPanelV2";
+import OrbitPanel from "./components/OrbitPanel";
 import LeftPanel from "./components/LeftPanel";
 import KpiBar from "./components/KpiBar";
-import SunClockSimplified from "./components/SunClockSimplified";
 import TimeScaleControl from "./components/TimeScaleControl";
 import SandboxModeSwitcher from "./components/SandboxModeSwitcher";
 import FactoryStrip from "./components/factory/FactoryStrip";
@@ -30,7 +32,7 @@ export default function Home() {
   const viewerRef = useCesiumViewer("cesium-globe-container");
   const safeMode = getSafeMode();
   const [factorySelectedNode, setFactorySelectedNode] = useState<string | null>(null);
-  const bottleneck = useFactoryNarrator();
+  const [activeMode, setActiveMode] = useState<"factory" | "orbit" | "missions">("factory");
   
   // Log GPU event on mount
   useEffect(() => {
@@ -70,27 +72,34 @@ export default function Home() {
           <Toast />
           <GlobePositionDebug viewerRef={viewerRef} />
           <ErrorPanel />
-          <SandboxModeSwitcher />
-          {/* Left Sidebar - Factory Controls + Status */}
-          <LeftPanel selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} />
           
-          {/* Center - Globe + High-level metrics */}
-          <SunClockSimplified />
-          <TimeScaleControl />
-          <KpiBar />
+          {/* Top: Mode Tabs */}
+          <ModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
           
-          {/* Bottom - Factory Flow Diagram (collapsible) */}
-          <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={bottleneck?.nodeId || null} />
-          
-          {/* Orbital Advantage Panel (replaces Show Improvements) */}
-          <div className="orbital-advantage">
-            <OrbitalAdvantagePanel />
+          {/* Left Sidebar - Mode-specific content */}
+          <div className="fixed top-[50px] left-6 w-64 z-40 panel max-h-[calc(100vh-100px)] overflow-y-auto">
+            {activeMode === "factory" && <FactorySystemsPanelV2 />}
+            {activeMode === "orbit" && <OrbitPanel />}
+            {activeMode === "missions" && (
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+                <MissionPanel />
+              </div>
+            )}
           </div>
+          
+          {/* Center - Globe (clean, unobstructed) */}
+          <TimeScaleControl />
+          
+          {/* Bottom Center - Orbital Advantage Panel (docked) */}
+          <OrbitalAdvantagePanelV2 />
+          
+          {/* Bottom - Mode-specific panels */}
+          {activeMode === "factory" && (
+            <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={null} />
+          )}
           
           {/* Onboarding Tutorial */}
           <OnboardingTutorial />
-          
-          <DetailPanel />
         </>
       )}
     </main>

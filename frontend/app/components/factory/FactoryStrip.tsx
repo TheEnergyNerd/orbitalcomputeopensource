@@ -419,8 +419,8 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
 
   const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
   
-  // Calculate SVG dimensions based on layout - much larger for less compression
-  const svgWidth = isMobile ? 100 : (buildingPositions["launchComplex"]?.x || 0) + BUILDING_WIDTH + 120;
+  // Calculate SVG dimensions based on layout - ensure all buildings are visible
+  const svgWidth = isMobile ? 100 : (buildingPositions["launchOps"]?.x || 0) + BUILDING_WIDTH + 120;
   const svgHeight = isMobile ? 600 : 320; // Much larger height for better spacing
   
   if (!isExpanded) {
@@ -451,7 +451,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         width={svgWidth}
         height={svgHeight}
         className="block"
-        style={{ minWidth: `${svgWidth}px` }}
+        style={{ minWidth: `${svgWidth}px`, display: 'block' }}
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        preserveAspectRatio="xMinYMin meet"
       >
         {/* Render conduits first (behind buildings) - only show active ones */}
         {RESOURCE_FLOWS.map(renderConduit)}
