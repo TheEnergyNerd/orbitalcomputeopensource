@@ -34,7 +34,6 @@ function getResourceBufferFromSim(id: ResourceId, sim: SimState): number {
   return sim.resources[id]?.buffer ?? 0;
 }
 
-// Import from engine instead of duplicating
 import { getResourceThroughput as getResourceThroughputEngine } from "../../lib/sim/engine";
 
 /**
