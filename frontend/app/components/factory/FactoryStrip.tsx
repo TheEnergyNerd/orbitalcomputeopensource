@@ -420,8 +420,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
   const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
   
   // Calculate SVG dimensions based on layout - ensure all buildings are visible
-  const svgWidth = isMobile ? 100 : (buildingPositions["launchOps"]?.x || 0) + BUILDING_WIDTH + 120;
-  const svgHeight = isMobile ? 600 : 320; // Much larger height for better spacing
+  const maxX = Math.max(...Object.values(buildingPositions).map(p => p.x + (p.x === buildingPositions["siliconSource"]?.x ? SOURCE_WIDTH : BUILDING_WIDTH)), 0);
+  const svgWidth = isMobile ? 100 : Math.max(maxX + 200, 2000); // Minimum 2000px width for scrollability
+  const svgHeight = isMobile ? 600 : 320;
   
   if (!isExpanded) {
     return (
@@ -451,9 +452,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         width={svgWidth}
         height={svgHeight}
         className="block"
-        style={{ minWidth: `${svgWidth}px`, display: 'block' }}
+        style={{ minWidth: `${svgWidth}px` }}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        preserveAspectRatio="xMinYMin meet"
+        preserveAspectRatio="none"
       >
         {/* Render conduits first (behind buildings) - only show active ones */}
         {RESOURCE_FLOWS.map(renderConduit)}
