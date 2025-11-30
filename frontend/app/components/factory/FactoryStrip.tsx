@@ -8,10 +8,9 @@ import { formatSigFigs, formatDecimal } from "../../lib/utils/formatNumber";
 import { classifyNode } from "../../lib/ui/semantics";
 import {
   ChipFabBuilding,
-  RackLineBuilding,
+  ComputeLineBuilding,
   PodFactoryBuilding,
-  FuelPlantBuilding,
-  LaunchComplexBuilding,
+  LaunchOpsBuilding,
   SiliconSourceBuilding,
   SteelSourceBuilding,
 } from "./BuildingSprites";
@@ -36,21 +35,21 @@ const PACKET_RADIUS = 4;
 const BUILDING_ORDER = [
   { id: "siliconSource", type: "source" as const, label: "Silicon", subtitle: "Infinite source" },
   { id: "chipFab", type: "machine" as const, label: "Chip Fab", subtitle: "Turns Silicon into Chips" },
-  { id: "rackLine", type: "machine" as const, label: "Rack Line", subtitle: "Turns Steel + Chips into Racks" },
-  { id: "podFactory", type: "machine" as const, label: "Pod Factory", subtitle: "Builds Pods from Chips + Racks" },
-  { id: "fuelPlant", type: "machine" as const, label: "Fuel Plant", subtitle: "Makes Fuel from Methane + LOX" },
-  { id: "launchComplex", type: "machine" as const, label: "Launch", subtitle: "Consumes Pods + Fuel to add Pods in Orbit" },
+  { id: "computeLine", type: "machine" as const, label: "Compute Line", subtitle: "Turns Steel + Chips into Compute Units" },
+  { id: "podFactory", type: "machine" as const, label: "Pod Factory", subtitle: "Builds Pods from Chips + Compute Units" },
+  { id: "launchOpsResource", type: "source" as const, label: "Launch Ops", subtitle: "Infinite source" },
+  { id: "launchOps", type: "machine" as const, label: "Launch Ops", subtitle: "Consumes Pods + Launch Ops to add Pods in Orbit" },
 ] as const;
 
 // Resource flow paths
 const RESOURCE_FLOWS: Array<{ from: string; to: string; resource: ResourceId; color: string }> = [
   { from: "siliconSource", to: "chipFab", resource: "silicon", color: "#a78bfa" },
-  { from: "steelSource", to: "rackLine", resource: "steel", color: "#cbd5e1" },
-  { from: "chipFab", to: "rackLine", resource: "chips", color: "#22d3ee" },
+  { from: "steelSource", to: "computeLine", resource: "steel", color: "#cbd5e1" },
+  { from: "chipFab", to: "computeLine", resource: "chips", color: "#22d3ee" },
   { from: "chipFab", to: "podFactory", resource: "chips", color: "#22d3ee" },
-  { from: "rackLine", to: "podFactory", resource: "racks", color: "#facc15" },
-  { from: "podFactory", to: "launchComplex", resource: "pods", color: "#f472b6" },
-  { from: "fuelPlant", to: "launchComplex", resource: "fuel", color: "#f97316" },
+  { from: "computeLine", to: "podFactory", resource: "computeUnits", color: "#facc15" },
+  { from: "podFactory", to: "launchOps", resource: "pods", color: "#f472b6" },
+  { from: "launchOpsResource", to: "launchOps", resource: "launchOpsResource", color: "#f97316" },
 ];
 
 export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNodeId }: FactoryStripProps) {
@@ -147,18 +146,11 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       }
     });
     
-    // Fuel plant below pod factory
-    const podFactoryY = buildingPositions["podFactory"]?.y || 0;
-    buildingPositions["fuelPlant"] = {
-      x: centerX - BUILDING_WIDTH / 2,
-      y: podFactoryY + BUILDING_HEIGHT + 20,
-    };
-    
-    // Steel source above rack line
-    const rackLineY = buildingPositions["rackLine"]?.y || 0;
+    // Steel source above compute line
+    const computeLineY = buildingPositions["computeLine"]?.y || 0;
     buildingPositions["steelSource"] = {
       x: centerX - SOURCE_WIDTH / 2,
-      y: rackLineY - SOURCE_HEIGHT - 10,
+      y: computeLineY - SOURCE_HEIGHT - 10,
     };
   } else {
     // Horizontal layout for desktop - much more spacing for less compression
@@ -176,17 +168,10 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       }
     });
 
-    // Add fuel plant position (below pod factory) - much more spacing
-    const podFactoryX = buildingPositions["podFactory"]?.x || 0;
-    buildingPositions["fuelPlant"] = {
-      x: podFactoryX,
-      y: centerY + BUILDING_HEIGHT / 2 + 60,
-    };
-    
-    // Add steel source (for rack line, positioned above) - much more spacing
-    const rackLineX = buildingPositions["rackLine"]?.x || 0;
+    // Add steel source (for compute line, positioned above) - much more spacing
+    const computeLineX = buildingPositions["computeLine"]?.x || 0;
     buildingPositions["steelSource"] = {
-      x: rackLineX,
+      x: computeLineX,
       y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 50,
     };
   }
@@ -195,10 +180,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     if (buildingId === "siliconSource" || buildingId === "steelSource") return 1; // Sources always active
     const machineIdMap: Record<string, MachineId> = {
       chipFab: "chipFab",
-      rackLine: "rackLine",
+      computeLine: "computeLine",
       podFactory: "podFactory",
-      fuelPlant: "fuelPlant",
-      launchComplex: "launchComplex",
+      launchOps: "launchOps",
     };
     const machineId = machineIdMap[buildingId];
     if (machineId) {
@@ -214,10 +198,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     }
     const machineIdMap: Record<string, MachineId> = {
       chipFab: "chipFab",
-      rackLine: "rackLine",
+      computeLine: "computeLine",
       podFactory: "podFactory",
-      fuelPlant: "fuelPlant",
-      launchComplex: "launchComplex",
+      launchOps: "launchOps",
     };
     const machineId = machineIdMap[buildingId];
     if (machineId) {
@@ -324,14 +307,12 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       BuildingComponent = SteelSourceBuilding;
     } else if (building.id === "chipFab") {
       BuildingComponent = ChipFabBuilding;
-    } else if (building.id === "rackLine") {
-      BuildingComponent = RackLineBuilding;
+    } else if (building.id === "computeLine") {
+      BuildingComponent = ComputeLineBuilding;
     } else if (building.id === "podFactory") {
       BuildingComponent = PodFactoryBuilding;
-    } else if (building.id === "fuelPlant") {
-      BuildingComponent = FuelPlantBuilding;
-    } else if (building.id === "launchComplex") {
-      BuildingComponent = LaunchComplexBuilding;
+    } else if (building.id === "launchOps") {
+      BuildingComponent = LaunchOpsBuilding;
     } else {
       return null;
     }
@@ -478,13 +459,12 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         
         {/* Render buildings */}
         {BUILDING_ORDER.map(renderBuilding)}
-        {/* Fuel plant and steel source with subtitles */}
-        {buildingPositions["fuelPlant"] && renderBuilding({ id: "fuelPlant", type: "machine" as const, label: "Fuel Plant", subtitle: "Makes Fuel from Methane + LOX" })}
+        {/* Steel source with subtitle */}
         {buildingPositions["steelSource"] && renderBuilding({ id: "steelSource", type: "source" as const, label: "Steel", subtitle: "Infinite source" })}
         
         {/* Rocket launch animations */}
         {launchAnimations.map((anim) => {
-          const launchPos = buildingPositions["launchComplex"];
+          const launchPos = buildingPositions["launchOps"];
           if (!launchPos) return null;
           
           const elapsed = (Date.now() - anim.startTime) / 1000;

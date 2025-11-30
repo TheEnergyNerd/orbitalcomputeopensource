@@ -73,7 +73,7 @@ export function ChipFabBuilding({ utilization, isStarved, isConstrained, width =
 /**
  * Rack Line: warehouse with roll-up doors
  */
-export function RackLineBuilding({ utilization, isStarved, isConstrained, width = 80, height = 60 }: BuildingSpriteProps) {
+export function ComputeLineBuilding({ utilization, isStarved, isConstrained, width = 80, height = 60 }: BuildingSpriteProps) {
   const glowIntensity = Math.min(1, utilization * 1.5);
   const pulse = utilization > 0.9 ? "animate-pulse" : "";
   const borderColor = isStarved ? "#ef4444" : isConstrained ? "#f97316" : "#22c55e";
@@ -239,7 +239,7 @@ export function FuelPlantBuilding({ utilization, isStarved, isConstrained, width
 /**
  * Launch Complex: pad + tower + tiny rocket silhouette
  */
-export function LaunchComplexBuilding({ utilization, isStarved, isConstrained, width = 80, height = 60 }: BuildingSpriteProps) {
+export function LaunchOpsBuilding({ utilization, isStarved, isConstrained, width = 80, height = 60 }: BuildingSpriteProps) {
   const glowIntensity = Math.min(1, utilization * 1.5);
   const pulse = utilization > 0.9 ? "animate-pulse" : "";
   const borderColor = isStarved ? "#ef4444" : isConstrained ? "#f97316" : "#22c55e";
