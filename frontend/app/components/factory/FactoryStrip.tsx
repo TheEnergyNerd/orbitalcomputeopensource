@@ -104,33 +104,66 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
 
   // Calculate building positions
   const buildingPositions: Record<string, { x: number; y: number }> = {};
-  let currentX = 20;
-  const centerY = isMobile ? 40 : 100;
-  const spacing = isMobile ? 15 : 30;
-
-  BUILDING_ORDER.forEach((building) => {
-    if (building.type === "source") {
-      buildingPositions[building.id] = { x: currentX, y: centerY - SOURCE_HEIGHT / 2 };
-      currentX += SOURCE_WIDTH + spacing;
-    } else {
-      buildingPositions[building.id] = { x: currentX, y: centerY - BUILDING_HEIGHT / 2 };
-      currentX += BUILDING_WIDTH + spacing;
-    }
-  });
-
-  // Add fuel plant position (below pod factory)
-  const podFactoryX = buildingPositions["podFactory"]?.x || 0;
-  buildingPositions["fuelPlant"] = {
-    x: podFactoryX,
-    y: centerY + BUILDING_HEIGHT / 2 + 20,
-  };
   
-  // Add steel source (for rack line, positioned above)
-  const rackLineX = buildingPositions["rackLine"]?.x || 0;
-  buildingPositions["steelSource"] = {
-    x: rackLineX,
-    y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 10,
-  };
+  if (isMobile) {
+    // Vertical stack for mobile
+    let currentY = 20;
+    const centerX = 50;
+    const verticalSpacing = 80;
+    
+    BUILDING_ORDER.forEach((building) => {
+      if (building.type === "source") {
+        buildingPositions[building.id] = { x: centerX - SOURCE_WIDTH / 2, y: currentY };
+        currentY += SOURCE_HEIGHT + verticalSpacing;
+      } else {
+        buildingPositions[building.id] = { x: centerX - BUILDING_WIDTH / 2, y: currentY };
+        currentY += BUILDING_HEIGHT + verticalSpacing;
+      }
+    });
+    
+    // Fuel plant below pod factory
+    const podFactoryY = buildingPositions["podFactory"]?.y || 0;
+    buildingPositions["fuelPlant"] = {
+      x: centerX - BUILDING_WIDTH / 2,
+      y: podFactoryY + BUILDING_HEIGHT + 20,
+    };
+    
+    // Steel source above rack line
+    const rackLineY = buildingPositions["rackLine"]?.y || 0;
+    buildingPositions["steelSource"] = {
+      x: centerX - SOURCE_WIDTH / 2,
+      y: rackLineY - SOURCE_HEIGHT - 10,
+    };
+  } else {
+    // Horizontal layout for desktop
+    let currentX = 20;
+    const centerY = 100;
+    const spacing = 30;
+
+    BUILDING_ORDER.forEach((building) => {
+      if (building.type === "source") {
+        buildingPositions[building.id] = { x: currentX, y: centerY - SOURCE_HEIGHT / 2 };
+        currentX += SOURCE_WIDTH + spacing;
+      } else {
+        buildingPositions[building.id] = { x: currentX, y: centerY - BUILDING_HEIGHT / 2 };
+        currentX += BUILDING_WIDTH + spacing;
+      }
+    });
+
+    // Add fuel plant position (below pod factory)
+    const podFactoryX = buildingPositions["podFactory"]?.x || 0;
+    buildingPositions["fuelPlant"] = {
+      x: podFactoryX,
+      y: centerY + BUILDING_HEIGHT / 2 + 20,
+    };
+    
+    // Add steel source (for rack line, positioned above)
+    const rackLineX = buildingPositions["rackLine"]?.x || 0;
+    buildingPositions["steelSource"] = {
+      x: rackLineX,
+      y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 10,
+    };
+  }
 
   const getBuildingUtilization = (buildingId: string): number => {
     if (buildingId === "siliconSource" || buildingId === "steelSource") return 1; // Sources always active
@@ -182,15 +215,29 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
     const speed = Math.max(throughput / 100, 0.15);
     const opacity = throughput > 0 ? 0.6 + speed * 0.4 : 0.2;
 
-    // Calculate path
+    // Calculate path - handle both horizontal and vertical layouts
     const fromIsSource = flow.from.includes("Source");
-    const fromOffsetX = fromIsSource ? SOURCE_WIDTH : BUILDING_WIDTH;
-    const fromOffsetY = fromIsSource ? SOURCE_HEIGHT / 2 : BUILDING_HEIGHT / 2;
+    const toIsSource = flow.to.includes("Source");
     
-    const startX = fromPos.x + fromOffsetX;
-    const startY = fromPos.y + fromOffsetY;
-    const endX = toPos.x;
-    const endY = toPos.y + BUILDING_HEIGHT / 2;
+    let startX: number, startY: number, endX: number, endY: number;
+    
+    if (isMobile) {
+      // Vertical layout: conduits go down
+      const fromOffsetY = fromIsSource ? SOURCE_HEIGHT : BUILDING_HEIGHT;
+      startX = fromPos.x + (fromIsSource ? SOURCE_WIDTH / 2 : BUILDING_WIDTH / 2);
+      startY = fromPos.y + fromOffsetY;
+      endX = toPos.x + (toIsSource ? SOURCE_WIDTH / 2 : BUILDING_WIDTH / 2);
+      endY = toPos.y;
+    } else {
+      // Horizontal layout: conduits go right
+      const fromOffsetX = fromIsSource ? SOURCE_WIDTH : BUILDING_WIDTH;
+      const fromOffsetY = fromIsSource ? SOURCE_HEIGHT / 2 : BUILDING_HEIGHT / 2;
+      const toOffsetY = toIsSource ? SOURCE_HEIGHT / 2 : BUILDING_HEIGHT / 2;
+      startX = fromPos.x + fromOffsetX;
+      startY = fromPos.y + fromOffsetY;
+      endX = toPos.x;
+      endY = toPos.y + toOffsetY;
+    }
 
     const dx = endX - startX;
     const dy = endY - startY;
@@ -293,25 +340,38 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
             opacity="0.8"
           />
         )}
-        {/* Label below building */}
-        <text
-          x={width / 2}
-          y={height + 15}
-          textAnchor="middle"
-          className="text-[10px] fill-gray-300 font-semibold"
-        >
-          {building.label}
-        </text>
+        {/* Label below building (or to the right on mobile) */}
+        {isMobile ? (
+          <text
+            x={width + 10}
+            y={height / 2 + 4}
+            textAnchor="start"
+            className="text-[10px] fill-gray-300 font-semibold"
+          >
+            {building.label}
+          </text>
+        ) : (
+          <text
+            x={width / 2}
+            y={height + 15}
+            textAnchor="middle"
+            className="text-[10px] fill-gray-300 font-semibold"
+          >
+            {building.label}
+          </text>
+        )}
       </g>
     );
   };
 
-  const svgHeight = isMobile ? 300 : 220; // Extra height for labels
+  // Calculate SVG dimensions based on layout
+  const svgWidth = isMobile ? 100 : (buildingPositions["launchComplex"]?.x || 0) + BUILDING_WIDTH + 40;
+  const svgHeight = isMobile ? 600 : 220; // Extra height for vertical stack on mobile
   
   return (
     <div className="fixed bottom-0 left-0 right-0 h-[220px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
       <svg
-        viewBox={`0 0 ${currentX + 20} ${svgHeight}`}
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
         style={{ overflow: 'visible' }}

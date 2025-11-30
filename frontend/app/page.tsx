@@ -12,6 +12,7 @@ import SandboxModeSwitcher from "./components/SandboxModeSwitcher";
 import FactoryStrip from "./components/factory/FactoryStrip";
 import FactoryHelpPanel from "./components/FactoryHelpPanel";
 import FactoryStatusBar from "./components/factory/FactoryStatusBar";
+import ShareFactoryButton from "./components/factory/ShareFactoryButton";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import { useSandboxStore } from "./store/sandboxStore";
@@ -71,6 +72,7 @@ export default function Home() {
           <KpiBar />
           <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} />
           <FactoryStatusBar />
+          <ShareFactoryButton />
           <FactoryHelpPanel />
           <SandboxVisualizations />
           <DetailPanel />
