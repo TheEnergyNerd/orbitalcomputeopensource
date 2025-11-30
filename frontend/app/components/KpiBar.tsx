@@ -41,7 +41,7 @@ export default function KpiBar() {
   const maxQueue = launchState?.maxQueue ?? 5;
 
   return (
-    <div className="fixed bottom-[260px] left-0 right-0 z-30 bg-gray-900/95 border-t border-gray-700/50 px-4 py-2">
+    <div className="fixed bottom-[220px] left-0 right-0 z-25 bg-gray-900/95 border-t border-gray-700/50 px-4 py-2" style={{ marginLeft: '280px' }}>
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <div className="flex items-center gap-1">
           <span className="text-gray-400">Latency</span>
