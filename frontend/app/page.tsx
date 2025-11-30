@@ -13,6 +13,7 @@ import FactoryStrip from "./components/factory/FactoryStrip";
 import FactoryHelpPanel from "./components/FactoryHelpPanel";
 import FactoryStatusBar from "./components/factory/FactoryStatusBar";
 import ShareFactoryButton from "./components/factory/ShareFactoryButton";
+import FactoryNarrator, { useFactoryNarrator } from "./components/factory/FactoryNarrator";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import { useSandboxStore } from "./store/sandboxStore";
