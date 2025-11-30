@@ -9,6 +9,8 @@ import OrbitPanel from "./components/OrbitPanel";
 import MissionPanel from "./components/MissionPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import FactoryStrip from "./components/factory/FactoryStrip";
+import FactoryNodeDetailPanel from "./components/FactoryNodeDetailPanel";
+import FactoryStartGuide from "./components/FactoryStartGuide";
 import Toast from "./components/Toast";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
@@ -85,7 +87,14 @@ export default function Home() {
           
           {/* Bottom - Mode-specific panels */}
           {activeMode === "factory" && (
-            <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={null} />
+            <>
+              <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={null} />
+              <FactoryNodeDetailPanel 
+                selectedNodeId={factorySelectedNode} 
+                onClose={() => setFactorySelectedNode(null)} 
+              />
+              <FactoryStartGuide />
+            </>
           )}
           
           {/* Onboarding Tutorial */}

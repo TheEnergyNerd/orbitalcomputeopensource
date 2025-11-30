@@ -92,6 +92,14 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
   }, [simState]);
 
   useEffect(() => {
+    // Only animate if there's actual production happening
+    const hasProduction = Object.values(simState?.machines || {}).some(m => m.lines > 0);
+    
+    if (!hasProduction) {
+      // No animation if no machines are running
+      return;
+    }
+
     // Animate packet offsets
     const animate = () => {
       if (!simState) return;
