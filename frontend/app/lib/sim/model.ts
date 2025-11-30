@@ -55,6 +55,9 @@ export interface FactoryConstraints {
   gridOccupied: boolean[][]; // 2D grid of occupied cells
 }
 
+import type { OrbitalPodSpec, GroundDcSpec } from "./orbitConfig";
+import { DEFAULT_ORBITAL_POD_SPEC, DEFAULT_GROUND_DC_SPEC } from "./orbitConfig";
+
 export interface SimState {
   resources: Record<ResourceId, ResourceState>;
   machines: Record<MachineId, Machine>;
@@ -62,6 +65,12 @@ export interface SimState {
   timeScale: 1 | 10 | 100;
   rdPoints: number;
   constraints: FactoryConstraints;
+  // Orbit configs
+  orbitalPodSpec: OrbitalPodSpec;
+  groundDcSpec: GroundDcSpec;
+  // Simple state
+  podsInOrbit: number;
+  targetComputeKw: number; // Total compute demand
 }
 
 /**
@@ -278,6 +287,10 @@ export function createInitialSimState(): SimState {
     timeScale: 1,
     rdPoints: 0,
     constraints,
+    orbitalPodSpec: DEFAULT_ORBITAL_POD_SPEC,
+    groundDcSpec: DEFAULT_GROUND_DC_SPEC,
+    podsInOrbit: 0,
+    targetComputeKw: 42000, // 42 GW baseline ground capacity
   };
 }
 

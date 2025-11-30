@@ -5,6 +5,7 @@ import { getMachineUtilization } from "../../lib/sim/engine";
 import type { MachineId, ResourceId } from "../../lib/sim/model";
 import { formatSigFigs, formatDecimal } from "../../lib/utils/formatNumber";
 import { classifyNode, getStatusColor } from "../../lib/ui/semantics";
+import { getOrbitalComputeKw } from "../../lib/sim/orbitConfig";
 
 /**
  * Factory Status Bar - Shows key metrics and storytelling text

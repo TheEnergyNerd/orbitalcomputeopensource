@@ -189,7 +189,12 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
     if (outputResource) {
       // For discrete resources (pods, launches), round to nearest integer
       if (machine.outputResource === 'pods' || machine.outputResource === 'launches') {
-        outputResource.buffer += Math.round(produced);
+        const launched = Math.round(produced);
+        outputResource.buffer += launched;
+        // When launches complete, add pods to orbit
+        if (machine.outputResource === 'launches' && launched > 0) {
+          next.podsInOrbit = Math.floor(next.podsInOrbit + launched);
+        }
       } else {
         outputResource.buffer += produced;
       }

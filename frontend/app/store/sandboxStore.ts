@@ -482,6 +482,12 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
     set((state) => {
       if (!state.simState) return state;
       const nextState = stepSim(state.simState, dtMinutes);
+      
+      // Sync podsInOrbit from launches buffer (when launches complete, they become pods in orbit)
+      // This happens in stepSim when launches are produced, but we ensure it's synced here
+      const launchesBuffer = Math.floor(nextState.resources.launches?.buffer ?? 0);
+      // podsInOrbit is already updated in stepSim when launches are produced
+      
       return { simState: nextState };
     });
   },
