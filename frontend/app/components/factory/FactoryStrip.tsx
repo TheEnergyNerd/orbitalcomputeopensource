@@ -469,9 +469,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         {/* Factory Flow label */}
         <text
           x={svgWidth / 2}
-          y="15"
+          y="20"
           textAnchor="middle"
-          className="text-xs fill-gray-300 font-semibold"
+          className="text-sm fill-gray-300 font-semibold"
         >
           Factory Flow: From Ground Materials to Orbit
         </text>
