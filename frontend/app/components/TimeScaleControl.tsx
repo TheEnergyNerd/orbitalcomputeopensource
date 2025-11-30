@@ -14,7 +14,7 @@ export default function TimeScaleControl() {
   ];
 
   return (
-    <div className="fixed bottom-[280px] left-[280px] z-40 bg-gray-800/90 border border-gray-700 rounded-lg p-2">
+    <div className="fixed top-[calc(70px+500px)] left-6 z-40 bg-gray-800/90 border border-gray-700 rounded-lg p-2">
       <div className="text-xs text-gray-400 mb-1">Time Scale</div>
       <div className="flex gap-1">
         {options.map((option) => (

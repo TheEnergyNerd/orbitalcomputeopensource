@@ -135,7 +135,7 @@ export default function SandboxVisualizations() {
 
   if (!isVisible) {
     return (
-      <div className="fixed bottom-[280px] left-[340px] z-50">
+      <div className="fixed top-[calc(70px+500px)] left-[280px] z-50">
         <button
           onClick={() => setIsVisible(true)}
           className="px-4 py-2 bg-accent-blue hover:bg-accent-blue/80 text-dark-bg rounded-lg text-sm font-semibold transition-all shadow-lg"
