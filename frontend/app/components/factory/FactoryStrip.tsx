@@ -21,12 +21,13 @@ interface FactoryStripProps {
   highlightNodeId?: string | null; // Node to highlight as bottleneck
 }
 
-// Increased sizes for less compression - much larger spacing
-const BUILDING_WIDTH = 200;
-const BUILDING_HEIGHT = 90;
-const SOURCE_WIDTH = 140;
-const SOURCE_HEIGHT = 70;
-const BUILDING_SPACING = 100; // Much more space between buildings
+// Proper spacing for scrollable factory flow
+const BUILDING_WIDTH = 240;
+const BUILDING_HEIGHT = 100;
+const SOURCE_WIDTH = 160;
+const SOURCE_HEIGHT = 80;
+const BUILDING_SPACING = 260; // Minimum 260px spacing between nodes
+const VERTICAL_SPACING = 160; // Minimum 160px vertical spacing
 const CONDUIT_HEIGHT = 8;
 const PACKET_COUNT = 6;
 const PACKET_RADIUS = 4;
@@ -168,11 +169,18 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       }
     });
 
-    // Add steel source (for compute line, positioned above) - much more spacing
+    // Add steel source (for compute line, positioned above) - proper vertical spacing
     const computeLineX = buildingPositions["computeLine"]?.x || 0;
     buildingPositions["steelSource"] = {
       x: computeLineX,
-      y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 50,
+      y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - VERTICAL_SPACING / 2,
+    };
+    
+    // Add launchOpsResource source (positioned below launchOps) - proper vertical spacing
+    const launchOpsX = buildingPositions["launchOps"]?.x || 0;
+    buildingPositions["launchOpsResource"] = {
+      x: launchOpsX,
+      y: centerY + BUILDING_HEIGHT / 2 + VERTICAL_SPACING / 2,
     };
   }
 
@@ -429,7 +437,8 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
   }
   
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[320px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+    <div className="fixed bottom-0 left-0 right-0 h-[320px] bg-gray-900/95 border-t border-gray-700 z-20" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+      <div className="w-full h-full overflow-x-auto overflow-y-hidden">
       {/* Collapse button */}
       <button
         onClick={() => setIsExpanded(false)}
@@ -439,10 +448,10 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       </button>
       
       <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="w-full h-full"
-        preserveAspectRatio="xMidYMid meet"
-        style={{ overflow: 'visible' }}
+        width={svgWidth}
+        height={svgHeight}
+        className="block"
+        style={{ minWidth: `${svgWidth}px` }}
       >
         {/* Render conduits first (behind buildings) - only show active ones */}
         {RESOURCE_FLOWS.map(renderConduit)}
@@ -490,6 +499,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           );
         })}
       </svg>
+      </div>
     </div>
   );
 }

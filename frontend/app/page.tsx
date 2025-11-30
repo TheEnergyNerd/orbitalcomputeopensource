@@ -3,7 +3,8 @@
 import SandboxGlobe from "./components/SandboxGlobe";
 import DetailPanel from "./components/DetailPanel";
 // Removed old components: SandboxControls, SandboxMetrics, SimulationFeedback, DeploymentQueue, DeploymentTimeDisplay
-import SandboxVisualizations from "./components/SandboxVisualizations";
+import OrbitalAdvantagePanel from "./components/OrbitalAdvantagePanel";
+import OnboardingTutorial from "./components/OnboardingTutorial";
 import LeftPanel from "./components/LeftPanel";
 import KpiBar from "./components/KpiBar";
 import SunClockSimplified from "./components/SunClockSimplified";
@@ -80,7 +81,15 @@ export default function Home() {
           
           {/* Bottom - Factory Flow Diagram (collapsible) */}
           <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={bottleneck?.nodeId || null} />
-          <SandboxVisualizations />
+          
+          {/* Orbital Advantage Panel (replaces Show Improvements) */}
+          <div className="orbital-advantage">
+            <OrbitalAdvantagePanel />
+          </div>
+          
+          {/* Onboarding Tutorial */}
+          <OnboardingTutorial />
+          
           <DetailPanel />
         </>
       )}

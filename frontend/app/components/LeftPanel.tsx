@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
 import MissionPanel from "./MissionPanel";
-import FactorySidebar from "./FactorySidebar";
+import FactorySystemsPanel from "./FactorySystemsPanel";
 import { useFactoryNarrator } from "./factory/FactoryNarrator";
 
 type Mode = "factory" | "orbit" | "missions";
@@ -89,11 +89,7 @@ export default function LeftPanel({ selectedNodeId: propSelectedNodeId, onSelect
 
         {/* Content */}
         {activeMode === "factory" && (
-          <FactorySidebar
-            selectedNodeId={selectedNodeId as any}
-            onSelectNode={onSelectNode}
-            highlightNodeId={bottleneck?.nodeId || null}
-          />
+          <FactorySystemsPanel />
         )}
 
         {activeMode === "orbit" && (
