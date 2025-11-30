@@ -17,14 +17,14 @@ export default function FactoryStatusBar() {
 
   const { machines, resources } = simState;
 
-  // Calculate key metrics
+  // Calculate key metrics using config-based formulas
   const podsPerMonth = (resources.pods?.prodPerMin ?? 0) * 60 * 24 * 30;
   const launchesPerMonth = (resources.launches?.prodPerMin ?? 0) * 60 * 24 * 30;
-  const podsInOrbit = Math.floor(resources.launches?.buffer ?? 0);
-  const orbitalCapacityMW = podsInOrbit * 0.15;
-  const BASE_GROUND_CAPACITY_MW = 42000;
-  const totalCapacity = orbitalCapacityMW + BASE_GROUND_CAPACITY_MW;
-  const orbitalShare = totalCapacity > 0 ? (orbitalCapacityMW / totalCapacity) * 100 : 0;
+  const podsInOrbit = Math.floor(simState.podsInOrbit);
+  const orbitalSpec = simState.orbitalPodSpec;
+  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec);
+  const targetComputeKw = simState.targetComputeKw;
+  const orbitalShare = targetComputeKw > 0 ? (orbitalComputeKw / targetComputeKw) * 100 : 0;
 
   // Find starved and constrained nodes
   let starvedNode: string | null = null;
