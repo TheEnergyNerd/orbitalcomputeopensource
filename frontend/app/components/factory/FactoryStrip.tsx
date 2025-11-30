@@ -312,6 +312,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     const utilization = getBuildingUtilization(building.id);
     const { isStarved, isConstrained } = getBuildingStatus(building.id);
     const isSelected = selectedNodeId === building.id;
+    const isHighlighted = highlightNodeId === building.id;
 
     let BuildingComponent: React.ComponentType<BuildingSpriteProps> | null = null;
     if (building.id === "siliconSource") {
