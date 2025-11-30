@@ -384,19 +384,19 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         {isMobile ? (
           <>
             <text
-              x={width + 10}
+              x={width + 15}
               y={height / 2 - 4}
               textAnchor="start"
-              className="text-[11px] fill-gray-300 font-semibold"
+              className="text-xs fill-gray-300 font-semibold"
             >
               {building.label}
             </text>
             {building.subtitle && (
               <text
-                x={width + 10}
+                x={width + 15}
                 y={height / 2 + 10}
                 textAnchor="start"
-                className="text-[9px] fill-gray-400"
+                className="text-[10px] fill-gray-400"
               >
                 {building.subtitle}
               </text>
@@ -406,18 +406,18 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           <>
             <text
               x={width / 2}
-              y={height + 12}
+              y={height + 18}
               textAnchor="middle"
-              className="text-[11px] fill-gray-300 font-semibold"
+              className="text-xs fill-gray-300 font-semibold"
             >
               {building.label}
             </text>
             {building.subtitle && (
               <text
                 x={width / 2}
-                y={height + 24}
+                y={height + 32}
                 textAnchor="middle"
-                className="text-[9px] fill-gray-400"
+                className="text-[10px] fill-gray-400"
               >
                 {building.subtitle}
               </text>
