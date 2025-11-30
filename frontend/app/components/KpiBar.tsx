@@ -21,26 +21,29 @@ export default function KpiBar() {
   const targetComputeKw = simState.targetComputeKw;
   
   // Calculate annualized metrics
-  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec);
+  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec, simState.podDegradationFactor);
   const orbitalShare = targetComputeKw > 0 ? (orbitalComputeKw / targetComputeKw) * 100 : 0;
   
   const energyMwhPerYear = getOrbitHybridEnergyMwhPerYear(
     targetComputeKw,
     orbitalComputeKw,
     orbitalSpec,
-    groundSpec
+    groundSpec,
+    simState.podDegradationFactor
   );
   const co2TonsPerYear = getOrbitHybridCo2TonsPerYear(
     targetComputeKw,
     podsInOrbit,
     orbitalSpec,
-    groundSpec
+    groundSpec,
+    simState.podDegradationFactor
   );
   const energyCostPerYear = getOrbitHybridEnergyCostPerYear(
     targetComputeKw,
     podsInOrbit,
     orbitalSpec,
-    groundSpec
+    groundSpec,
+    simState.podDegradationFactor
   );
   
   // Simplified metrics (can be enhanced later)

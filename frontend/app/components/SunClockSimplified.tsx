@@ -19,7 +19,7 @@ export default function SunClockSimplified() {
   const groundSpec = simState.groundDcSpec;
 
   // Calculate orbital metrics using config-based formulas
-  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec);
+  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec, simState.podDegradationFactor);
   const orbitalPowerMw = getOrbitalPowerMw(podsInOrbit, orbitalSpec);
   const capacityFactor = orbitalSpec.capacityFactor;
   const effectivePue = orbitalSpec.effectivePue;

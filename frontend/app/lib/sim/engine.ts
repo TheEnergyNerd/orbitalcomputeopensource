@@ -3,6 +3,7 @@
  */
 
 import type { SimState, Machine, ResourceId, ResourceState, FactoryConstraints } from './model';
+import { DEFAULT_ORBITAL_POD_SPEC } from './orbitConfig';
 
 /**
  * Get machine utilization (0-1, can exceed 1 if bottlenecked)
@@ -240,6 +241,32 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
     if (next.resources[resourceId].buffer < 0) {
       next.resources[resourceId].buffer = 0;
     }
+  }
+
+  // Apply pod degradation (3% per year)
+  // dtMinutes is in minutes, so 1 year = 365 * 24 * 60 = 525600 minutes
+  const degradationPerYear = 0.03;
+  const yearsElapsed = scaledDt / (365 * 24 * 60);
+  if (yearsElapsed > 0 && next.podsInOrbit > 0) {
+    // Degrade by 3% per year
+    const degradationFactor = Math.pow(1 - degradationPerYear, yearsElapsed);
+    next.podDegradationFactor = Math.max(0.1, next.podDegradationFactor * degradationFactor);
+  }
+
+  // Apply generational upgrades to orbital pod spec
+  // Each generation increases compute per pod, reduces mass/cost
+  if (next.generation > 0) {
+    const genMultiplier = Math.pow(1.5, next.generation); // 1.5x per generation
+    const costReduction = Math.pow(0.8, next.generation); // 20% cost reduction per generation
+    const massReduction = Math.pow(0.85, next.generation); // 15% mass reduction per generation
+    
+    // Update orbital pod spec with generational improvements
+    next.orbitalPodSpec = {
+      ...next.orbitalPodSpec,
+      computeKw: DEFAULT_ORBITAL_POD_SPEC.computeKw * genMultiplier,
+      capexPerPod: DEFAULT_ORBITAL_POD_SPEC.capexPerPod * costReduction,
+      // Mass reduction affects launch costs indirectly (handled in economics)
+    };
   }
 
   return next;

@@ -43,9 +43,15 @@ export const DEFAULT_GROUND_DC_SPEC: GroundDcSpec = {
 
 /**
  * Get orbital compute capacity in kW
+ * Accounts for pod degradation and generational upgrades
  */
-export function getOrbitalComputeKw(podsInOrbit: number, spec: OrbitalPodSpec): number {
-  return podsInOrbit * spec.computeKw;
+export function getOrbitalComputeKw(
+  podsInOrbit: number, 
+  spec: OrbitalPodSpec, 
+  degradationFactor?: number
+): number {
+  const degFactor = degradationFactor ?? 1.0;
+  return podsInOrbit * spec.computeKw * degFactor;
 }
 
 /**
@@ -77,7 +83,8 @@ export function getOrbitHybridEnergyMwhPerYear(
   totalComputeKw: number,
   orbitalComputeKw: number,
   orbitalSpec: OrbitalPodSpec,
-  groundSpec: GroundDcSpec
+  groundSpec: GroundDcSpec,
+  degradationFactor?: number
 ): number {
   const groundKw = Math.max(0, totalComputeKw - orbitalComputeKw);
   
@@ -97,9 +104,10 @@ export function getOrbitHybridCo2TonsPerYear(
   totalComputeKw: number,
   podsInOrbit: number,
   orbitalSpec: OrbitalPodSpec,
-  groundSpec: GroundDcSpec
+  groundSpec: GroundDcSpec,
+  degradationFactor?: number
 ): number {
-  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec);
+  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec, degradationFactor);
   const groundKw = Math.max(0, totalComputeKw - orbitalComputeKw);
   
   const groundEnergy = getGroundEnergyMwhPerYear(groundKw, groundSpec);
@@ -117,9 +125,10 @@ export function getOrbitHybridEnergyCostPerYear(
   totalComputeKw: number,
   podsInOrbit: number,
   orbitalSpec: OrbitalPodSpec,
-  groundSpec: GroundDcSpec
+  groundSpec: GroundDcSpec,
+  degradationFactor?: number
 ): number {
-  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec);
+  const orbitalComputeKw = getOrbitalComputeKw(podsInOrbit, orbitalSpec, degradationFactor);
   const groundKw = Math.max(0, totalComputeKw - orbitalComputeKw);
   
   const groundEnergy = getGroundEnergyMwhPerYear(groundKw, groundSpec);
