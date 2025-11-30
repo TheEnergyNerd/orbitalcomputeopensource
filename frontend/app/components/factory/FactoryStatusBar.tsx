@@ -52,7 +52,7 @@ export default function FactoryStatusBar() {
   }
 
   return (
-    <div className="fixed bottom-[200px] left-0 right-0 z-25 bg-gray-900/90 border-t border-gray-700/50 px-4 py-2" style={{ marginLeft: '280px' }}>
+    <div className="fixed bottom-[220px] left-0 right-0 z-25 bg-gray-900/90 border-t border-gray-700/50 px-4 py-2" style={{ marginLeft: '280px' }}>
       <div className="flex items-center justify-between gap-4 text-xs">
         <div className="flex-1">
           <p className="text-gray-300 font-semibold">{statusText}</p>

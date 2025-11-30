@@ -306,12 +306,15 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
     );
   };
 
+  const svgHeight = isMobile ? 300 : 220; // Extra height for labels
+  
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[200px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+    <div className="fixed bottom-0 left-0 right-0 h-[220px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
       <svg
-        viewBox={`0 0 ${currentX + 20} ${isMobile ? 300 : 200}`}
+        viewBox={`0 0 ${currentX + 20} ${svgHeight}`}
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
+        style={{ overflow: 'visible' }}
       >
         {/* Render conduits first (behind buildings) */}
         {RESOURCE_FLOWS.map(renderConduit)}
