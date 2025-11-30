@@ -238,7 +238,8 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
 
     const throughput = getResourceThroughput(flow.resource, simState);
     const speed = Math.max(throughput / 100, 0.15);
-    const opacity = throughput > 0 ? 0.6 + speed * 0.4 : 0.2;
+    // Show only active connectors (dim inactive to 20% opacity)
+    const opacity = throughput > 0 ? 1.0 : 0.2;
 
     // Calculate path - handle both horizontal and vertical layouts
     const fromIsSource = flow.from.includes("Source");
@@ -353,32 +354,29 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           width={width}
           height={height}
         />
+        {/* Clean thin outlines with color accents - no glow */}
         {isSelected && (
+          <rect
+            x="-1"
+            y="-1"
+            width={width + 2}
+            height={height + 2}
+            fill="none"
+            stroke="#60a5fa"
+            strokeWidth="2"
+            rx="4"
+          />
+        )}
+        {isHighlighted && (
           <rect
             x="-2"
             y="-2"
             width={width + 4}
             height={height + 4}
             fill="none"
-            stroke="#60a5fa"
-            strokeWidth="3"
-            rx="6"
-            opacity="0.8"
-          />
-        )}
-        {isHighlighted && (
-          <rect
-            x="-4"
-            y="-4"
-            width={width + 8}
-            height={height + 8}
-            fill="none"
-            stroke="#ef4444"
-            strokeWidth="3"
-            rx="6"
-            opacity="0.9"
-            className="animate-pulse"
-            style={{ transform: `scale(1.05)` }}
+            stroke="#f97316"
+            strokeWidth="2"
+            rx="4"
           />
         )}
         {/* Label and subtitle below building (or to the right on mobile) */}
