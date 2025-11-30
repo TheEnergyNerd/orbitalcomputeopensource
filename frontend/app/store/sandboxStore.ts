@@ -505,7 +505,10 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
         const { canAddMachineLine } = require("../lib/sim/constraints");
         const check = canAddMachineLine(state.simState, machineId as any, lineDelta);
         if (!check.canAdd) {
-          // Return state unchanged (error will be shown by UI)
+          // Show toast error
+          const { showToast } = require("../lib/utils/toast");
+          showToast(check.reason || "Cannot add machine line", 'error');
+          // Return state unchanged
           return state;
         }
       }

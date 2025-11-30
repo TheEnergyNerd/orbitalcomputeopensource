@@ -91,9 +91,9 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
   let totalWorkforceUsed = 0;
 
   Object.values(next.machines).forEach(machine => {
-    totalPowerUsed += machine.powerDrawMW * machine.lines;
-    totalCoolingUsed += machine.heatMW * machine.lines;
-    totalWorkforceUsed += machine.workers * machine.lines;
+    totalPowerUsed += (machine.powerDrawMW || 0) * machine.lines;
+    totalCoolingUsed += (machine.heatMW || 0) * machine.lines;
+    totalWorkforceUsed += (machine.workers || 0) * machine.lines;
   });
 
   next.constraints.powerUsedMW = totalPowerUsed;
@@ -164,8 +164,37 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
       maxFeasibleOutput = maxOutputPerMin;
     }
 
+    // Get machine utilization considering constraints
+    let utilization = getMachineUtilization(machine, next.resources, next.constraints);
+    
+    // Apply constraint penalties if over capacity
+    // Force utilization reduction if constraints are exceeded
+    const powerRatio = next.constraints.powerCapacityMW > 0 
+      ? Math.min(1, next.constraints.powerCapacityMW / Math.max(1, totalPowerUsed))
+      : 1;
+    const coolingRatio = next.constraints.coolingCapacityMW > 0
+      ? Math.min(1, next.constraints.coolingCapacityMW / Math.max(1, totalCoolingUsed))
+      : 1;
+    const workforceRatio = next.constraints.workforceTotal > 0
+      ? Math.min(1, next.constraints.workforceTotal / Math.max(1, totalWorkforceUsed))
+      : 1;
+    
+    // Apply the most restrictive constraint
+    const constraintMultiplier = Math.min(powerRatio, coolingRatio, workforceRatio);
+    utilization = utilization * constraintMultiplier;
+    
+    // If inputs are missing, mark as starved (utilization < 0.1)
+    const hasInputs = Object.keys(machine.inputRates).length === 0 || 
+      Object.entries(machine.inputRates).some(([resourceId]) => {
+        const resource = next.resources[resourceId as ResourceId];
+        return resource && resource.buffer > 0;
+      });
+    if (!hasInputs && machine.lines > 0) {
+      utilization = Math.min(utilization, 0.05); // Starved machines run at 5% max
+    }
+
     // Actual output is limited by inputs and constraints
-    const actualOutputPerMin = Math.min(maxFeasibleOutput, maxOutputPerMin) * effectiveUtilization;
+    const actualOutputPerMin = Math.min(maxFeasibleOutput, maxOutputPerMin) * utilization;
 
     // Consume inputs
     for (const { resourceId, rate } of inputConsumptions) {

@@ -174,6 +174,10 @@ export function createInitialSimState(): SimState {
         speedLevel: 0,
         efficiencyLevel: 0,
       },
+      powerDrawMW: 2.0,
+      heatMW: 1.5,
+      workers: 5,
+      footprint: { width: 2, height: 2 },
     },
     rackLine: {
       id: 'rackLine',

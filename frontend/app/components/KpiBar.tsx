@@ -52,7 +52,7 @@ export default function KpiBar() {
   const maxQueue = 100; // TODO: derive from constraints
 
   return (
-    <div className="fixed top-[70px] left-[280px] right-6 z-30 bg-gray-900/90 border-b border-gray-700/50 px-3 py-1.5">
+    <div className="fixed top-[70px] left-[280px] right-[280px] z-30 bg-gray-900/90 border-b border-gray-700/50 px-3 py-1.5">
       <div className="flex items-center justify-center gap-3 text-[11px] flex-wrap">
         <span className="text-gray-400">Latency</span>
         <span className="text-white font-semibold">{formatDecimal(avgLatencyMs, 1)} ms</span>

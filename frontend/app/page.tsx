@@ -14,6 +14,7 @@ import FactoryHelpPanel from "./components/FactoryHelpPanel";
 import FactoryStatusBar from "./components/factory/FactoryStatusBar";
 import ShareFactoryButton from "./components/factory/ShareFactoryButton";
 import FactoryNarrator, { useFactoryNarrator } from "./components/factory/FactoryNarrator";
+import Toast from "./components/Toast";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import { useSandboxStore } from "./store/sandboxStore";
@@ -65,6 +66,7 @@ export default function Home() {
 
       {!loading && (
         <>
+          <Toast />
           <GlobePositionDebug viewerRef={viewerRef} />
           <ErrorPanel />
           <SandboxModeSwitcher />

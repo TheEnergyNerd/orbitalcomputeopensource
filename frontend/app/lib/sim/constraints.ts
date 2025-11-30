@@ -58,7 +58,11 @@ export function canAddMachineLine(
 
   // Check floor space
   const footprint = machine.footprint;
-  const spaceNeeded = footprint.width * footprint.height * additionalLines;
+  if (!footprint || !footprint.width || !footprint.height) {
+    // Machine doesn't have footprint defined, skip space check
+    // (but still check other constraints)
+  } else {
+    const spaceNeeded = footprint.width * footprint.height * additionalLines;
   const availableSpace = countAvailableGridCells(constraints);
   
   if (spaceNeeded > availableSpace) {

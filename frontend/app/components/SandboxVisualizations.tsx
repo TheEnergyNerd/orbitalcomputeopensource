@@ -138,7 +138,7 @@ export default function SandboxVisualizations() {
       <div className="fixed bottom-[280px] left-6 z-30">
         <button
           onClick={() => setIsVisible(true)}
-          className="px-4 py-2 bg-accent-blue hover:bg-accent-blue/80 text-dark-bg rounded-lg text-sm font-semibold transition-all shadow-lg"
+          className="px-4 py-2 bg-accent-blue hover:bg-accent-blue/80 text-dark-bg rounded-lg text-sm font-semibold transition-all shadow-lg z-50"
           title="Show Improvements vs Ground-Only"
         >
           ▶ Show Improvements
