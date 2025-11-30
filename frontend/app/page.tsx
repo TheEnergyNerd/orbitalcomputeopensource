@@ -50,7 +50,7 @@ export default function Home() {
         <div className="fixed inset-0 flex items-center justify-center bg-dark-bg/80 z-50">
           <div className="text-center panel-glass rounded-xl p-8 shadow-2xl">
             <div className="text-3xl font-bold text-accent-blue mb-4 font-mono">Loading Simulation...</div>
-            <div className="text-md text-gray-300 font-mono">Connecting to backend and initializing 3D globe</div>
+            <div className="text-md text-gray-300 font-mono">Initializing simulation...</div>
             {error && (
               <div className="mt-4 text-sm text-accent-orange font-mono">
                 {error}
