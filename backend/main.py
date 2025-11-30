@@ -24,7 +24,7 @@ from services.starlink import get_starlink_service
 
 app = FastAPI(title="Orbital Compute Control Room API")
 
-# CORS middleware
+# CORS middleware - MUST be added before other middleware
 # Allow all origins in production (you can restrict this to specific domains)
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "*")
 if ALLOWED_ORIGINS_STR == "*":
@@ -35,6 +35,7 @@ if ALLOWED_ORIGINS_STR == "*":
         allow_credentials=False,  # Must be False when allow_origins=["*"]
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
 else:
     # Allow specific origins
@@ -42,10 +43,48 @@ else:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+
+# Exception handler to ensure CORS headers are added even on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Ensure CORS headers are added even when exceptions occur"""
+    from fastapi.responses import JSONResponse
+    from fastapi import status
+    
+    # Add CORS headers manually
+    headers = {}
+    if ALLOWED_ORIGINS_STR == "*":
+        headers["Access-Control-Allow-Origin"] = "*"
+    else:
+        origin = request.headers.get("origin")
+        if origin in ALLOWED_ORIGINS:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+    headers["Access-Control-Allow-Methods"] = "*"
+    headers["Access-Control-Allow-Headers"] = "*"
+    
+    # Return error response with CORS headers
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=headers
+        )
+    else:
+        # Log the actual error for debugging
+        import traceback
+        print(f"[ERROR] Unhandled exception: {exc}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error. Check server logs for details."},
+            headers=headers
+        )
 
 # Compression middleware for large responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
