@@ -24,7 +24,7 @@ export default function FactoryStrip() {
       <div className="flex items-center justify-center gap-6">
         {(Object.keys(machines) as MachineId[]).map((machineId) => {
           const machine = machines[machineId];
-          const utilization = getMachineUtilization(machine, resources);
+          const utilization = getMachineUtilization(machine, resources, simState.constraints);
           const utilizationPercent = Math.min(100, utilization * 100);
           const isBottlenecked = utilization > 0.9;
           const isUnderutilized = utilization < 0.2;

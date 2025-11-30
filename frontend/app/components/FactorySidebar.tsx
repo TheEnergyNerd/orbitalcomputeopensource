@@ -38,7 +38,7 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
   Object.entries(machines).forEach(([machineId, machine]) => {
     if (machine.lines === 0) return;
     
-    const utilization = getMachineUtilization(machine, resources);
+    const utilization = getMachineUtilization(machine, resources, simState.constraints);
     const isStarved = utilization < 0.1 && machine.lines > 0;
     const isConstrained = utilization > 0.8;
     
@@ -99,7 +99,7 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
       const machineId = selectedNode.id as MachineId;
       const machine = machines[machineId];
       if (machine) {
-        const utilization = getMachineUtilization(machine, resources);
+        const utilization = getMachineUtilization(machine, resources, simState.constraints);
         const speedMultiplier = 1 + (machine.upgrades.speedLevel * 0.2);
         const outputRate = machine.baseOutputPerLine * speedMultiplier * machine.lines;
         
@@ -338,7 +338,7 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
         <div className="space-y-2 mt-2">
           {(Object.keys(machines) as MachineId[]).map((machineId) => {
             const machine = machines[machineId];
-            const utilization = getMachineUtilization(machine, resources);
+            const utilization = getMachineUtilization(machine, resources, simState.constraints);
             return (
               <MachineCard
                 key={machineId}
