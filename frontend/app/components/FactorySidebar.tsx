@@ -207,10 +207,6 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
             ))}
           </div>
         )}
-
-        <div className="text-[10px] text-gray-400 mt-2">
-          Launches: {formatSigFigs(launchesPerMonth, 1)}/mo
-        </div>
       </div>
 
       {/* Compact Resource List */}
@@ -326,14 +322,14 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
         </div>
       )}
 
-      {/* Collapsible Machines List */}
+      {/* Collapsible Machines List - collapsed by default */}
       <details
-        open={machinesExpanded}
+        open={false}
         onToggle={(e) => setMachinesExpanded(e.currentTarget.open)}
         className="mt-4"
       >
         <summary className="text-xs font-semibold text-gray-300 cursor-pointer mb-2">
-          Machines ({Object.keys(machines).length}) — Advanced
+          Machines ({Object.keys(machines).length})
         </summary>
         <div className="space-y-2 mt-2">
           {(Object.keys(machines) as MachineId[]).map((machineId) => {

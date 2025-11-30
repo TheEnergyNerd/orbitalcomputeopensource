@@ -18,16 +18,15 @@ export default function MachineCard({ machine, utilization, onChangeLines }: Mac
   const isBottlenecked = utilization > 0.95;
   const isUnderutilized = utilization < 0.2;
 
+  // Grayscale with highlight only when bottleneck
   return (
-    <div className={`p-3 rounded-lg border transition-all ${
+    <div className={`p-2 rounded-lg border transition-all ${
       isBottlenecked 
-        ? "bg-red-500/20 border-red-500/50 animate-pulse" 
-        : isUnderutilized
-        ? "bg-gray-800/30 border-gray-700 opacity-60"
-        : "bg-gray-800 border-gray-700"
+        ? "bg-gray-800 border-orange-500" 
+        : "bg-gray-800/50 border-gray-700"
     }`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold text-gray-300">{machine.name}</span>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold text-gray-300">{machine.name}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => onChangeLines(Math.max(0, machine.lines - 1))}
@@ -48,47 +47,36 @@ export default function MachineCard({ machine, utilization, onChangeLines }: Mac
         </div>
       </div>
 
-      <div className="space-y-1.5 text-xs">
+      <div className="space-y-1 text-[11px]">
         <div className="flex justify-between text-gray-400">
-          <span>Output:</span>
-          <span className="text-white font-mono">
-            {formatSigFigs(effectiveOutput)} {machine.outputResource}/min
+          <span>Instances:</span>
+          <span className="text-white font-semibold">{machine.lines}</span>
+        </div>
+        <div className="flex justify-between text-gray-400">
+          <span>Output/min:</span>
+          <span className="text-white font-semibold">
+            {formatSigFigs(effectiveOutput)} {machine.outputResource}
           </span>
         </div>
-
-        <div className="space-y-1">
-          <div className="flex justify-between text-gray-400 mb-1">
-            <span>Utilization:</span>
-            <span className={`font-semibold ${
-              isBottlenecked ? "text-red-400" :
-              utilizationPercent > 80 ? "text-yellow-400" :
-              "text-green-400"
+        <div className="flex items-center justify-between text-gray-400">
+          <span>Utilization:</span>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-semibold ${
+              isBottlenecked ? "text-orange-400" : "text-gray-300"
             }`}>
               {formatSigFigs(utilizationPercent)}%
             </span>
-          </div>
-          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-2 rounded-full transition-all ${
-                isBottlenecked ? "bg-red-500" :
-                utilizationPercent > 80 ? "bg-yellow-400" :
-                "bg-green-500"
-              }`}
-              style={{ width: `${utilizationPercent}%` }}
-            />
+            <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className={`h-1.5 rounded-full transition-all ${
+                  isBottlenecked ? "bg-orange-500" : "bg-gray-500"
+                }`}
+                style={{ width: `${utilizationPercent}%` }}
+              />
+            </div>
           </div>
         </div>
 
-        {machine.upgrades.speedLevel > 0 && (
-          <div className="text-[10px] text-gray-500 mt-1">
-            Speed +{machine.upgrades.speedLevel * 20}%
-          </div>
-        )}
-        {machine.upgrades.efficiencyLevel > 0 && (
-          <div className="text-[10px] text-gray-500">
-            Efficiency +{machine.upgrades.efficiencyLevel * 10}%
-          </div>
-        )}
       </div>
     </div>
   );

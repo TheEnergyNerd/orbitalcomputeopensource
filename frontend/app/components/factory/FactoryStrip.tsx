@@ -428,19 +428,42 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     );
   };
 
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
+  
   // Calculate SVG dimensions based on layout
   const svgWidth = isMobile ? 100 : (buildingPositions["launchComplex"]?.x || 0) + BUILDING_WIDTH + 40;
-  const svgHeight = isMobile ? 600 : 220; // Extra height for vertical stack on mobile
+  const svgHeight = isMobile ? 600 : 200; // Fixed height ~200px
+  
+  if (!isExpanded) {
+    return (
+      <div className="fixed bottom-0 left-0 right-0 h-8 bg-gray-900/95 border-t border-gray-700 z-20" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="w-full h-full flex items-center justify-center text-xs text-gray-400 hover:text-white transition"
+        >
+          Show Factory Flow ▼
+        </button>
+      </div>
+    );
+  }
   
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[220px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+    <div className="fixed bottom-0 left-0 right-0 h-[200px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+      {/* Collapse button */}
+      <button
+        onClick={() => setIsExpanded(false)}
+        className="absolute top-2 right-2 text-xs text-gray-400 hover:text-white transition z-30 bg-gray-800/80 px-2 py-1 rounded"
+      >
+        Hide Factory Flow ▲
+      </button>
+      
       <svg
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
         style={{ overflow: 'visible' }}
       >
-        {/* Render conduits first (behind buildings) */}
+        {/* Render conduits first (behind buildings) - only show active ones */}
         {RESOURCE_FLOWS.map(renderConduit)}
 
         {/* Factory Flow label */}
@@ -448,7 +471,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           x={svgWidth / 2}
           y="15"
           textAnchor="middle"
-          className="text-sm fill-gray-200 font-bold"
+          className="text-xs fill-gray-300 font-semibold"
         >
           Factory Flow: From Ground Materials to Orbit
         </text>

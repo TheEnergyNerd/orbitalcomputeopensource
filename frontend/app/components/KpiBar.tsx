@@ -10,8 +10,6 @@ import {
 } from "../lib/sim/orbitConfig";
 
 export default function KpiBar() {
-  const { simState } = useSandboxStore();
-
   // Calculate metrics using config-based formulas
   const simState = useSandboxStore((s) => s.simState);
   
@@ -54,47 +52,25 @@ export default function KpiBar() {
   const maxQueue = 100; // TODO: derive from constraints
 
   return (
-    <div className="fixed bottom-[240px] left-0 right-0 z-25 bg-gray-900/95 border-t border-gray-700/50 px-4 py-2" style={{ marginLeft: '280px' }}>
-      <div className="flex flex-wrap items-center gap-4 text-xs">
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Latency</span>
-          <span className="text-white font-semibold">{formatDecimal(avgLatencyMs, 1)} ms</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Energy Cost</span>
-          <span className="text-white font-semibold">${formatSigFigs(energyCostPerYear / 1_000_000, 1)}M/yr</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Cooling</span>
-          <span className="text-white font-semibold">${formatSigFigs(coolingCostPerYear / 1_000_000, 1)}M/yr</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Carbon</span>
-          <span className="text-white font-semibold">{formatSigFigs(co2TonsPerYear / 1000, 1)} ktCO₂/yr</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Resilience</span>
-          <span className="text-white font-semibold">{formatDecimal(resilience, 0)}%</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Coverage</span>
-          <span className="text-white font-semibold">{formatDecimal(coverage, 1)}%</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Orbital Share</span>
-          <span className="text-white font-semibold">{formatDecimal(orbitalShare, 1)}%</span>
-        </div>
-        <div className="text-gray-600">|</div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">Queue</span>
-          <span className="text-white font-semibold">{formatDecimal(simState.resources.pods?.buffer ?? 0, 0)}/{maxQueue}</span>
-        </div>
+    <div className="fixed top-[70px] left-[280px] right-6 z-30 bg-gray-900/90 border-b border-gray-700/50 px-3 py-1.5">
+      <div className="flex items-center justify-center gap-3 text-[11px] flex-wrap">
+        <span className="text-gray-400">Latency</span>
+        <span className="text-white font-semibold">{formatDecimal(avgLatencyMs, 1)} ms</span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">Energy Cost</span>
+        <span className="text-white font-semibold">${formatSigFigs(energyCostPerYear / 1_000_000, 1)}M/yr</span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">Cooling</span>
+        <span className="text-white font-semibold">${formatSigFigs(coolingCostPerYear / 1_000_000, 1)}M/yr</span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">CO₂</span>
+        <span className="text-white font-semibold">{formatSigFigs(co2TonsPerYear / 1000, 1)} kt/yr</span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">Resilience</span>
+        <span className="text-white font-semibold">{formatDecimal(resilience, 0)}%</span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">Orbit Share</span>
+        <span className="text-white font-semibold">{formatDecimal(orbitalShare, 1)}%</span>
       </div>
     </div>
   );

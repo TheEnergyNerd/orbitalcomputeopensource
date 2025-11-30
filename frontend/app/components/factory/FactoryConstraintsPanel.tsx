@@ -38,78 +38,34 @@ export default function FactoryConstraintsPanel() {
   };
 
   return (
-    <div className="panel-glass rounded-lg p-3 border border-white/10 space-y-2">
-      <h3 className="text-sm font-semibold text-white mb-2">Factory Systems</h3>
+    <div className="p-2 rounded-lg border border-gray-700 bg-gray-800/50">
+      <h3 className="text-xs font-semibold text-gray-300 mb-2">Factory Systems</h3>
       
-      {/* Power */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-400">Power</span>
-          <span className={`font-semibold ${getStatusColor(powerPercent)}`}>
-            {formatDecimal(constraints.powerUsedMW, 1)} / {formatDecimal(constraints.powerCapacityMW, 1)} MW
+      {/* Compact horizontal bars - no decimals */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Power:</span>
+          <span className="text-white font-semibold">
+            {Math.floor(constraints.powerUsedMW)} / {Math.floor(constraints.powerCapacityMW)} MW
           </span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-1.5">
-          <div 
-            className={`h-1.5 rounded-full transition-all ${
-              powerPercent >= 95 ? "bg-red-500" : powerPercent >= 80 ? "bg-orange-500" : "bg-green-500"
-            }`}
-            style={{ width: `${Math.min(100, powerPercent)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Cooling */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-400">Cooling</span>
-          <span className={`font-semibold ${getStatusColor(coolingPercent)}`}>
-            {formatDecimal(constraints.coolingUsedMW, 1)} / {formatDecimal(constraints.coolingCapacityMW, 1)} MW
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Cooling:</span>
+          <span className="text-white font-semibold">
+            {Math.floor(constraints.coolingUsedMW)} / {Math.floor(constraints.coolingCapacityMW)} MW
           </span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-1.5">
-          <div 
-            className={`h-1.5 rounded-full transition-all ${
-              coolingPercent >= 95 ? "bg-red-500" : coolingPercent >= 80 ? "bg-orange-500" : "bg-green-500"
-            }`}
-            style={{ width: `${Math.min(100, coolingPercent)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Workforce */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-400">Workforce</span>
-          <span className={`font-semibold ${getStatusColor(workforcePercent)}`}>
-            {formatDecimal(constraints.workforceUsed, 0)} / {formatDecimal(constraints.workforceTotal, 0)}
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Workforce:</span>
+          <span className="text-white font-semibold">
+            {Math.floor(constraints.workforceUsed)} / {Math.floor(constraints.workforceTotal)}
           </span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-1.5">
-          <div 
-            className={`h-1.5 rounded-full transition-all ${
-              workforcePercent >= 95 ? "bg-red-500" : workforcePercent >= 80 ? "bg-orange-500" : "bg-green-500"
-            }`}
-            style={{ width: `${Math.min(100, workforcePercent)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Floor Space */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-400">Floor Space</span>
-          <span className={`font-semibold ${getStatusColor(spacePercent)}`}>
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-gray-400">Space:</span>
+          <span className="text-white font-semibold">
             {occupiedCells} / {totalCells} cells
           </span>
-        </div>
-        <div className="w-full bg-gray-700 rounded-full h-1.5">
-          <div 
-            className={`h-1.5 rounded-full transition-all ${
-              spacePercent >= 95 ? "bg-red-500" : spacePercent >= 80 ? "bg-orange-500" : "bg-green-500"
-            }`}
-            style={{ width: `${Math.min(100, spacePercent)}%` }}
-          />
         </div>
       </div>
     </div>
