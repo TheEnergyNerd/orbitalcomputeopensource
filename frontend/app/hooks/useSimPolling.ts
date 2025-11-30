@@ -20,19 +20,17 @@ export function useSimPolling() {
           timeout: 180000, // 180 second timeout for large responses
           // Add signal for cancellation if component unmounts
         });
-        console.log("[useSimPolling] Received state response, satellites:", response.data?.satellites?.length || 0);
         if (response.data && response.data.metrics) {
           // Set state first, then loading to false
           setState(response.data);
           setError(null);
           setLoading(false);
           retryCount = 0; // Reset retry count on success
-          console.log("[useSimPolling] State loaded successfully, loading set to false");
           // Advance local factory engine by 1/30 month per poll (daily tick)
           try {
             runFactoryTick(1 / 30); // 1 day = 1/30 month
           } catch (e) {
-            console.warn("[useSimPolling] runFactoryTick failed:", e);
+            // Silently handle factory tick errors
           }
           
           // Step new Factorio-style simulation (1 minute per poll, scaled by timeScale)
@@ -42,10 +40,9 @@ export function useSimPolling() {
               stepSimulation(1); // 1 minute per poll
             }
           } catch (e) {
-            console.warn("[useSimPolling] stepSimulation failed:", e);
+            // Silently handle simulation step errors
           }
         } else {
-          console.error("Invalid state structure:", response.data);
           setError("Invalid state structure");
           retryCount++;
           if (retryCount >= MAX_RETRIES) {
@@ -53,21 +50,18 @@ export function useSimPolling() {
           }
         }
       } catch (error: any) {
-        console.error("Error fetching state:", error);
         retryCount++;
         
         if (error.response?.status === 503) {
-          console.log(`Waiting for simulation to initialize... (attempt ${retryCount}/${MAX_RETRIES})`);
           if (retryCount >= MAX_RETRIES) {
             setError("Simulation initialization is taking too long. Please check the backend logs.");
             setLoading(false);
           }
         } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error') || error.code === 'ECONNREFUSED') {
           // Network error - backend might not be running
-          console.warn(`Backend not reachable (attempt ${retryCount}/${MAX_RETRIES}). Is the server running on port 8000?`);
           // Only show error after a few retries to avoid flashing error messages
           if (retryCount >= 3) {
-            setError("Cannot connect to backend. Please ensure the server is running on port 8000.");
+            setError("Cannot connect to backend. Please ensure the server is running.");
           }
           if (retryCount >= MAX_RETRIES) {
             setLoading(false);
@@ -85,10 +79,6 @@ export function useSimPolling() {
             retryCount: retryCount,
           };
           
-          // Log to console
-          console.error("[useSimPolling] Error 5 (Timeout) - Debug Info:", errorDetails);
-          console.warn(`[useSimPolling] Request timeout (attempt ${retryCount}/${MAX_RETRIES}). Backend may be slow to respond.`);
-          
           // Persist to localStorage so user can see it even after crash
           let savedToStorage = false;
           try {
@@ -102,41 +92,19 @@ export function useSimPolling() {
               localStorage.setItem('orbitalCompute_errorLog', JSON.stringify(errorLog));
               localStorage.setItem('orbitalCompute_lastError', JSON.stringify(errorDetails));
               savedToStorage = true;
-              console.log("[useSimPolling] Error logged to localStorage successfully");
-              console.log("[useSimPolling] To view errors, run in console:");
-              console.log("localStorage.getItem('orbitalCompute_errorLog')");
-              console.log("or");
-              console.log("localStorage.getItem('orbitalCompute_lastError')");
             }
           } catch (e) {
-            console.warn("[useSimPolling] Could not save error to localStorage:", e);
-            if (e instanceof Error) {
-            console.warn("[useSimPolling] localStorage may not be available:", e.message);
-            } else {
-              console.warn("[useSimPolling] localStorage may not be available (non-Error):", String(e));
-            }
+            // Silently fail localStorage operations
           }
           
-          // Show error message with localStorage instructions
+          // Show error message
           if (retryCount >= 3) {
-            const storageMsg = savedToStorage 
-              ? "Error saved to localStorage. Run: localStorage.getItem('orbitalCompute_errorLog')"
-              : "localStorage not available. Check console for error details above.";
-            const errorMsg = `Request timeout (Error 5). ${storageMsg}`;
-            setError(errorMsg);
-            console.error("[useSimPolling] ERROR 5 DETAILS:", errorDetails);
-            if (savedToStorage) {
-              console.error("[useSimPolling] Error saved! Run this in console:");
-              console.error("JSON.parse(localStorage.getItem('orbitalCompute_errorLog'))");
-            } else {
-              console.error("[useSimPolling] localStorage unavailable. Error details above.");
-            }
+            setError("Request timeout. Backend may be slow to respond.");
           }
           if (retryCount >= MAX_RETRIES) {
             setLoading(false);
           }
         } else {
-          console.warn(`Error: ${error.message || 'Unknown error'}`);
           // Only show error after multiple failures
           if (retryCount >= 5) {
             setError(error.message || "Failed to fetch simulation state");
@@ -159,7 +127,7 @@ export function useSimPolling() {
           stepSimulation(1 / 60); // Step by 1/60 minute (1 second) each tick
         }
       } catch (e) {
-        console.warn("[useSimPolling] continuous stepSimulation failed:", e);
+        // Silently handle simulation step errors
       }
     }, 100); // Run every 100ms
     

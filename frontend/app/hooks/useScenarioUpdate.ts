@@ -26,12 +26,7 @@ export function useScenarioUpdate() {
         setOrbitOffloadPercent(orbitOffloadPercent);
       }
     } catch (error: any) {
-      console.error("Error updating scenario:", error);
-      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        console.error("[useScenarioUpdate] Backend not available. Is the server running?");
-      } else {
-        console.error("[useScenarioUpdate] Scenario update failed:", error.message);
-      }
+      // Silently handle scenario update errors
     }
   };
 
