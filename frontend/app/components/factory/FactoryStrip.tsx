@@ -126,8 +126,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
   };
   
   // Add steel source (for rack line, positioned above)
+  const rackLineX = buildingPositions["rackLine"]?.x || 0;
   buildingPositions["steelSource"] = {
-    x: buildingPositions["rackLine"]?.x || 0,
+    x: rackLineX,
     y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 10,
   };
 
@@ -219,9 +220,11 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
     const { isStarved, isConstrained } = getBuildingStatus(building.id);
     const isSelected = selectedNodeId === building.id;
 
-    let BuildingComponent: React.ComponentType<BuildingSpriteProps>;
+    let BuildingComponent: React.ComponentType<BuildingSpriteProps> | null = null;
     if (building.id === "siliconSource") {
       BuildingComponent = SiliconSourceBuilding;
+    } else if (building.id === "steelSource") {
+      BuildingComponent = SteelSourceBuilding;
     } else if (building.id === "chipFab") {
       BuildingComponent = ChipFabBuilding;
     } else if (building.id === "rackLine") {
@@ -235,6 +238,8 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
     } else {
       return null;
     }
+    
+    if (!BuildingComponent) return null;
 
     const width = building.type === "source" ? SOURCE_WIDTH : BUILDING_WIDTH;
     const height = building.type === "source" ? SOURCE_HEIGHT : BUILDING_HEIGHT;
@@ -291,8 +296,8 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
 
         {/* Render buildings */}
         {BUILDING_ORDER.map(renderBuilding)}
-        {renderBuilding({ id: "fuelPlant", type: "machine", label: "Fuel Plant" })}
-        {renderBuilding({ id: "steelSource", type: "source", label: "Steel" })}
+        {renderBuilding({ id: "fuelPlant", type: "machine", label: "Fuel Plant" } as const)}
+        {renderBuilding({ id: "steelSource", type: "source", label: "Steel" } as const)}
       </svg>
     </div>
   );
