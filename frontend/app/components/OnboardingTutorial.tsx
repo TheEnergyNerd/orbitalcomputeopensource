@@ -39,13 +39,9 @@ export default function OnboardingTutorial() {
   const [isVisible, setIsVisible] = useState(false);
   
   useEffect(() => {
-    // Check if tutorial has been completed
-    const tutorialCompleted = localStorage.getItem("tutorial_completed");
-    if (!tutorialCompleted) {
-      // Show tutorial every time (as requested)
-      setIsVisible(true);
-      setCurrentStep(1);
-    }
+    // Show tutorial every time (as requested by user)
+    setIsVisible(true);
+    setCurrentStep(1);
   }, []);
   
   if (!isVisible || currentStep === null) return null;

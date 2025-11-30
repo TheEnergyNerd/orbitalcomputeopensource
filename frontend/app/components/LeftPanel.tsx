@@ -18,7 +18,6 @@ export default function LeftPanel({ selectedNodeId: propSelectedNodeId, onSelect
   const [activeMode, setActiveMode] = useState<Mode>("factory");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [internalSelectedNode, setInternalSelectedNode] = useState<string | null>(null);
-  const bottleneck = useFactoryNarrator();
   
   // Use prop if provided, otherwise use internal state
   const selectedNodeId = propSelectedNodeId !== undefined ? propSelectedNodeId : internalSelectedNode;
