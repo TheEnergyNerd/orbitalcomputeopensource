@@ -134,21 +134,43 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode }: FactorySt
 
   const getBuildingUtilization = (buildingId: string): number => {
     if (buildingId === "siliconSource" || buildingId === "steelSource") return 1; // Sources always active
-    const machine = machines[buildingId as MachineId];
-    if (!machine) return 0;
-    return getMachineUtilization(machine, resources);
+    const machineIdMap: Record<string, MachineId> = {
+      chipFab: "chipFab",
+      rackLine: "rackLine",
+      podFactory: "podFactory",
+      fuelPlant: "fuelPlant",
+      launchComplex: "launchComplex",
+    };
+    const machineId = machineIdMap[buildingId];
+    if (machineId) {
+      const machine = machines[machineId];
+      if (machine) return getMachineUtilization(machine, resources);
+    }
+    return 0;
   };
 
   const getBuildingStatus = (buildingId: string): { isStarved: boolean; isConstrained: boolean } => {
     if (buildingId === "siliconSource" || buildingId === "steelSource") {
       return { isStarved: false, isConstrained: false };
     }
-    const machine = machines[buildingId as MachineId];
-    if (!machine) return { isStarved: false, isConstrained: false };
-    const utilization = getMachineUtilization(machine, resources);
-    const isStarved = utilization < 0.1 && machine.lines > 0;
-    const isConstrained = utilization > 0.8;
-    return { isStarved, isConstrained };
+    const machineIdMap: Record<string, MachineId> = {
+      chipFab: "chipFab",
+      rackLine: "rackLine",
+      podFactory: "podFactory",
+      fuelPlant: "fuelPlant",
+      launchComplex: "launchComplex",
+    };
+    const machineId = machineIdMap[buildingId];
+    if (machineId) {
+      const machine = machines[machineId];
+      if (machine) {
+        const utilization = getMachineUtilization(machine, resources);
+        const isStarved = utilization < 0.1 && machine.lines > 0;
+        const isConstrained = utilization > 0.8;
+        return { isStarved, isConstrained };
+      }
+    }
+    return { isStarved: false, isConstrained: false };
   };
 
   const renderConduit = (flow: typeof RESOURCE_FLOWS[0]) => {
