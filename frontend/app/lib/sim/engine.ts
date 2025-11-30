@@ -188,12 +188,16 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
     const outputResource = next.resources[machine.outputResource];
     if (outputResource) {
       // For discrete resources (pods, launches), round to nearest integer
-      if (machine.outputResource === 'pods' || machine.outputResource === 'launches') {
-        const launched = Math.round(produced);
-        outputResource.buffer += launched;
-        // When launches complete, add pods to orbit
-        if (machine.outputResource === 'launches' && launched > 0) {
-          next.podsInOrbit = Math.floor(next.podsInOrbit + launched);
+      if (machine.outputResource === 'pods') {
+        const podsProduced = Math.round(produced);
+        outputResource.buffer += podsProduced;
+      } else if (machine.outputResource === 'launches') {
+        // Launches immediately become pods in orbit (no buffer accumulation)
+        const launchesProduced = Math.round(produced);
+        if (launchesProduced > 0) {
+          next.podsInOrbit = Math.floor(next.podsInOrbit + launchesProduced);
+          // Don't accumulate launches in buffer - they go directly to orbit
+          // But track production rate for UI
         }
       } else {
         outputResource.buffer += produced;
