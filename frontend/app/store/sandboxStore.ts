@@ -519,23 +519,22 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
         lines: newLines,
       };
       
-      // Update constraints usage
+      // Recalculate constraints usage from all machines
       const constraints = { ...state.simState.constraints };
-      constraints.powerUsedMW = 0;
-      constraints.coolingUsedMW = 0;
-      constraints.workforceUsed = 0;
+      let totalPowerUsed = 0;
+      let totalCoolingUsed = 0;
+      let totalWorkforceUsed = 0;
       
       Object.values(state.simState.machines).forEach(m => {
-        if (m.id === machineId) {
-          constraints.powerUsedMW += updatedMachine.powerDrawMW * updatedMachine.lines;
-          constraints.coolingUsedMW += updatedMachine.heatMW * updatedMachine.lines;
-          constraints.workforceUsed += updatedMachine.workers * updatedMachine.lines;
-        } else {
-          constraints.powerUsedMW += m.powerDrawMW * m.lines;
-          constraints.coolingUsedMW += m.heatMW * m.lines;
-          constraints.workforceUsed += m.workers * m.lines;
-        }
+        const lines = m.id === machineId ? newLines : m.lines;
+        totalPowerUsed += (m.powerDrawMW || 0) * lines;
+        totalCoolingUsed += (m.heatMW || 0) * lines;
+        totalWorkforceUsed += (m.workers || 0) * lines;
       });
+      
+      constraints.powerUsedMW = totalPowerUsed;
+      constraints.coolingUsedMW = totalCoolingUsed;
+      constraints.workforceUsed = totalWorkforceUsed;
       
       return {
         simState: {

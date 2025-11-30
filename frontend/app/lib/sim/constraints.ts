@@ -63,14 +63,15 @@ export function canAddMachineLine(
     // (but still check other constraints)
   } else {
     const spaceNeeded = footprint.width * footprint.height * additionalLines;
-  const availableSpace = countAvailableGridCells(constraints);
-  
-  if (spaceNeeded > availableSpace) {
-    return {
-      canAdd: false,
-      reason: "No floor space available",
-      errorType: "space",
-    };
+    const availableSpace = countAvailableGridCells(constraints);
+    
+    if (spaceNeeded > availableSpace) {
+      return {
+        canAdd: false,
+        reason: "No floor space available",
+        errorType: "space",
+      };
+    }
   }
 
   return { canAdd: true };

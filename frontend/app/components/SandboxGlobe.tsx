@@ -791,6 +791,11 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
     });
 
     // Render only 10% of background satellites for performance
+    // Safety check: ensure state.satellites exists and is an array
+    if (!state || !state.satellites || !Array.isArray(state.satellites) || state.satellites.length === 0) {
+      return; // Don't render if no satellites
+    }
+    
     const RENDER_RATIO = 0.1;
     const totalSats = state.satellites.length;
     const sampledSats = state.satellites.filter((_, idx) => idx % Math.ceil(1 / RENDER_RATIO) === 0);
