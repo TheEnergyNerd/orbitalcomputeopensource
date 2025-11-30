@@ -442,10 +442,21 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
         {/* Render conduits first (behind buildings) */}
         {RESOURCE_FLOWS.map(renderConduit)}
 
+        {/* Factory Flow label */}
+        <text
+          x={svgWidth / 2}
+          y="15"
+          textAnchor="middle"
+          className="text-sm fill-gray-200 font-bold"
+        >
+          Factory Flow: From Ground Materials to Orbit
+        </text>
+        
         {/* Render buildings */}
         {BUILDING_ORDER.map(renderBuilding)}
-        {renderBuilding({ id: "fuelPlant", type: "machine", label: "Fuel Plant" } as const)}
-        {renderBuilding({ id: "steelSource", type: "source", label: "Steel" } as const)}
+        {/* Fuel plant and steel source with subtitles */}
+        {buildingPositions["fuelPlant"] && renderBuilding({ id: "fuelPlant", type: "machine" as const, label: "Fuel Plant", subtitle: "Makes Fuel from Methane + LOX" })}
+        {buildingPositions["steelSource"] && renderBuilding({ id: "steelSource", type: "source" as const, label: "Steel", subtitle: "Infinite source" })}
         
         {/* Rocket launch animations */}
         {launchAnimations.map((anim) => {
