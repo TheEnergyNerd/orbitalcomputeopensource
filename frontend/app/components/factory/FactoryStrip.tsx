@@ -22,11 +22,12 @@ interface FactoryStripProps {
   highlightNodeId?: string | null; // Node to highlight as bottleneck
 }
 
-// Limit node size to max 140px width
-const BUILDING_WIDTH = 120;
-const BUILDING_HEIGHT = 50;
-const SOURCE_WIDTH = 80;
-const SOURCE_HEIGHT = 40;
+// Increased sizes for less compression
+const BUILDING_WIDTH = 160;
+const BUILDING_HEIGHT = 70;
+const SOURCE_WIDTH = 100;
+const SOURCE_HEIGHT = 50;
+const BUILDING_SPACING = 60; // Space between buildings
 const CONDUIT_HEIGHT = 8;
 const PACKET_COUNT = 6;
 const PACKET_RADIUS = 4;
@@ -160,10 +161,10 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       y: rackLineY - SOURCE_HEIGHT - 10,
     };
   } else {
-    // Horizontal layout for desktop
-    let currentX = 20;
+    // Horizontal layout for desktop - increased spacing for less compression
+    let currentX = 40;
     const centerY = 100;
-    const spacing = 30;
+    const spacing = BUILDING_SPACING;
 
     BUILDING_ORDER.forEach((building) => {
       if (building.type === "source") {
@@ -175,18 +176,18 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
       }
     });
 
-    // Add fuel plant position (below pod factory)
+    // Add fuel plant position (below pod factory) - more spacing
     const podFactoryX = buildingPositions["podFactory"]?.x || 0;
     buildingPositions["fuelPlant"] = {
       x: podFactoryX,
-      y: centerY + BUILDING_HEIGHT / 2 + 20,
+      y: centerY + BUILDING_HEIGHT / 2 + 40,
     };
     
-    // Add steel source (for rack line, positioned above)
+    // Add steel source (for rack line, positioned above) - more spacing
     const rackLineX = buildingPositions["rackLine"]?.x || 0;
     buildingPositions["steelSource"] = {
       x: rackLineX,
-      y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 10,
+      y: centerY - BUILDING_HEIGHT / 2 - SOURCE_HEIGHT - 30,
     };
   }
 
@@ -429,9 +430,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
 
   const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
   
-  // Calculate SVG dimensions based on layout
-  const svgWidth = isMobile ? 100 : (buildingPositions["launchComplex"]?.x || 0) + BUILDING_WIDTH + 40;
-  const svgHeight = isMobile ? 600 : 200; // Fixed height ~200px
+  // Calculate SVG dimensions based on layout - increased height for less compression
+  const svgWidth = isMobile ? 100 : (buildingPositions["launchComplex"]?.x || 0) + BUILDING_WIDTH + 80;
+  const svgHeight = isMobile ? 600 : 240; // Increased height for better spacing
   
   if (!isExpanded) {
     return (
@@ -447,7 +448,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
   }
   
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[200px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
+    <div className="fixed bottom-0 left-0 right-0 h-[240px] bg-gray-900/95 border-t border-gray-700 z-20 overflow-visible" style={{ marginLeft: isMobile ? '0' : '280px' }}>
       {/* Collapse button */}
       <button
         onClick={() => setIsExpanded(false)}

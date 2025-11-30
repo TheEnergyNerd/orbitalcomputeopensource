@@ -29,19 +29,37 @@ export function formatSigFigs(value: number, maxSigFigs: number = 4): string {
     const thousands = absValue / 1_000;
     return sign + formatWithSigFigs(thousands, sigFigs) + 'k';
   } else if (absValue < 0.0001) {
-    // Very small numbers - use decimal notation
+    // Very small numbers - use decimal notation (no scientific notation)
     return value.toFixed(4);
   }
   
-  // Use toPrecision to get significant figures
-  const formatted = value.toPrecision(sigFigs);
+  // For numbers in the normal range, use toPrecision but ensure no scientific notation
+  // toPrecision can produce scientific notation, so we need to handle it
+  let formatted = value.toPrecision(sigFigs);
+  
+  // If toPrecision produced scientific notation (contains 'e' or 'E'), convert it
+  if (formatted.includes('e') || formatted.includes('E')) {
+    // Parse the scientific notation and convert to regular number
+    const num = parseFloat(formatted);
+    // Use toFixed with appropriate decimals instead
+    const decimals = Math.max(0, sigFigs - Math.floor(Math.log10(Math.abs(num))) - 1);
+    formatted = num.toFixed(Math.min(decimals, 4));
+  }
   
   // Remove trailing zeros and decimal point if not needed
   return formatted.replace(/\.?0+$/, "");
 }
 
 function formatWithSigFigs(value: number, sigFigs: number): string {
-  const formatted = value.toPrecision(sigFigs);
+  let formatted = value.toPrecision(sigFigs);
+  
+  // If toPrecision produced scientific notation, convert it
+  if (formatted.includes('e') || formatted.includes('E')) {
+    const num = parseFloat(formatted);
+    const decimals = Math.max(0, sigFigs - Math.floor(Math.log10(Math.abs(num))) - 1);
+    formatted = num.toFixed(Math.min(decimals, 4));
+  }
+  
   return formatted.replace(/\.?0+$/, "");
 }
 
