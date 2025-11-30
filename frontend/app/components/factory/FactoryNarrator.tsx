@@ -24,7 +24,7 @@ export function useFactoryNarrator(): BottleneckInfo | null {
   Object.entries(machines).forEach(([machineId, machine]) => {
     if (machine.lines === 0) return;
 
-    const utilization = getMachineUtilization(machine, resources);
+    const utilization = getMachineUtilization(machine, resources, simState.constraints);
     const isStarved = utilization < 0.1 && machine.lines > 0;
     const isConstrained = utilization > 0.8;
 

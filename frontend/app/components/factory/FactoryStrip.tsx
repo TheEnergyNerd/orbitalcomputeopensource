@@ -201,7 +201,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     const machineId = machineIdMap[buildingId];
     if (machineId) {
       const machine = machines[machineId];
-      if (machine) return getMachineUtilization(machine, resources);
+      if (machine) return getMachineUtilization(machine, resources, simState.constraints);
     }
     return 0;
   };
@@ -221,7 +221,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     if (machineId) {
       const machine = machines[machineId];
       if (machine) {
-        const utilization = getMachineUtilization(machine, resources);
+        const utilization = getMachineUtilization(machine, resources, simState.constraints);
         const isStarved = utilization < 0.1 && machine.lines > 0;
         const isConstrained = utilization > 0.8;
         return { isStarved, isConstrained };

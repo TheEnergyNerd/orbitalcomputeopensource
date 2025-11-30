@@ -491,16 +491,53 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
       const machine = state.simState.machines[machineId as keyof typeof state.simState.machines];
       if (!machine) return state;
       
+      const newLines = Math.max(0, Math.floor(lines));
+      const lineDelta = newLines - machine.lines;
+      
+      // If adding lines, check constraints
+      if (lineDelta > 0) {
+        const { canAddMachineLine } = require("../lib/sim/constraints");
+        const check = canAddMachineLine(state.simState, machineId as any, lineDelta);
+        if (!check.canAdd) {
+          // Show error toast (will be handled by UI)
+          console.warn(`Cannot add lines: ${check.reason}`);
+          // Return state unchanged
+          return state;
+        }
+      }
+      
+      // Update machine lines
+      const updatedMachine = {
+        ...machine,
+        lines: newLines,
+      };
+      
+      // Update constraints usage
+      const constraints = { ...state.simState.constraints };
+      constraints.powerUsedMW = 0;
+      constraints.coolingUsedMW = 0;
+      constraints.workforceUsed = 0;
+      
+      Object.values(state.simState.machines).forEach(m => {
+        if (m.id === machineId) {
+          constraints.powerUsedMW += updatedMachine.powerDrawMW * updatedMachine.lines;
+          constraints.coolingUsedMW += updatedMachine.heatMW * updatedMachine.lines;
+          constraints.workforceUsed += updatedMachine.workers * updatedMachine.lines;
+        } else {
+          constraints.powerUsedMW += m.powerDrawMW * m.lines;
+          constraints.coolingUsedMW += m.heatMW * m.lines;
+          constraints.workforceUsed += m.workers * m.lines;
+        }
+      });
+      
       return {
         simState: {
           ...state.simState,
           machines: {
             ...state.simState.machines,
-            [machineId]: {
-              ...machine,
-              lines: Math.max(0, Math.floor(lines)),
-            },
+            [machineId]: updatedMachine,
           },
+          constraints,
         },
       };
     });

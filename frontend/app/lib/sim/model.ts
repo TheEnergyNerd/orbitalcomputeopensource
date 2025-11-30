@@ -28,11 +28,31 @@ export interface Machine {
     speedLevel: number;      // 0…N
     efficiencyLevel: number; // 0…N
   };
+  // Constraint metadata
+  powerDrawMW: number;      // Power draw per line
+  heatMW: number;           // Heat output per line
+  workers: number;          // Workers required per line
+  footprint: {              // Grid cells occupied
+    width: number;
+    height: number;
+  };
 }
 
 export interface FlowEdge {
   from: ResourceId;
   to: ResourceId;
+}
+
+export interface FactoryConstraints {
+  powerCapacityMW: number;
+  powerUsedMW: number;
+  coolingCapacityMW: number;
+  coolingUsedMW: number;
+  workforceTotal: number;
+  workforceUsed: number;
+  gridWidth: number;
+  gridHeight: number;
+  gridOccupied: boolean[][]; // 2D grid of occupied cells
 }
 
 export interface SimState {
@@ -41,6 +61,7 @@ export interface SimState {
   flows: FlowEdge[];
   timeScale: 1 | 10 | 100;
   rdPoints: number;
+  constraints: FactoryConstraints;
 }
 
 /**
@@ -159,6 +180,10 @@ export function createInitialSimState(): SimState {
         speedLevel: 0,
         efficiencyLevel: 0,
       },
+      powerDrawMW: 1.0,
+      heatMW: 0.8,
+      workers: 3,
+      footprint: { width: 2, height: 1 },
     },
     podFactory: {
       id: 'podFactory',
@@ -174,6 +199,10 @@ export function createInitialSimState(): SimState {
         speedLevel: 0,
         efficiencyLevel: 0,
       },
+      powerDrawMW: 3.0,
+      heatMW: 2.0,
+      workers: 8,
+      footprint: { width: 3, height: 2 },
     },
     fuelPlant: {
       id: 'fuelPlant',
@@ -189,6 +218,10 @@ export function createInitialSimState(): SimState {
         speedLevel: 0,
         efficiencyLevel: 0,
       },
+      powerDrawMW: 1.5,
+      heatMW: 1.2,
+      workers: 4,
+      footprint: { width: 2, height: 2 },
     },
     launchComplex: {
       id: 'launchComplex',
@@ -204,6 +237,10 @@ export function createInitialSimState(): SimState {
         speedLevel: 0,
         efficiencyLevel: 0,
       },
+      powerDrawMW: 5.0,
+      heatMW: 3.0,
+      workers: 12,
+      footprint: { width: 4, height: 3 },
     },
   };
 

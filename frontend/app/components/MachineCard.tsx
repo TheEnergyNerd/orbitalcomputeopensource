@@ -7,6 +7,7 @@ interface MachineCardProps {
   machine: Machine;
   utilization: number;
   onChangeLines: (lines: number) => void;
+  canAddMore?: boolean; // Whether adding more lines is possible
 }
 
 export default function MachineCard({ machine, utilization, onChangeLines }: MachineCardProps) {

@@ -6,10 +6,12 @@ import type { SimState, Machine, ResourceId, ResourceState } from './model';
 
 /**
  * Get machine utilization (0-1, can exceed 1 if bottlenecked)
+ * Now considers: inputs, outputs, power, cooling, workforce
  */
 export function getMachineUtilization(
   m: Machine,
-  resources: Record<ResourceId, ResourceState>
+  resources: Record<ResourceId, ResourceState>,
+  constraints?: FactoryConstraints
 ): number {
   if (m.lines === 0) return 0;
 
@@ -38,6 +40,27 @@ export function getMachineUtilization(
     }
   }
 
+  // Check constraint ratios if constraints are provided
+  if (constraints) {
+    const totalPowerNeeded = m.powerDrawMW * m.lines;
+    const powerAvailableRatio = constraints.powerCapacityMW > 0 
+      ? Math.min(1, constraints.powerCapacityMW / totalPowerNeeded)
+      : 0;
+    maxFeasibleOutput = Math.min(maxFeasibleOutput, maxOutputPerMin * powerAvailableRatio);
+
+    const totalCoolingNeeded = m.heatMW * m.lines;
+    const coolingAvailableRatio = constraints.coolingCapacityMW > 0
+      ? Math.min(1, constraints.coolingCapacityMW / totalCoolingNeeded)
+      : 0;
+    maxFeasibleOutput = Math.min(maxFeasibleOutput, maxOutputPerMin * coolingAvailableRatio);
+
+    const totalWorkersNeeded = m.workers * m.lines;
+    const workforceAvailableRatio = constraints.workforceTotal > 0
+      ? Math.min(1, constraints.workforceTotal / totalWorkersNeeded)
+      : 0;
+    maxFeasibleOutput = Math.min(maxFeasibleOutput, maxOutputPerMin * workforceAvailableRatio);
+  }
+
   if (maxFeasibleOutput === Infinity) {
     maxFeasibleOutput = maxOutputPerMin;
   }
@@ -56,7 +79,31 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
     ...state,
     resources: { ...state.resources },
     machines: { ...state.machines },
+    constraints: {
+      ...state.constraints,
+      gridOccupied: state.constraints.gridOccupied.map(row => [...row]), // Deep copy grid
+    },
   };
+
+  // Calculate constraint usage from machines
+  let totalPowerUsed = 0;
+  let totalCoolingUsed = 0;
+  let totalWorkforceUsed = 0;
+
+  Object.values(next.machines).forEach(machine => {
+    totalPowerUsed += machine.powerDrawMW * machine.lines;
+    totalCoolingUsed += machine.heatMW * machine.lines;
+    totalWorkforceUsed += machine.workers * machine.lines;
+  });
+
+  next.constraints.powerUsedMW = totalPowerUsed;
+  next.constraints.coolingUsedMW = totalCoolingUsed;
+  next.constraints.workforceUsed = totalWorkforceUsed;
+
+  // Safety checks: apply penalties if over capacity
+  const powerOverCapacity = next.constraints.powerUsedMW > next.constraints.powerCapacityMW;
+  const coolingOverCapacity = next.constraints.coolingUsedMW > next.constraints.coolingCapacityMW;
+  const workforceOverCapacity = next.constraints.workforceUsed > next.constraints.workforceTotal;
 
   // Reset production/consumption rates
   for (const resourceId of Object.keys(next.resources) as ResourceId[]) {
@@ -117,9 +164,8 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
       maxFeasibleOutput = maxOutputPerMin;
     }
 
-    // Actual output is limited by inputs
-    const actualOutputPerMin = Math.min(maxFeasibleOutput, maxOutputPerMin);
-    const utilization = maxOutputPerMin > 0 ? actualOutputPerMin / maxOutputPerMin : 0;
+    // Actual output is limited by inputs and constraints
+    const actualOutputPerMin = Math.min(maxFeasibleOutput, maxOutputPerMin) * effectiveUtilization;
 
     // Consume inputs
     for (const { resourceId, rate } of inputConsumptions) {

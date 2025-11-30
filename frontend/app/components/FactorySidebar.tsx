@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
 import { getMachineUtilization } from "../lib/sim/engine";
 import type { MachineId, ResourceId } from "../lib/sim/model";
@@ -8,6 +8,7 @@ import { FACTORY_NODES, type FactoryNodeId } from "../lib/factory/factoryLayout"
 import { classifyNode, getStatusColor, getNetRateColor, type NodeStatus } from "../lib/ui/semantics";
 import { formatSigFigs, formatDecimal } from "../lib/utils/formatNumber";
 import MachineCard from "./MachineCard";
+import FactoryConstraintsPanel from "./factory/FactoryConstraintsPanel";
 
 interface FactorySidebarProps {
   selectedNodeId: FactoryNodeId | null;
@@ -166,6 +167,9 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
       <div className="text-[10px] text-gray-500 mb-2">
         Factory → {selectedNode ? selectedNode.label : "Overview"}
       </div>
+
+      {/* Factory Systems (Constraints) */}
+      <FactoryConstraintsPanel />
 
       {/* Factory Health Summary */}
       <div className="p-3 rounded-lg border border-gray-700 bg-gray-800/50">
