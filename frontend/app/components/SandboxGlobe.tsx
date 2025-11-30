@@ -795,10 +795,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
     const totalSats = state.satellites.length;
     const sampledSats = state.satellites.filter((_, idx) => idx % Math.ceil(1 / RENDER_RATIO) === 0);
     sampledSats.forEach((sat) => {
-      // Eclipse simulation: darker when in shadow
-      const color = sat.sunlit
-        ? Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.9)
-        : Cesium.Color.fromCssColorString("#4a5568").withAlpha(0.5); // Dark gray when in eclipse
+      // Use static color - no sun position logic
+      const color = Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.9);
       
       const size = isMostlySpaceMode ? 6 : 4 + sat.utilization * 2; // Smaller satellites: 4-6 pixels
       
@@ -813,7 +811,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           if (existingEntity.point) {
             existingEntity.point.color = new Cesium.ConstantProperty(color);
             existingEntity.point.pixelSize = new Cesium.ConstantProperty(size);
-            existingEntity.point.outlineColor = new Cesium.ConstantProperty(sat.sunlit ? Cesium.Color.WHITE : Cesium.Color.fromCssColorString("#2d3748"));
+            existingEntity.point.outlineColor = new Cesium.ConstantProperty(Cesium.Color.WHITE);
           }
         } catch (e) {
           // If update fails, remove and recreate
@@ -824,7 +822,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             point: {
               pixelSize: size,
               color: color,
-              outlineColor: sat.sunlit ? Cesium.Color.WHITE : Cesium.Color.fromCssColorString("#2d3748"),
+              outlineColor: Cesium.Color.WHITE,
               outlineWidth: isMostlySpaceMode ? 3 : 2,
               heightReference: Cesium.HeightReference.NONE,
               scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
@@ -841,7 +839,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           point: {
             pixelSize: size,
             color: color,
-            outlineColor: sat.sunlit ? Cesium.Color.WHITE : Cesium.Color.fromCssColorString("#2d3748"),
+            outlineColor: Cesium.Color.WHITE,
             outlineWidth: isMostlySpaceMode ? 3 : 2,
             heightReference: Cesium.HeightReference.NONE,
             scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
@@ -853,34 +851,25 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         (satEntity as any)._satelliteId = sat.id;
       }
       
-      // Add glow effect for sunlit satellites (only if it doesn't exist)
-      if (sat.sunlit) {
-        const glowId = `${sat.id}_glow`;
-        const existingGlow = entities.getById(glowId);
-        if (!existingGlow) {
-          entities.add({
-            id: glowId,
-            position: Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000),
-            ellipse: {
-              semiMajorAxis: 15000,
-              semiMinorAxis: 15000,
-              material: Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.15),
-              heightReference: Cesium.HeightReference.NONE,
-            },
-          });
-        } else {
-          // Update existing glow position
-          existingGlow.position = new Cesium.ConstantPositionProperty(
-            Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
-          );
-        }
+      // Add glow effect for all satellites (visual only, no sun position logic)
+      const glowId = `${sat.id}_glow`;
+      const existingGlow = entities.getById(glowId);
+      if (!existingGlow) {
+        entities.add({
+          id: glowId,
+          position: Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000),
+          ellipse: {
+            semiMajorAxis: 15000,
+            semiMinorAxis: 15000,
+            material: Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.15),
+            heightReference: Cesium.HeightReference.NONE,
+          },
+        });
       } else {
-        // Remove glow if satellite is no longer sunlit
-        const glowId = `${sat.id}_glow`;
-        const existingGlow = entities.getById(glowId);
-        if (existingGlow) {
-          entities.remove(existingGlow);
-        }
+        // Update existing glow position
+        existingGlow.position = new Cesium.ConstantPositionProperty(
+          Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
+        );
       }
     });
 
