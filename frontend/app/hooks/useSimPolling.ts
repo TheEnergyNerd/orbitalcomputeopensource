@@ -66,6 +66,19 @@ export function useSimPolling() {
           if (retryCount >= MAX_RETRIES) {
             setLoading(false);
           }
+        } else if (error.response?.status === 500) {
+          // Backend error - could be CORS or server error
+          if (retryCount >= 3) {
+            const isCorsError = error.message?.includes('CORS') || error.message?.includes('Access-Control-Allow-Origin');
+            if (isCorsError) {
+              setError("CORS error: Backend is not configured to allow requests from this origin.");
+            } else {
+              setError("Backend server error (500). Check backend logs for details.");
+            }
+          }
+          if (retryCount >= MAX_RETRIES) {
+            setLoading(false);
+          }
         } else if (error.code === 'ECONNABORTED' || error.code === 5 || error.message?.includes('timeout')) {
           // Error code 5 is ECONNABORTED (timeout)
           const errorDetails = {
