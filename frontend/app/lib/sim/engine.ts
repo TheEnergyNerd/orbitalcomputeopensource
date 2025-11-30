@@ -2,7 +2,7 @@
  * Simulation engine for Factorio-style production chain
  */
 
-import type { SimState, Machine, ResourceId, ResourceState } from './model';
+import type { SimState, Machine, ResourceId, ResourceState, FactoryConstraints } from './model';
 
 /**
  * Get machine utilization (0-1, can exceed 1 if bottlenecked)
