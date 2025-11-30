@@ -406,18 +406,18 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           <>
             <text
               x={width / 2}
-              y={height + 18}
+              y={height + 25}
               textAnchor="middle"
-              className="text-xs fill-gray-300 font-semibold"
+              className="text-sm fill-gray-300 font-semibold"
             >
               {building.label}
             </text>
             {building.subtitle && (
               <text
                 x={width / 2}
-                y={height + 32}
+                y={height + 42}
                 textAnchor="middle"
-                className="text-[10px] fill-gray-400"
+                className="text-xs fill-gray-400"
               >
                 {building.subtitle}
               </text>
