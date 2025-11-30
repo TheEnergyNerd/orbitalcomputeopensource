@@ -32,12 +32,12 @@ const PACKET_RADIUS = 4;
 
 // Building order for horizontal layout
 const BUILDING_ORDER = [
-  { id: "siliconSource", type: "source", label: "Silicon" },
-  { id: "chipFab", type: "machine", label: "Chip Fab" },
-  { id: "rackLine", type: "machine", label: "Rack Line" },
-  { id: "podFactory", type: "machine", label: "Pod Factory" },
-  { id: "fuelPlant", type: "machine", label: "Fuel Plant" },
-  { id: "launchComplex", type: "machine", label: "Launch" },
+  { id: "siliconSource", type: "source" as const, label: "Silicon", subtitle: "Infinite source" },
+  { id: "chipFab", type: "machine" as const, label: "Chip Fab", subtitle: "Turns Silicon into Chips" },
+  { id: "rackLine", type: "machine" as const, label: "Rack Line", subtitle: "Turns Steel + Chips into Racks" },
+  { id: "podFactory", type: "machine" as const, label: "Pod Factory", subtitle: "Builds Pods from Chips + Racks" },
+  { id: "fuelPlant", type: "machine" as const, label: "Fuel Plant", subtitle: "Makes Fuel from Methane + LOX" },
+  { id: "launchComplex", type: "machine" as const, label: "Launch", subtitle: "Consumes Pods + Fuel to add Pods in Orbit" },
 ] as const;
 
 // Resource flow paths
