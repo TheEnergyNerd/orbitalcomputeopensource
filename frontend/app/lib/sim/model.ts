@@ -256,12 +256,28 @@ export function createInitialSimState(): SimState {
     { from: 'fuel', to: 'launches' },
   ];
 
+  // Initialize factory constraints
+  const gridWidth = 12;
+  const gridHeight = 8;
+  const constraints: FactoryConstraints = {
+    powerCapacityMW: 50,      // Initial power capacity
+    powerUsedMW: 0,
+    coolingCapacityMW: 40,     // Initial cooling capacity
+    coolingUsedMW: 0,
+    workforceTotal: 50,        // Initial workforce
+    workforceUsed: 0,
+    gridWidth,
+    gridHeight,
+    gridOccupied: Array(gridHeight).fill(null).map(() => Array(gridWidth).fill(false)),
+  };
+
   return {
     resources,
     machines,
     flows,
     timeScale: 1,
     rdPoints: 0,
+    constraints,
   };
 }
 
