@@ -68,15 +68,16 @@ export default function Home() {
           <GlobePositionDebug viewerRef={viewerRef} />
           <ErrorPanel />
           <SandboxModeSwitcher />
+          {/* Left Sidebar - Factory Controls + Status */}
           <LeftPanel selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} />
+          
+          {/* Center - Globe + High-level metrics */}
           <SunClockSimplified />
           <TimeScaleControl />
           <KpiBar />
-          <FactoryNarrator />
+          
+          {/* Bottom - Factory Flow Diagram (collapsible) */}
           <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={bottleneck?.nodeId || null} />
-          <FactoryStatusBar />
-          <ShareFactoryButton />
-          <FactoryHelpPanel />
           <SandboxVisualizations />
           <DetailPanel />
         </>

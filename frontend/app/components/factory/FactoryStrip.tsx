@@ -22,9 +22,10 @@ interface FactoryStripProps {
   highlightNodeId?: string | null; // Node to highlight as bottleneck
 }
 
-const BUILDING_WIDTH = 80;
-const BUILDING_HEIGHT = 60;
-const SOURCE_WIDTH = 60;
+// Limit node size to max 140px width
+const BUILDING_WIDTH = 120;
+const BUILDING_HEIGHT = 50;
+const SOURCE_WIDTH = 80;
 const SOURCE_HEIGHT = 40;
 const CONDUIT_HEIGHT = 8;
 const PACKET_COUNT = 6;
@@ -272,15 +273,15 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
 
     return (
       <g key={`conduit-${flow.from}-${flow.to}`}>
-        {/* Conduit base (thick neon path) */}
+        {/* Conduit base (clean thin outline) */}
         <line
           x1={startX}
           y1={startY}
           x2={endX}
           y2={endY}
           stroke={flow.color}
-          strokeWidth={CONDUIT_HEIGHT}
-          opacity={opacity * 0.3}
+          strokeWidth="2"
+          opacity={opacity}
           strokeLinecap="round"
         />
         
