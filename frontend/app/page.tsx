@@ -1,28 +1,18 @@
 "use client";
 
 import SandboxGlobe from "./components/SandboxGlobe";
-import DetailPanel from "./components/DetailPanel";
-// Removed old components: SandboxControls, SandboxMetrics, SimulationFeedback, DeploymentQueue, DeploymentTimeDisplay
 import OrbitalAdvantagePanelV2 from "./components/OrbitalAdvantagePanelV2";
 import OnboardingTutorial from "./components/OnboardingTutorial";
 import ModeTabs from "./components/ModeTabs";
 import FactorySystemsPanelV2 from "./components/FactorySystemsPanelV2";
 import OrbitPanel from "./components/OrbitPanel";
-import LeftPanel from "./components/LeftPanel";
-import KpiBar from "./components/KpiBar";
+import MissionPanel from "./components/MissionPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
-import SandboxModeSwitcher from "./components/SandboxModeSwitcher";
 import FactoryStrip from "./components/factory/FactoryStrip";
-import FactoryHelpPanel from "./components/FactoryHelpPanel";
-import FactoryStatusBar from "./components/factory/FactoryStatusBar";
-import ShareFactoryButton from "./components/factory/ShareFactoryButton";
-import FactoryNarrator, { useFactoryNarrator } from "./components/factory/FactoryNarrator";
 import Toast from "./components/Toast";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
-import { useSandboxStore } from "./store/sandboxStore";
 import GlobePositionDebug from "./components/GlobePositionDebug";
-import SunClock from "./components/SunClock";
 import ErrorPanel from "./components/ErrorPanel";
 import { useCesiumViewer, getSafeMode } from "./hooks/useCesiumViewer";
 import { logGpuEvent } from "./lib/debugGpu";
