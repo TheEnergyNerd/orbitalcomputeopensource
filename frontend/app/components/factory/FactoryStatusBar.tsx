@@ -30,7 +30,7 @@ export default function FactoryStatusBar() {
   let constrainedNode: string | null = null;
 
   Object.entries(machines).forEach(([machineId, machine]) => {
-    const utilization = getMachineUtilization(machine, resources);
+    const utilization = getMachineUtilization(machine, resources, simState.constraints);
     if (utilization < 0.1 && machine.lines > 0 && !starvedNode) {
       starvedNode = machine.name;
     }
