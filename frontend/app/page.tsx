@@ -11,6 +11,7 @@ import TimeScaleControl from "./components/TimeScaleControl";
 import FactoryStrip from "./components/factory/FactoryStrip";
 import FactoryNodeDetailPanel from "./components/FactoryNodeDetailPanel";
 import FactoryStartGuide from "./components/FactoryStartGuide";
+import PodsReadyIndicator from "./components/PodsReadyIndicator";
 import Toast from "./components/Toast";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
@@ -94,6 +95,7 @@ export default function Home() {
                 onClose={() => setFactorySelectedNode(null)} 
               />
               <FactoryStartGuide />
+              <PodsReadyIndicator />
             </>
           )}
           

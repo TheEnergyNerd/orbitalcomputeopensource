@@ -314,6 +314,9 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
     const utilization = getBuildingUtilization(building.id);
     const { isStarved, isConstrained } = getBuildingStatus(building.id);
     const isSelected = selectedNodeId === building.id;
+    
+    // Check if pods are ready for launch (highlight Launch Ops)
+    const podsReady = building.id === "launchOps" && (simState.resources.pods?.buffer || 0) > 0;
     const isHighlighted = highlightNodeId === building.id;
 
     let BuildingComponent: React.ComponentType<BuildingSpriteProps> | null = null;

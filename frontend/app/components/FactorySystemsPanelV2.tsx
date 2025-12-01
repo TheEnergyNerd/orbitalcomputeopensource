@@ -116,13 +116,25 @@ export default function FactorySystemsPanelV2() {
           {Object.entries(resources).map(([resourceId, resource]) => {
             const netRate = resource.prodPerMin - resource.consPerMin;
             const rateColor = netRate > 0 ? "text-cyan-400" : netRate < 0 ? "text-red-400" : "text-gray-400";
+            const isPods = resourceId === "pods";
+            const podsReady = isPods && resource.buffer > 0;
             return (
-              <div key={resourceId} className="flex justify-between text-[10px]">
-                <span className="text-gray-400">{resource.name}:</span>
-                <span className="text-white">{formatDecimal(resource.buffer, 0)}</span>
+              <div 
+                key={resourceId} 
+                className={`flex justify-between text-[10px] ${podsReady ? "bg-cyan-500/20 px-1 py-0.5 rounded border border-cyan-400/50" : ""}`}
+              >
+                <span className={podsReady ? "text-cyan-300 font-semibold" : "text-gray-400"}>
+                  {resource.name}:
+                </span>
+                <span className={podsReady ? "text-cyan-200 font-bold" : "text-white"}>
+                  {formatDecimal(resource.buffer, 0)}
+                </span>
                 <span className={rateColor}>
                   [{netRate > 0 ? "+" : ""}{formatDecimal(netRate, 1)}/min]
                 </span>
+                {podsReady && (
+                  <span className="text-cyan-400 ml-1">🚀</span>
+                )}
               </div>
             );
           })}
