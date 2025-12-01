@@ -331,8 +331,10 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         // Also use ResizeObserver for immediate detection
         const containerEl = document.getElementById("cesium-globe-container");
         let resizeObserver: ResizeObserver | null = null;
+        let mutationObserver: MutationObserver | null = null;
         
         if (containerEl) {
+          // ResizeObserver: Watch for size changes
           resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
               const { height, width } = entry.contentRect;
@@ -348,10 +350,16 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                   viewportWidth,
                 });
                 const el = entry.target as HTMLElement;
-                el.style.height = `${viewportHeight}px`;
-                el.style.width = `${viewportWidth}px`;
-                el.style.minHeight = `${viewportHeight}px`;
-                el.style.minWidth = `${viewportWidth}px`;
+                // Use !important via setProperty to override any conflicting styles
+                el.style.setProperty('height', `${viewportHeight}px`, 'important');
+                el.style.setProperty('width', `${viewportWidth}px`, 'important');
+                el.style.setProperty('min-height', `${viewportHeight}px`, 'important');
+                el.style.setProperty('min-width', `${viewportWidth}px`, 'important');
+                el.style.setProperty('position', 'fixed', 'important');
+                el.style.setProperty('top', '0', 'important');
+                el.style.setProperty('left', '0', 'important');
+                el.style.setProperty('right', '0', 'important');
+                el.style.setProperty('bottom', '0', 'important');
                 
                 // Force Cesium resize
                 if (!viewer.isDestroyed()) {
@@ -364,6 +372,46 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             }
           });
           resizeObserver.observe(containerEl);
+          
+          // MutationObserver: Watch for style attribute changes that might collapse it
+          mutationObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                const el = mutation.target as HTMLElement;
+                const height = el.offsetHeight || el.clientHeight;
+                const width = el.offsetWidth || el.clientWidth;
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+                
+                // If style changed and container is now collapsed, fix it
+                if (height < viewportHeight * 0.5 || width < viewportWidth * 0.5) {
+                  console.warn("[SandboxGlobe] MutationObserver detected container collapse after style change!", {
+                    height,
+                    width,
+                    viewportHeight,
+                    viewportWidth,
+                  });
+                  el.style.setProperty('height', `${viewportHeight}px`, 'important');
+                  el.style.setProperty('width', `${viewportWidth}px`, 'important');
+                  el.style.setProperty('min-height', `${viewportHeight}px`, 'important');
+                  el.style.setProperty('min-width', `${viewportWidth}px`, 'important');
+                  
+                  if (!viewer.isDestroyed()) {
+                    setTimeout(() => {
+                      viewer.resize();
+                      viewer.scene.requestRender();
+                    }, 50);
+                  }
+                }
+              }
+            }
+          });
+          mutationObserver.observe(containerEl, {
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+            childList: false,
+            subtree: false,
+          });
         }
         
         const watchdogInterval = setInterval(() => {
@@ -395,13 +443,15 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 viewportHeight,
                 viewportWidth,
               });
-              container.style.height = `${viewportHeight}px`;
-              container.style.width = `${viewportWidth}px`;
-              container.style.position = "fixed";
-              container.style.top = "0";
-              container.style.left = "0";
-              container.style.right = "0";
-              container.style.bottom = "0";
+              container.style.setProperty('height', `${viewportHeight}px`, 'important');
+              container.style.setProperty('width', `${viewportWidth}px`, 'important');
+              container.style.setProperty('min-height', `${viewportHeight}px`, 'important');
+              container.style.setProperty('min-width', `${viewportWidth}px`, 'important');
+              container.style.setProperty('position', 'fixed', 'important');
+              container.style.setProperty('top', '0', 'important');
+              container.style.setProperty('left', '0', 'important');
+              container.style.setProperty('right', '0', 'important');
+              container.style.setProperty('bottom', '0', 'important');
               needsFix = true;
             }
           }
@@ -471,6 +521,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         return () => {
           clearInterval(watchdogInterval);
           if (resizeObserver) resizeObserver.disconnect();
+          if (mutationObserver) mutationObserver.disconnect();
         };
         
         console.log("[SandboxGlobe] Viewer configuration complete");
