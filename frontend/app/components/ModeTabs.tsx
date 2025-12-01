@@ -1,6 +1,6 @@
 "use client";
 
-type Mode = "factory" | "orbit" | "missions";
+type Mode = "factory" | "deployment" | "orbit" | "missions";
 
 interface ModeTabsProps {
   activeMode: Mode;
@@ -20,6 +20,16 @@ export default function ModeTabs({ activeMode, onModeChange }: ModeTabsProps) {
           }`}
         >
           Factory
+        </button>
+        <button
+          onClick={() => onModeChange("deployment")}
+          className={`px-4 py-2 text-sm font-semibold rounded-t transition ${
+            activeMode === "deployment"
+              ? "bg-gray-800 text-accent-blue border-t border-x border-gray-700"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Deployment
         </button>
         <button
           onClick={() => onModeChange("orbit")}

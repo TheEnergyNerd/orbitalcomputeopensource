@@ -7,6 +7,7 @@ import ModeTabs from "./components/ModeTabs";
 import FactorySystemsPanelV2 from "./components/FactorySystemsPanelV2";
 import OrbitPanel from "./components/OrbitPanel";
 import MissionPanel from "./components/MissionPanel";
+import DeploymentPanel from "./components/DeploymentPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import FactoryStrip from "./components/factory/FactoryStrip";
 import FactoryNodeDetailPanel from "./components/FactoryNodeDetailPanel";
@@ -25,7 +26,7 @@ export default function Home() {
   const viewerRef = useCesiumViewer("cesium-globe-container");
   const safeMode = getSafeMode();
   const [factorySelectedNode, setFactorySelectedNode] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<"factory" | "orbit" | "missions">("factory");
+  const [activeMode, setActiveMode] = useState<"factory" | "deployment" | "orbit" | "missions">("factory");
   
   // Log GPU event on mount
   useEffect(() => {
@@ -97,6 +98,10 @@ export default function Home() {
               <FactoryStartGuide />
               <PodsReadyIndicator />
             </>
+          )}
+          
+          {activeMode === "deployment" && (
+            <DeploymentPanel />
           )}
           
           {/* Onboarding Tutorial */}

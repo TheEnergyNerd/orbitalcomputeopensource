@@ -68,6 +68,16 @@ interface SandboxStore {
   launchState: LaunchState;
   // New Factorio-style sim state
   simState: SimState | null;
+  // Deployment state
+  launchThreshold: number; // 5, 10, or max
+  fuelAvailableLaunches: number; // Integer
+  launchSlotsThisMonth: number; // Integer
+  podsPerLaunchCapacity: number; // From Launch Complex level
+  lastLaunchMetrics: {
+    before: any;
+    after: any;
+    podsLaunched: number;
+  } | null;
   setOrbitalComputeUnits: (units: number) => void;
   addOrbitalCompute: () => void;
   setGroundDCReduction: (percent: number) => void;
@@ -94,8 +104,12 @@ interface SandboxStore {
   incrementTotalPodsBuilt: () => void;
   // Factory controls (new system)
   runFactoryTick: (monthFraction: number) => void;
+  updateMachineLines: (machineId: MachineId, lines: number) => void;
   updateFactoryLines: (nodeId: FactoryNodeId, lines: number) => boolean; // Returns true if successful
   toggleLaunchProvider: (providerId: NewLaunchProviderId) => void;
+  // Deployment controls
+  setLaunchThreshold: (threshold: number) => void;
+  performLaunch: () => { success: boolean; error?: string; podsLaunched?: number };
 }
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
@@ -558,6 +572,77 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
         },
       };
     });
+  },
+  // Deployment controls
+  setLaunchThreshold: (threshold) => {
+    set({ launchThreshold: threshold });
+  },
+  performLaunch: () => {
+    const state = get();
+    if (!state.simState) {
+      return { success: false, error: "Simulation state not initialized" };
+    }
+    
+    const podsInWarehouse = Math.floor(state.simState.resources.pods?.buffer || 0);
+    const { launchThreshold, fuelAvailableLaunches, launchSlotsThisMonth, podsPerLaunchCapacity } = state;
+    
+    // Check readiness
+    if (podsInWarehouse < launchThreshold) {
+      return { success: false, error: "Need more pods" };
+    }
+    if (fuelAvailableLaunches <= 0) {
+      return { success: false, error: "No fuel available" };
+    }
+    if (launchSlotsThisMonth <= 0) {
+      return { success: false, error: "No launch slots remaining" };
+    }
+    
+    // Calculate pods to launch
+    const maxPods = Math.min(launchThreshold, podsInWarehouse, podsPerLaunchCapacity);
+    const podsThisLaunch = Math.floor(maxPods);
+    
+    if (podsThisLaunch <= 0) {
+      return { success: false, error: "Cannot launch 0 pods" };
+    }
+    
+    // Store metrics before launch
+    const { calculateDeploymentMetrics } = require("../lib/deployment/metrics");
+    const metricsBefore = calculateDeploymentMetrics(state.simState);
+    
+    // Update state
+    set((s) => {
+      if (!s.simState) return s;
+      
+      const updatedResources = {
+        ...s.simState.resources,
+        pods: {
+          ...s.simState.resources.pods,
+          buffer: Math.max(0, s.simState.resources.pods.buffer - podsThisLaunch),
+        },
+      };
+      
+      const updatedSimState = {
+        ...s.simState,
+        resources: updatedResources,
+        podsInOrbit: s.simState.podsInOrbit + podsThisLaunch,
+      };
+      
+      // Calculate metrics after launch
+      const metricsAfter = calculateDeploymentMetrics(updatedSimState);
+      
+      return {
+        simState: updatedSimState,
+        fuelAvailableLaunches: Math.max(0, s.fuelAvailableLaunches - 1),
+        launchSlotsThisMonth: Math.max(0, s.launchSlotsThisMonth - 1),
+        lastLaunchMetrics: {
+          before: metricsBefore,
+          after: metricsAfter,
+          podsLaunched: podsThisLaunch,
+        },
+      };
+    });
+    
+    return { success: true, podsLaunched: podsThisLaunch };
   },
 }));
 
