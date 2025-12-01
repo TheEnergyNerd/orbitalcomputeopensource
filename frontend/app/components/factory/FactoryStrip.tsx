@@ -354,6 +354,7 @@ export default function FactoryStrip({ selectedNodeId, onSelectNode, highlightNo
           isConstrained={isConstrained}
           width={width}
           height={height}
+          isHighlighted={podsReady}
         />
         {/* Clean thin outlines with color accents - no glow */}
         {isSelected && (
