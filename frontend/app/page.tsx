@@ -39,7 +39,17 @@ export default function Home() {
   return (
     <main className="fixed inset-0 w-full h-full overflow-hidden bg-dark-bg">
       {/* Single shared globe container - viewer is managed by hook */}
-      <div id="cesium-globe-container" className="fixed inset-0 w-full h-full" style={{ zIndex: 0 }} />
+      <div 
+        id="cesium-globe-container" 
+        className="fixed inset-0 w-full h-full" 
+        style={{ 
+          zIndex: 0,
+          minHeight: '100vh',
+          minWidth: '100vw',
+          height: '100vh',
+          width: '100vw',
+        }} 
+      />
       
       {/* Globe Rendering - sandbox only, components just add entities */}
       <SandboxGlobe viewerRef={viewerRef} />

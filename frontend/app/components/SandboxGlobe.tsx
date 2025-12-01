@@ -328,9 +328,48 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         }, 1000);
         
         // Watchdog: Periodically check and fix container/widget dimensions
+        // Also use ResizeObserver for immediate detection
+        const container = document.getElementById("cesium-globe-container");
+        let resizeObserver: ResizeObserver | null = null;
+        
+        if (container) {
+          resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+              const { height, width } = entry.contentRect;
+              const viewportHeight = window.innerHeight;
+              const viewportWidth = window.innerWidth;
+              
+              // If container collapsed significantly, fix immediately
+              if (height < viewportHeight * 0.5 || width < viewportWidth * 0.5) {
+                console.warn("[SandboxGlobe] ResizeObserver detected container collapse!", {
+                  height,
+                  width,
+                  viewportHeight,
+                  viewportWidth,
+                });
+                const el = entry.target as HTMLElement;
+                el.style.height = `${viewportHeight}px`;
+                el.style.width = `${viewportWidth}px`;
+                el.style.minHeight = `${viewportHeight}px`;
+                el.style.minWidth = `${viewportWidth}px`;
+                
+                // Force Cesium resize
+                if (!viewer.isDestroyed()) {
+                  setTimeout(() => {
+                    viewer.resize();
+                    viewer.scene.requestRender();
+                  }, 50);
+                }
+              }
+            }
+          });
+          resizeObserver.observe(container);
+        }
+        
         const watchdogInterval = setInterval(() => {
           if (viewer.isDestroyed()) {
             clearInterval(watchdogInterval);
+            if (resizeObserver) resizeObserver.disconnect();
             return;
           }
           
@@ -427,10 +466,11 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               }
             }, 100);
           }
-        }, 3000); // Check every 3 seconds (more frequent)
+        }, 1000); // Check every 1 second (very frequent)
         
         return () => {
           clearInterval(watchdogInterval);
+          if (resizeObserver) resizeObserver.disconnect();
         };
         
         console.log("[SandboxGlobe] Viewer configuration complete");
