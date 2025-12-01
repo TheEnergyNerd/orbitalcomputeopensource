@@ -176,13 +176,48 @@ export function useCesiumViewer(
     const widget = (viewer as any).cesiumWidget;
     if (widget?.container) {
       const widgetContainer = widget.container as HTMLElement;
-      const containerHeight = el.offsetHeight || window.innerHeight;
-      const containerWidth = el.offsetWidth || window.innerWidth;
-      widgetContainer.style.width = `${containerWidth}px`;
-      widgetContainer.style.height = `${containerHeight}px`;
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      widgetContainer.style.width = `${viewportWidth}px`;
+      widgetContainer.style.height = `${viewportHeight}px`;
       widgetContainer.style.position = "relative";
       widgetContainer.style.overflow = "hidden";
     }
+    
+    // Add resize listener to maintain dimensions
+    const handleResize = () => {
+      if (viewer.isDestroyed()) return;
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Update container
+      if (el) {
+        (el as HTMLElement).style.height = `${viewportHeight}px`;
+        (el as HTMLElement).style.width = `${viewportWidth}px`;
+      }
+      
+      // Update widget container
+      if (widget?.container) {
+        const widgetContainer = widget.container as HTMLElement;
+        widgetContainer.style.width = `${viewportWidth}px`;
+        widgetContainer.style.height = `${viewportHeight}px`;
+      }
+      
+      // Update canvas
+      const canvas = el.querySelector("canvas");
+      if (canvas) {
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+      }
+      
+      // Notify Cesium of resize
+      viewer.resize();
+    };
+    
+    window.addEventListener("resize", handleResize);
+    
+    // Store cleanup function
+    (viewer as any)._resizeHandler = handleResize;
 
     // Force initial render - requestRenderMode might prevent initial render
     viewer.scene.requestRender();
@@ -197,6 +232,11 @@ export function useCesiumViewer(
     }
 
     return () => {
+      // Clean up resize handler
+      if ((viewer as any)._resizeHandler) {
+        window.removeEventListener("resize", (viewer as any)._resizeHandler);
+        delete (viewer as any)._resizeHandler;
+      }
       // Don't destroy on unmount - let the global instance persist
       // Only destroy if explicitly requested or on page unload
       console.log(`[useCesiumViewer] Component unmounting for ${containerId}, keeping viewer alive`);
