@@ -8,6 +8,8 @@ import FactorySystemsPanelV2 from "./components/FactorySystemsPanelV2";
 import OrbitPanel from "./components/OrbitPanel";
 import MissionPanel from "./components/MissionPanel";
 import DeploymentPanel from "./components/DeploymentPanel";
+import SimpleView from "./components/SimpleView";
+import AdvancedView from "./components/AdvancedView";
 import TimeScaleControl from "./components/TimeScaleControl";
 import FactoryStrip from "./components/factory/FactoryStrip";
 import FactoryNodeDetailPanel from "./components/FactoryNodeDetailPanel";
@@ -26,7 +28,7 @@ export default function Home() {
   const viewerRef = useCesiumViewer("cesium-globe-container");
   const safeMode = getSafeMode();
   const [factorySelectedNode, setFactorySelectedNode] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<"factory" | "deployment" | "orbit" | "missions">("factory");
+  const [activeMode, setActiveMode] = useState<"overview" | "advanced" | "deployment" | "orbit" | "missions">("overview");
   
   // Log GPU event on mount
   useEffect(() => {
@@ -80,39 +82,36 @@ export default function Home() {
           {/* Top: Mode Tabs */}
           <ModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
           
-          {/* Left Sidebar - Mode-specific content */}
-          <div className="fixed top-[50px] left-6 w-64 z-40 panel max-h-[calc(100vh-100px)] overflow-y-auto">
-            {activeMode === "factory" && <FactorySystemsPanelV2 />}
-            {activeMode === "orbit" && <OrbitPanel />}
-            {activeMode === "missions" && (
-              <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
-                <MissionPanel />
-              </div>
-            )}
-          </div>
+          {/* Main Content - Mode-specific views */}
+          {activeMode === "overview" && (
+            <SimpleView />
+          )}
           
-          {/* Center - Globe (clean, unobstructed) */}
-          <TimeScaleControl />
-          
-          {/* Bottom Center - Orbital Advantage Panel (docked) */}
-          <OrbitalAdvantagePanelV2 />
-          
-          {/* Bottom - Mode-specific panels */}
-          {activeMode === "factory" && (
-            <>
-              <FactoryStrip selectedNodeId={factorySelectedNode} onSelectNode={setFactorySelectedNode} highlightNodeId={null} />
-              <FactoryNodeDetailPanel 
-                selectedNodeId={factorySelectedNode} 
-                onClose={() => setFactorySelectedNode(null)} 
-              />
-              <FactoryStartGuide />
-              <PodsReadyIndicator />
-            </>
+          {activeMode === "advanced" && (
+            <AdvancedView />
           )}
           
           {activeMode === "deployment" && (
             <DeploymentPanel />
           )}
+          
+          {/* Left Sidebar - Mode-specific content (only for non-overview modes) */}
+          {activeMode !== "overview" && (
+            <div className="fixed top-[50px] left-6 w-64 z-40 panel max-h-[calc(100vh-100px)] overflow-y-auto">
+              {activeMode === "orbit" && <OrbitPanel />}
+              {activeMode === "missions" && (
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+                  <MissionPanel />
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Center - Globe (clean, unobstructed) - always visible */}
+          <TimeScaleControl />
+          
+          {/* Bottom Center - Orbital Advantage Panel (docked) - only in overview */}
+          {activeMode === "overview" && <OrbitalAdvantagePanelV2 />}
           
           {/* Onboarding Tutorial */}
           <OnboardingTutorial />
