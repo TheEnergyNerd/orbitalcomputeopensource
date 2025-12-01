@@ -206,7 +206,7 @@ export function createInitialSimState(): SimState {
     launchOps: {
       id: 'launchOps',
       name: 'Launch Ops',
-      lines: 1,
+      lines: 0, // Start with 0 lines so pods can accumulate first
       baseOutputPerLine: 0.5, // launches/min (1 launch per 2 min = faster for gameplay)
       inputRates: {
         pods: 1, // pods/min per line
