@@ -159,7 +159,7 @@ export default function OrbitalAdvantagePanelV2() {
   if (isCollapsed) {
     // Collapsed: just icons in a row
     return (
-      <div className="fixed bottom-[20px] left-1/2 transform -translate-x-1/2 z-30 panel">
+      <div className="fixed bottom-[20px] left-1/2 transform -translate-x-1/2 z-30 panel pointer-events-auto">
         <div className="flex items-center gap-3 px-3 py-2">
           <span className="text-lg">📡</span>
           <span className="text-lg">⚡</span>
@@ -178,7 +178,7 @@ export default function OrbitalAdvantagePanelV2() {
   
   // Expanded: 2x2 grid
   return (
-    <div className="fixed bottom-[20px] left-1/2 transform -translate-x-1/2 z-30 panel" style={{ width: "80%", maxWidth: "520px" }}>
+    <div className="fixed bottom-[20px] left-1/2 transform -translate-x-1/2 z-30 panel pointer-events-auto" style={{ width: "80%", maxWidth: "520px" }}>
       <div className="flex justify-between items-center mb-2">
         <span className="text-xs font-semibold text-gray-300">ORBITAL ADVANTAGE</span>
         <button

@@ -36,9 +36,9 @@ export default function SimpleView() {
   const orbitalShare = targetComputeKw > 0 ? (orbitalComputeKw / targetComputeKw) * 100 : 0;
 
   return (
-    <div className="fixed inset-0 flex flex-col">
+    <div className="fixed inset-0 flex flex-col pointer-events-none">
       {/* Top Controls - Simplified */}
-      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 panel">
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 panel pointer-events-auto">
         <div className="flex items-center gap-4 text-xs">
           <div>
             <span className="text-gray-400">Orbital Share:</span>
@@ -60,7 +60,7 @@ export default function SimpleView() {
       <OrbitalAdvantagePanelV2 />
 
       {/* Deployment Summary - Bottom */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 panel max-w-2xl">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 panel max-w-2xl pointer-events-auto">
         <p className="text-xs text-gray-300 text-center mb-2">
           To reach <span className="text-white font-semibold">{formatDecimal(orbitalShare, 1)}%</span> orbital share, 
           you're deploying about <span className="text-white font-semibold">{formatDecimal(podsPerYear, 0)}</span> pods 

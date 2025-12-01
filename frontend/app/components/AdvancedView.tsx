@@ -28,9 +28,9 @@ export default function AdvancedView() {
   const podsPerYear = podsPerMonth * 12;
 
   return (
-    <div className="fixed inset-0 flex flex-col">
+    <div className="fixed inset-0 flex flex-col pointer-events-none">
       {/* Left Sidebar - Factory Systems */}
-      <div className="fixed top-[50px] left-6 w-64 z-40 panel max-h-[calc(100vh-100px)] overflow-y-auto">
+      <div className="fixed top-[50px] left-6 w-64 z-40 panel max-h-[calc(100vh-100px)] overflow-y-auto pointer-events-auto">
         <FactorySystemsPanelV2 />
       </div>
 
@@ -45,10 +45,12 @@ export default function AdvancedView() {
 
       {/* Right Panel - Node Detail (when selected) */}
       {factorySelectedNode && (
-        <FactoryNodeDetailPanel 
-          selectedNodeId={factorySelectedNode} 
-          onClose={() => setFactorySelectedNode(null)} 
-        />
+        <div className="pointer-events-auto">
+          <FactoryNodeDetailPanel 
+            selectedNodeId={factorySelectedNode} 
+            onClose={() => setFactorySelectedNode(null)} 
+          />
+        </div>
       )}
 
       {/* Factory Start Guide */}
@@ -58,7 +60,7 @@ export default function AdvancedView() {
       <PodsReadyIndicator />
 
       {/* Capability Summary - Top Right */}
-      <div className="fixed top-[50px] right-6 w-64 z-40 panel">
+      <div className="fixed top-[50px] right-6 w-64 z-40 panel pointer-events-auto">
         <div className="space-y-2 text-xs">
           <div>
             <span className="text-gray-400">Pods/Year:</span>
