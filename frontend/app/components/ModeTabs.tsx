@@ -1,6 +1,8 @@
 "use client";
 
-type Mode = "factory" | "deployment" | "orbit" | "missions";
+import { useEffect } from "react";
+
+export type Mode = "overview" | "advanced" | "deployment" | "orbit" | "missions";
 
 interface ModeTabsProps {
   activeMode: Mode;
@@ -8,18 +10,37 @@ interface ModeTabsProps {
 }
 
 export default function ModeTabs({ activeMode, onModeChange }: ModeTabsProps) {
+  // Listen for switchMode events from SimpleView
+  useEffect(() => {
+    const handleSwitchMode = (e: CustomEvent) => {
+      onModeChange(e.detail as Mode);
+    };
+    window.addEventListener('switchMode' as any, handleSwitchMode);
+    return () => window.removeEventListener('switchMode' as any, handleSwitchMode);
+  }, [onModeChange]);
+
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900/95 border-b border-gray-700/50">
       <div className="flex items-center justify-center gap-1 px-4 py-2">
         <button
-          onClick={() => onModeChange("factory")}
+          onClick={() => onModeChange("overview")}
           className={`px-4 py-2 text-sm font-semibold rounded-t transition ${
-            activeMode === "factory"
+            activeMode === "overview"
               ? "bg-gray-800 text-accent-blue border-t border-x border-gray-700"
               : "text-gray-400 hover:text-white"
           }`}
         >
-          Factory
+          Overview
+        </button>
+        <button
+          onClick={() => onModeChange("advanced")}
+          className={`px-4 py-2 text-sm font-semibold rounded-t transition ${
+            activeMode === "advanced"
+              ? "bg-gray-800 text-accent-blue border-t border-x border-gray-700"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Advanced
         </button>
         <button
           onClick={() => onModeChange("deployment")}
