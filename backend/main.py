@@ -1225,7 +1225,7 @@ def clear_state_cache():
     _cache_tick = -1
 
 @app.get("/state")  # Removed response_model to avoid Pydantic truncation
-async def get_state(mode: str = "simulator"):
+async def get_state(request: Request, mode: str = "simulator"):
     """Get current simulation state
     
     Args:
@@ -1235,12 +1235,13 @@ async def get_state(mode: str = "simulator"):
     import time
     start_time = time.time()
     
-    # Use asyncio.sleep(0) to yield control and prevent blocking
-    await asyncio.sleep(0)
-    
-    async with sim_lock:
-        if sim_state is None:
-            raise HTTPException(status_code=503, detail="Simulation not initialized")
+    try:
+        # Use asyncio.sleep(0) to yield control and prevent blocking
+        await asyncio.sleep(0)
+        
+        async with sim_lock:
+            if sim_state is None:
+                raise HTTPException(status_code=503, detail="Simulation not initialized")
         
         
         # Use cached state if available and tick hasn't changed
@@ -1309,6 +1310,34 @@ async def get_state(mode: str = "simulator"):
         await asyncio.sleep(0)
         
         return JSONResponse(content=return_dict)
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 503)
+        raise
+    except Exception as e:
+        # Log the actual error for debugging
+        import traceback
+        error_msg = f"Error in get_state: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        print(traceback.format_exc())
+        # Return 500 with CORS headers
+        from fastapi.responses import JSONResponse
+        from fastapi import status
+        headers = {}
+        if ALLOWED_ORIGINS_STR == "*":
+            headers["Access-Control-Allow-Origin"] = "*"
+        else:
+            origin = request.headers.get("origin") if 'request' in locals() else None
+            if origin and origin in ALLOWED_ORIGINS:
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": f"Internal server error: {error_msg}"},
+            headers=headers
+        )
 
 
 @app.post("/scenario")
