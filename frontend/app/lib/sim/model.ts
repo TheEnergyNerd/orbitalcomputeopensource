@@ -188,7 +188,7 @@ export function createInitialSimState(): SimState {
       id: 'podFactory',
       name: 'Pod Factory',
       lines: 1,
-      baseOutputPerLine: 0.125, // pods/min (1 pod per 8 min)
+      baseOutputPerLine: 6, // pods/min (1 pod per 10 seconds)
       inputRates: {
         chips: 300, // chips/min per line
         computeUnits: 10, // compute units/min per line
