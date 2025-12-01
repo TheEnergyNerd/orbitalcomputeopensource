@@ -241,8 +241,8 @@ export function FuelPlantBuilding({ utilization, isStarved, isConstrained, width
  */
 export function LaunchOpsBuilding({ utilization, isStarved, isConstrained, width = 80, height = 60, isHighlighted = false }: BuildingSpriteProps) {
   const glowIntensity = Math.min(1, utilization * 1.5);
-  const pulse = utilization > 0.9 ? "animate-pulse" : "";
-  const borderColor = isStarved ? "#ef4444" : isConstrained ? "#f97316" : "#22c55e";
+  const pulse = utilization > 0.9 || isHighlighted ? "animate-pulse" : "";
+  const borderColor = isHighlighted ? "#06b6d4" : isStarved ? "#ef4444" : isConstrained ? "#f97316" : "#22c55e";
   
   return (
     <g>
@@ -254,8 +254,8 @@ export function LaunchOpsBuilding({ utilization, isStarved, isConstrained, width
         height="20"
         rx="2"
         fill="#0f172a"
-        stroke="#475569"
-        strokeWidth="1"
+        stroke={isHighlighted ? "#06b6d4" : "#475569"}
+        strokeWidth={isHighlighted ? "2" : "1"}
       />
       
       {/* Tower */}
