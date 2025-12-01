@@ -327,6 +327,52 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           if (!viewer.isDestroyed()) viewer.scene.requestRender();
         }, 1000);
         
+        // Watchdog: Periodically check and fix container/widget dimensions
+        const watchdogInterval = setInterval(() => {
+          if (viewer.isDestroyed()) {
+            clearInterval(watchdogInterval);
+            return;
+          }
+          
+          const widget = (viewer as any).cesiumWidget;
+          const widgetContainer = widget?.container as HTMLElement | null;
+          const container = document.getElementById("cesium-globe-container");
+          const canvas = container?.querySelector("canvas") as HTMLCanvasElement | null;
+          
+          // Fix widget container height if it's 0
+          if (widgetContainer && widgetContainer.offsetHeight === 0) {
+            console.warn("[SandboxGlobe] Widget container height is 0, fixing...");
+            if (container) {
+              const containerHeight = container.offsetHeight || window.innerHeight;
+              widgetContainer.style.height = `${containerHeight}px`;
+              widgetContainer.style.width = `${container.offsetWidth || window.innerWidth}px`;
+            }
+            viewer.scene.requestRender();
+          }
+          
+          // Ensure canvas is visible
+          if (canvas) {
+            if (canvas.style.display === "none" || canvas.style.visibility === "hidden") {
+              console.warn("[SandboxGlobe] Canvas is hidden, fixing...");
+              canvas.style.display = "block";
+              canvas.style.visibility = "visible";
+              canvas.style.opacity = "1";
+            }
+            if (canvas.width === 0 || canvas.height === 0) {
+              console.warn("[SandboxGlobe] Canvas dimensions are 0, forcing resize...");
+              if (container) {
+                canvas.width = container.offsetWidth || window.innerWidth;
+                canvas.height = container.offsetHeight || window.innerHeight;
+              }
+            }
+            viewer.scene.requestRender();
+          }
+        }, 5000); // Check every 5 seconds
+        
+        return () => {
+          clearInterval(watchdogInterval);
+        };
+        
         console.log("[SandboxGlobe] Viewer configuration complete");
       } catch (error) {
         console.error("[SandboxGlobe] Error configuring viewer:", error);
