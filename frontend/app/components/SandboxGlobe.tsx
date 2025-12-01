@@ -341,20 +341,31 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               const viewportHeight = window.innerHeight;
               const viewportWidth = window.innerWidth;
               
-              // If container collapsed significantly, fix immediately
-              if (height < viewportHeight * 0.5 || width < viewportWidth * 0.5) {
+              // If container collapsed significantly OR viewport itself is suspiciously small, fix immediately
+              // Check if viewport is suspiciously small (likely a layout bug)
+              const isViewportSuspicious = viewportHeight < 400 || viewportWidth < 400;
+              const isContainerCollapsed = height < viewportHeight * 0.5 || width < viewportWidth * 0.5;
+              
+              if (isContainerCollapsed || isViewportSuspicious) {
+                // Use screen dimensions as fallback if viewport is suspicious
+                const targetHeight = isViewportSuspicious ? window.screen.height : viewportHeight;
+                const targetWidth = isViewportSuspicious ? window.screen.width : viewportWidth;
+                
                 console.warn("[SandboxGlobe] ResizeObserver detected container collapse!", {
                   height,
                   width,
                   viewportHeight,
                   viewportWidth,
+                  screenHeight: window.screen.height,
+                  screenWidth: window.screen.width,
+                  isViewportSuspicious,
                 });
                 const el = entry.target as HTMLElement;
                 // Use !important via setProperty to override any conflicting styles
-                el.style.setProperty('height', `${viewportHeight}px`, 'important');
-                el.style.setProperty('width', `${viewportWidth}px`, 'important');
-                el.style.setProperty('min-height', `${viewportHeight}px`, 'important');
-                el.style.setProperty('min-width', `${viewportWidth}px`, 'important');
+                el.style.setProperty('height', `${targetHeight}px`, 'important');
+                el.style.setProperty('width', `${targetWidth}px`, 'important');
+                el.style.setProperty('min-height', `${targetHeight}px`, 'important');
+                el.style.setProperty('min-width', `${targetWidth}px`, 'important');
                 el.style.setProperty('position', 'fixed', 'important');
                 el.style.setProperty('top', '0', 'important');
                 el.style.setProperty('left', '0', 'important');
@@ -435,18 +446,29 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             const containerHeight = container.offsetHeight || container.clientHeight;
             const containerWidth = container.offsetWidth || container.clientWidth;
             
-            // If container is significantly smaller than viewport, fix it
-            if (containerHeight < viewportHeight * 0.5 || containerWidth < viewportWidth * 0.5) {
+            // Check if viewport itself is suspiciously small (likely a layout bug)
+            const isViewportSuspicious = viewportHeight < 400 || viewportWidth < 400;
+            const isContainerCollapsed = containerHeight < viewportHeight * 0.5 || containerWidth < viewportWidth * 0.5;
+            
+            // If container is collapsed OR viewport is suspicious, fix it
+            if (isContainerCollapsed || isViewportSuspicious) {
+              // Use screen dimensions as fallback if viewport is suspicious
+              const targetHeight = isViewportSuspicious ? window.screen.height : viewportHeight;
+              const targetWidth = isViewportSuspicious ? window.screen.width : viewportWidth;
+              
               console.warn("[SandboxGlobe] React Container collapsed, fixing...", {
                 containerHeight,
                 containerWidth,
                 viewportHeight,
                 viewportWidth,
+                screenHeight: window.screen.height,
+                screenWidth: window.screen.width,
+                isViewportSuspicious,
               });
-              container.style.setProperty('height', `${viewportHeight}px`, 'important');
-              container.style.setProperty('width', `${viewportWidth}px`, 'important');
-              container.style.setProperty('min-height', `${viewportHeight}px`, 'important');
-              container.style.setProperty('min-width', `${viewportWidth}px`, 'important');
+              container.style.setProperty('height', `${targetHeight}px`, 'important');
+              container.style.setProperty('width', `${targetWidth}px`, 'important');
+              container.style.setProperty('min-height', `${targetHeight}px`, 'important');
+              container.style.setProperty('min-width', `${targetWidth}px`, 'important');
               container.style.setProperty('position', 'fixed', 'important');
               container.style.setProperty('top', '0', 'important');
               container.style.setProperty('left', '0', 'important');

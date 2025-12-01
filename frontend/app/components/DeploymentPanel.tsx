@@ -16,7 +16,7 @@ export default function DeploymentPanel() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col">
+    <div className="fixed inset-0 flex flex-col" style={{ zIndex: 10 }}>
       {/* Top Strip */}
       <DeploymentTopStrip />
       
