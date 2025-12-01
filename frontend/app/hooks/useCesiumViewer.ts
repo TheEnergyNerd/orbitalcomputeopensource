@@ -144,18 +144,23 @@ export function useCesiumViewer(
       viewer.scene.globe.imageryLayers.get(0).alpha = 0.15;
     }
 
-    // Set container styles
+    // Set container styles - ensure it's always full viewport
     if (el) {
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
       (el as HTMLElement).style.position = "fixed";
       (el as HTMLElement).style.top = "0";
       (el as HTMLElement).style.left = "0";
       (el as HTMLElement).style.right = "0";
       (el as HTMLElement).style.bottom = "0";
-      (el as HTMLElement).style.width = "100vw";
-      (el as HTMLElement).style.height = "100vh";
+      (el as HTMLElement).style.width = `${viewportWidth}px`;
+      (el as HTMLElement).style.height = `${viewportHeight}px`;
+      (el as HTMLElement).style.minWidth = `${viewportWidth}px`;
+      (el as HTMLElement).style.minHeight = `${viewportHeight}px`;
       (el as HTMLElement).style.margin = "0";
       (el as HTMLElement).style.padding = "0";
       (el as HTMLElement).style.zIndex = "0";
+      (el as HTMLElement).style.overflow = "hidden";
     }
 
     // Ensure canvas fills container and is visible
