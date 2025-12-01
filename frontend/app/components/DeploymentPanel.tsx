@@ -17,6 +17,13 @@ export default function DeploymentPanel() {
       {/* Top Strip */}
       <DeploymentTopStrip />
       
+      {/* Launch Animation Overlay */}
+      <LaunchAnimation />
+      <LaunchGlobeEffects />
+      
+      {/* Deployment Tutorial */}
+      <DeploymentTutorial />
+      
       {/* Main Layout */}
       <div className="flex-1 flex gap-4 pt-12 pb-4 px-4">
         {/* Left Column - Launch Controls */}

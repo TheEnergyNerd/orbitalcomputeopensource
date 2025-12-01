@@ -45,7 +45,7 @@ export default function LaunchControlsPanel() {
   return (
     <div className="space-y-4">
       {/* Card 1: Pods Ready */}
-      <div className="panel">
+      <div className="panel" data-tutorial="pods-ready">
         <h3 className="text-sm font-semibold text-white mb-3">Pods Ready</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between">
@@ -82,7 +82,7 @@ export default function LaunchControlsPanel() {
       </div>
 
       {/* Card 2: Launch Threshold */}
-      <div className="panel">
+      <div className="panel" data-tutorial="launch-threshold">
         <h3 className="text-sm font-semibold text-white mb-3">Launch Threshold</h3>
         <div className="text-xs text-gray-400 mb-2">Launch when pods ≥</div>
         <div className="flex gap-2">
@@ -127,6 +127,7 @@ export default function LaunchControlsPanel() {
         <button
           onClick={handleLaunch}
           disabled={!canLaunch || isLaunching}
+          data-tutorial="launch-button"
           className={`w-full py-3 px-4 rounded-lg font-semibold text-sm transition ${
             canLaunch && !isLaunching
               ? "bg-accent-blue hover:bg-accent-blue/80 text-white"
