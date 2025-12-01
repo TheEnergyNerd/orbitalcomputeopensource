@@ -339,35 +339,95 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           const container = document.getElementById("cesium-globe-container");
           const canvas = container?.querySelector("canvas") as HTMLCanvasElement | null;
           
-          // Fix widget container height if it's 0
-          if (widgetContainer && widgetContainer.offsetHeight === 0) {
-            console.warn("[SandboxGlobe] Widget container height is 0, fixing...");
-            if (container) {
-              const containerHeight = container.offsetHeight || window.innerHeight;
-              widgetContainer.style.height = `${containerHeight}px`;
-              widgetContainer.style.width = `${container.offsetWidth || window.innerWidth}px`;
+          let needsFix = false;
+          const viewportHeight = window.innerHeight;
+          const viewportWidth = window.innerWidth;
+          
+          // Fix React Container if it's collapsed (should be full viewport)
+          if (container) {
+            const containerHeight = container.offsetHeight || container.clientHeight;
+            const containerWidth = container.offsetWidth || container.clientWidth;
+            
+            // If container is significantly smaller than viewport, fix it
+            if (containerHeight < viewportHeight * 0.5 || containerWidth < viewportWidth * 0.5) {
+              console.warn("[SandboxGlobe] React Container collapsed, fixing...", {
+                containerHeight,
+                containerWidth,
+                viewportHeight,
+                viewportWidth,
+              });
+              container.style.height = `${viewportHeight}px`;
+              container.style.width = `${viewportWidth}px`;
+              container.style.position = "fixed";
+              container.style.top = "0";
+              container.style.left = "0";
+              container.style.right = "0";
+              container.style.bottom = "0";
+              needsFix = true;
             }
-            viewer.scene.requestRender();
           }
           
-          // Ensure canvas is visible
+          // Fix widget container height if it's 0 or too small
+          if (widgetContainer) {
+            const widgetHeight = widgetContainer.offsetHeight || widgetContainer.clientHeight;
+            const widgetWidth = widgetContainer.offsetWidth || widgetContainer.clientWidth;
+            
+            if (widgetHeight === 0 || widgetHeight < viewportHeight * 0.5) {
+              console.warn("[SandboxGlobe] Widget container height is too small, fixing...", {
+                widgetHeight,
+                widgetWidth,
+                viewportHeight,
+                viewportWidth,
+              });
+              widgetContainer.style.height = `${viewportHeight}px`;
+              widgetContainer.style.width = `${viewportWidth}px`;
+              widgetContainer.style.position = "relative";
+              widgetContainer.style.overflow = "hidden";
+              needsFix = true;
+            }
+          }
+          
+          // Ensure canvas is visible and properly sized
           if (canvas) {
+            const canvasHeight = canvas.height || canvas.clientHeight;
+            const canvasWidth = canvas.width || canvas.clientWidth;
+            
             if (canvas.style.display === "none" || canvas.style.visibility === "hidden") {
               console.warn("[SandboxGlobe] Canvas is hidden, fixing...");
               canvas.style.display = "block";
               canvas.style.visibility = "visible";
               canvas.style.opacity = "1";
+              needsFix = true;
             }
-            if (canvas.width === 0 || canvas.height === 0) {
-              console.warn("[SandboxGlobe] Canvas dimensions are 0, forcing resize...");
-              if (container) {
-                canvas.width = container.offsetWidth || window.innerWidth;
-                canvas.height = container.offsetHeight || window.innerHeight;
-              }
+            
+            if (canvasHeight < viewportHeight * 0.5 || canvasWidth < viewportWidth * 0.5) {
+              console.warn("[SandboxGlobe] Canvas dimensions are too small, forcing resize...", {
+                canvasHeight,
+                canvasWidth,
+                viewportHeight,
+                viewportWidth,
+              });
+              // Force canvas to match viewport
+              canvas.width = viewportWidth;
+              canvas.height = viewportHeight;
+              canvas.style.width = "100%";
+              canvas.style.height = "100%";
+              needsFix = true;
             }
-            viewer.scene.requestRender();
           }
-        }, 5000); // Check every 5 seconds
+          
+          // Force render and resize if any fixes were applied
+          if (needsFix) {
+            viewer.scene.requestRender();
+            // Also force a resize event to trigger Cesium's internal resize
+            setTimeout(() => {
+              if (!viewer.isDestroyed()) {
+                viewer.resize();
+                viewer.scene.requestRender();
+              }
+            }, 100);
+          }
+        }, 3000); // Check every 3 seconds (more frequent)
         
         return () => {
           clearInterval(watchdogInterval);
