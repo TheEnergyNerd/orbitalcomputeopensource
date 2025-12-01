@@ -7,6 +7,7 @@ import FactorySystemsPanelV2 from "./FactorySystemsPanelV2";
 import FactoryNodeDetailPanel from "./FactoryNodeDetailPanel";
 import FactoryStartGuide from "./FactoryStartGuide";
 import PodsReadyIndicator from "./PodsReadyIndicator";
+import { formatDecimal } from "../lib/utils/formatNumber";
 
 /**
  * AdvancedView - All factory/industrial UI
