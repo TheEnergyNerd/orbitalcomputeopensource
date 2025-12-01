@@ -146,6 +146,12 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   launchState: createDefaultLaunchState(),
   // New Factorio-style sim state
   simState: createInitialSimState(),
+  // Deployment state
+  launchThreshold: 5, // Default to 5 pods
+  fuelAvailableLaunches: 10, // Start with 10 launches worth of fuel
+  launchSlotsThisMonth: 12, // 12 launches per month capacity
+  podsPerLaunchCapacity: 6, // Default 6 pods per launch
+  lastLaunchMetrics: null,
   setOrbitalComputeUnits: (units) => {
     set({ orbitalComputeUnits: units });
     // Check if we've entered "mostly space" mode
