@@ -329,10 +329,10 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         
         // Watchdog: Periodically check and fix container/widget dimensions
         // Also use ResizeObserver for immediate detection
-        const container = document.getElementById("cesium-globe-container");
+        const containerEl = document.getElementById("cesium-globe-container");
         let resizeObserver: ResizeObserver | null = null;
         
-        if (container) {
+        if (containerEl) {
           resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
               const { height, width } = entry.contentRect;
@@ -363,7 +363,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               }
             }
           });
-          resizeObserver.observe(container);
+          resizeObserver.observe(containerEl);
         }
         
         const watchdogInterval = setInterval(() => {
