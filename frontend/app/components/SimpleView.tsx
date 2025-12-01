@@ -61,11 +61,23 @@ export default function SimpleView() {
 
       {/* Deployment Summary - Bottom */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 panel max-w-2xl">
-        <p className="text-xs text-gray-300 text-center">
+        <p className="text-xs text-gray-300 text-center mb-2">
           To reach <span className="text-white font-semibold">{formatDecimal(orbitalShare, 1)}%</span> orbital share, 
           you're deploying about <span className="text-white font-semibold">{formatDecimal(podsPerYear, 0)}</span> pods 
           and <span className="text-white font-semibold">{formatDecimal(launchesPerYear, 0)}</span> launches/year.
         </p>
+        <div className="text-center">
+          <button
+            onClick={() => {
+              // Switch to Advanced tab via ModeTabs
+              const event = new CustomEvent('switchMode', { detail: 'advanced' });
+              window.dispatchEvent(event);
+            }}
+            className="text-[10px] text-gray-400 hover:text-cyan-400 underline"
+          >
+            Deep dive: industrial / advanced view →
+          </button>
+        </div>
       </div>
     </div>
   );
