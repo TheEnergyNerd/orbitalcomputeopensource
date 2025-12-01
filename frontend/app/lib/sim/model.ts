@@ -207,7 +207,7 @@ export function createInitialSimState(): SimState {
       id: 'launchOps',
       name: 'Launch Ops',
       lines: 1,
-      baseOutputPerLine: 0.0083, // launches/min (1 launch per 120 min = 2 hours)
+      baseOutputPerLine: 0.5, // launches/min (1 launch per 2 min = faster for gameplay)
       inputRates: {
         pods: 1, // pods/min per line
         launchOpsResource: 10, // launch ops units/min per line
