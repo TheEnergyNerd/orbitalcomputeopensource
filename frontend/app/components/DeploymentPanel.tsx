@@ -4,6 +4,9 @@ import { useSandboxStore } from "../store/sandboxStore";
 import LaunchControlsPanel from "./deployment/LaunchControlsPanel";
 import LaunchImpactPanel from "./deployment/LaunchImpactPanel";
 import DeploymentTopStrip from "./deployment/DeploymentTopStrip";
+import LaunchAnimation from "./deployment/LaunchAnimation";
+import LaunchGlobeEffects from "./deployment/LaunchGlobeEffects";
+import DeploymentTutorial from "./deployment/DeploymentTutorial";
 
 export default function DeploymentPanel() {
   const { simState } = useSandboxStore();
