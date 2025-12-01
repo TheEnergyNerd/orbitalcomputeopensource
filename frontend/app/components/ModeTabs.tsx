@@ -12,11 +12,14 @@ interface ModeTabsProps {
 export default function ModeTabs({ activeMode, onModeChange }: ModeTabsProps) {
   // Listen for switchMode events from SimpleView
   useEffect(() => {
-    const handleSwitchMode = (e: CustomEvent) => {
-      onModeChange(e.detail as Mode);
+    const handleSwitchMode = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        onModeChange(customEvent.detail as Mode);
+      }
     };
-    window.addEventListener('switchMode' as any, handleSwitchMode);
-    return () => window.removeEventListener('switchMode' as any, handleSwitchMode);
+    window.addEventListener('switchMode', handleSwitchMode);
+    return () => window.removeEventListener('switchMode', handleSwitchMode);
   }, [onModeChange]);
 
   return (

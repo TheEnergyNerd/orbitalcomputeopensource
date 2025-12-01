@@ -73,7 +73,7 @@ export default function SimpleView() {
               const event = new CustomEvent('switchMode', { detail: 'advanced' });
               window.dispatchEvent(event);
             }}
-            className="text-[10px] text-gray-400 hover:text-cyan-400 underline"
+            className="text-[10px] text-gray-400 hover:text-cyan-400 underline pointer-events-auto"
           >
             Deep dive: industrial / advanced view →
           </button>
