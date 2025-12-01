@@ -223,22 +223,18 @@ export function stepSim(state: SimState, dtMinutes: number): SimState {
         outputResource.buffer += podsProduced;
       } else if (machine.outputResource === 'launches') {
         // Launches immediately become pods in orbit (no buffer accumulation)
-        // But we need to track fractional launches for proper consumption
-        // Accumulate fractional launches in a temporary counter
-        const launchesProduced = produced; // Keep fractional value
-        if (launchesProduced > 0) {
-          // For display, round to show whole launches
-          const wholeLaunches = Math.floor(launchesProduced);
-          if (wholeLaunches > 0) {
-            next.podsInOrbit = Math.floor(next.podsInOrbit + wholeLaunches);
-          }
-          // Track production rate for UI (even fractional)
-          outputResource.prodPerMin += actualOutputPerMin;
+        // Track production rate for UI (always, even if no whole launches yet)
+        outputResource.prodPerMin += actualOutputPerMin;
+        
+        // Only add whole launches to orbit (round down to avoid premature launches)
+        const wholeLaunches = Math.floor(produced);
+        if (wholeLaunches > 0) {
+          next.podsInOrbit = Math.floor(next.podsInOrbit + wholeLaunches);
         }
       } else {
         outputResource.buffer += produced;
+        outputResource.prodPerMin += actualOutputPerMin;
       }
-      outputResource.prodPerMin += actualOutputPerMin;
     }
   }
 
