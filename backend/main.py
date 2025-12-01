@@ -1225,7 +1225,7 @@ def clear_state_cache():
     _cache_tick = -1
 
 @app.get("/state")  # Removed response_model to avoid Pydantic truncation
-async def get_state(request: Request, mode: str = "simulator"):
+async def get_state(mode: str = "simulator"):
     """Get current simulation state
     
     Args:
@@ -1327,10 +1327,9 @@ async def get_state(request: Request, mode: str = "simulator"):
         if ALLOWED_ORIGINS_STR == "*":
             headers["Access-Control-Allow-Origin"] = "*"
         else:
-            origin = request.headers.get("origin") if 'request' in locals() else None
-            if origin and origin in ALLOWED_ORIGINS:
-                headers["Access-Control-Allow-Origin"] = origin
-                headers["Access-Control-Allow-Credentials"] = "true"
+            # For CORS, we'll use the global ALLOWED_ORIGINS setting
+            headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+            headers["Access-Control-Allow-Credentials"] = "true"
         headers["Access-Control-Allow-Methods"] = "*"
         headers["Access-Control-Allow-Headers"] = "*"
         return JSONResponse(
