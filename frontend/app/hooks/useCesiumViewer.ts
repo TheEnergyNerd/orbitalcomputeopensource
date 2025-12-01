@@ -166,6 +166,22 @@ export function useCesiumViewer(
       (canvas as HTMLElement).style.display = "block";
       (canvas as HTMLElement).style.visibility = "visible";
       (canvas as HTMLElement).style.opacity = "1";
+      (canvas as HTMLElement).style.position = "absolute";
+      (canvas as HTMLElement).style.top = "0";
+      (canvas as HTMLElement).style.left = "0";
+      (canvas as HTMLElement).style.zIndex = "0";
+    }
+    
+    // Ensure widget container has proper dimensions (critical fix for disappearing globe)
+    const widget = (viewer as any).cesiumWidget;
+    if (widget?.container) {
+      const widgetContainer = widget.container as HTMLElement;
+      const containerHeight = el.offsetHeight || window.innerHeight;
+      const containerWidth = el.offsetWidth || window.innerWidth;
+      widgetContainer.style.width = `${containerWidth}px`;
+      widgetContainer.style.height = `${containerHeight}px`;
+      widgetContainer.style.position = "relative";
+      widgetContainer.style.overflow = "hidden";
     }
 
     // Force initial render - requestRenderMode might prevent initial render
