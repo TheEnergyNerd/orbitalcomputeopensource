@@ -3,7 +3,7 @@
 import { useSandboxStore } from "../store/sandboxStore";
 import FactoryStrip from "./FactoryStrip";
 import FactorySystemsPanelV2 from "./FactorySystemsPanelV2";
-import FactoryNodeDetailPanel from "./FactoryNodeDetailPanel";
+// import FactoryNodeDetailPanel from "./FactoryNodeDetailPanel"; // Disabled - not used
 import FactoryStartGuide from "./FactoryStartGuide";
 import PodsReadyIndicator from "./PodsReadyIndicator";
 import TimeScaleControl from "./TimeScaleControl";
@@ -39,14 +39,7 @@ export default function AdvancedView() {
       </div>
 
       {/* Right Panel - Node Detail (when selected) */}
-      {factorySelectedNode && (
-        <div className="pointer-events-auto">
-          <FactoryNodeDetailPanel 
-            selectedNodeId={factorySelectedNode} 
-            onClose={() => setFactorySelectedNode(null)} 
-          />
-        </div>
-      )}
+      {/* Disabled for now - FactoryStrip doesn't support node selection */}
 
       {/* Factory Start Guide */}
       <FactoryStartGuide />
