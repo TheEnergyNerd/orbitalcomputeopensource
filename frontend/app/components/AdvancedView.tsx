@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
 import FactoryStrip from "./FactoryStrip";
 import FactorySystemsPanelV2 from "./FactorySystemsPanelV2";
@@ -16,7 +15,6 @@ import { formatDecimal } from "../lib/utils/formatNumber";
  */
 export default function AdvancedView() {
   const { simState } = useSandboxStore();
-  const [factorySelectedNode, setFactorySelectedNode] = useState<string | null>(null);
 
   if (!simState) {
     return <div className="text-xs text-gray-500">Loading...</div>;
@@ -37,11 +35,7 @@ export default function AdvancedView() {
 
       {/* Center - Factory Flow */}
       <div className="flex-1 ml-[280px]">
-        <FactoryStrip 
-          selectedNodeId={factorySelectedNode} 
-          onSelectNode={setFactorySelectedNode} 
-          highlightNodeId={null} 
-        />
+        <FactoryStrip />
       </div>
 
       {/* Right Panel - Node Detail (when selected) */}
