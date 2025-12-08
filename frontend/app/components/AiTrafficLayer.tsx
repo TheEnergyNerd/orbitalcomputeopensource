@@ -110,7 +110,7 @@ export default function AiTrafficLayer({
           if (destId === "orbit") {
             isOrbit = true;
             // For orbit, use a point above the origin (simplified)
-            dest = { lat: origin.lat, lon: origin.lon };
+            dest = { name: "Orbit", lat: origin.lat, lon: origin.lon };
           }
           break;
         }
@@ -165,7 +165,7 @@ export default function AiTrafficLayer({
           const origin = ORIGINS[Math.floor(Math.random() * ORIGINS.length)];
           particle.origin = origin;
           if (particle.isOrbit) {
-            particle.dest = { lat: origin.lat, lon: origin.lon };
+            particle.dest = { name: "Orbit", lat: origin.lat, lon: origin.lon };
           } else {
             particle.dest = GROUND_DESTINATIONS[Math.floor(Math.random() * GROUND_DESTINATIONS.length)];
           }
