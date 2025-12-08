@@ -134,6 +134,9 @@ export function useCesiumViewer(
     viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.showWaterEffect = false;
     
+    // Disable scroll wheel zoom - allow page scrolling instead
+    viewer.scene.screenSpaceCameraController.enableZoom = false;
+    
     // In safe mode, disable additional features
     if (safeMode) {
       viewer.scene.globe.shadows = Cesium.ShadowMode.DISABLED;
@@ -175,6 +178,7 @@ export function useCesiumViewer(
       (canvas as HTMLElement).style.top = "0";
       (canvas as HTMLElement).style.left = "0";
       (canvas as HTMLElement).style.zIndex = "0";
+      (canvas as HTMLElement).style.pointerEvents = "auto";
     }
     
     // Ensure widget container has proper dimensions (critical fix for disappearing globe)

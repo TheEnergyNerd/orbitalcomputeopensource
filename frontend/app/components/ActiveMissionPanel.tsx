@@ -182,7 +182,7 @@ export default function ActiveMissionPanel() {
     );
 
     return (
-      <div className="fixed top-[130px] left-6 z-40 panel-glass rounded-xl p-4 w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10 max-h-[calc(100vh-150px)] overflow-y-auto">
+      <div className="fixed top-[130px] left-2 sm:left-6 z-40 panel-glass rounded-xl p-3 sm:p-4 w-[calc(100vw-1rem)] sm:w-80 md:w-96 lg:w-[420px] max-w-[calc(100vw-1rem)] shadow-2xl border border-white/10 max-h-[calc(100vh-150px)] overflow-y-auto">
         <h3 className="text-lg font-bold text-accent-blue mb-4">Available Missions</h3>
         <div className="space-y-3">
           {availableMissions.map((mission) => (
@@ -209,7 +209,7 @@ export default function ActiveMissionPanel() {
   }
   
   return (
-    <div className="fixed top-[130px] left-6 z-40 panel-glass rounded-xl p-4 w-80 max-w-[calc(100vw-12px)] shadow-2xl border border-white/10">
+    <div className="fixed top-[130px] left-2 sm:left-6 z-40 panel-glass rounded-xl p-3 sm:p-4 w-[calc(100vw-1rem)] sm:w-80 md:w-96 lg:w-[420px] max-w-[calc(100vw-1rem)] shadow-2xl border border-white/10">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-bold text-accent-blue">{mission.title}</h3>
         <button

@@ -4,7 +4,7 @@ import { POD_TIERS, getHighestAvailableTier, type PodTierId } from "../lib/deplo
 import { calculateDeploymentEngine, type DeploymentState } from "../lib/deployment/deploymentEngine";
 import type { LaunchProviderId } from "../lib/deployment/launchProviders";
 
-export type UnitType = "leo_pod" | "geo_hub" | "server_farm";
+export type UnitType = "leo_pod"; // GEO and server_farm removed - using 4-shell model only
 
 export interface OrbitalUnit {
   id: string;
@@ -45,33 +45,16 @@ interface OrbitalUnitsStore {
   reset: () => void;
 }
 
+// NEW POWER-FIRST UNIT DEFINITIONS (100kW minimum)
 const UNIT_DEFINITIONS: Record<UnitType, Omit<OrbitalUnit, "id" | "status" | "buildStartTime" | "deployedAt">> = {
   leo_pod: {
     type: "leo_pod",
-    name: "Starlink Cluster Compute Pod",
-    cost: 50, // $50M
-    powerOutputMw: 0.15, // 50 sats * 0.003 MW
-    latencyMs: 5,
+    name: "Orbital Compute Pod",
+    cost: 2, // $2M (BASE_POD cost)
+    powerOutputMw: 0.1, // 100 kW minimum (0.1 MW)
+    latencyMs: 65, // MID-LEO default latency
     lifetimeYears: 7,
-    buildTimeDays: 180, // 6 months (display only - actual build is accelerated)
-  },
-  geo_hub: {
-    type: "geo_hub",
-    name: "GEO Compute Hub",
-    cost: 200, // $200M
-    powerOutputMw: 1.0,
-    latencyMs: 120,
-    lifetimeYears: 15,
-    buildTimeDays: 365, // 1 year (display only - actual build is accelerated)
-  },
-  server_farm: {
-    type: "server_farm",
-    name: "In-Space Server Farm",
-    cost: 500, // $500M
-    powerOutputMw: 5.0,
-    latencyMs: 8,
-    lifetimeYears: 10,
-    buildTimeDays: 730, // 2 years (display only - actual build is accelerated)
+    buildTimeDays: 180,
   },
 };
 

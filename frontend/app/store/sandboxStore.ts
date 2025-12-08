@@ -24,7 +24,7 @@ import {
   processLaunchQueue,
   calculateDeploymentRate,
 } from "../lib/launch/launchQueue";
-import type { SimState } from "../lib/sim/model";
+import type { SimState, MachineId } from "../lib/sim/model";
 import { createInitialSimState } from "../lib/sim/model";
 import { stepSim } from "../lib/sim/engine";
 
@@ -73,6 +73,8 @@ interface SandboxStore {
   fuelAvailableLaunches: number; // Integer
   launchSlotsThisMonth: number; // Integer
   podsPerLaunchCapacity: number; // From Launch Complex level
+  launchReliability: number; // 0.80-0.999 (80%-99.9%)
+  coolingOverhead: number; // 0.10-0.50 (10%-50%)
   lastLaunchMetrics: {
     before: any;
     after: any;
@@ -98,7 +100,7 @@ interface SandboxStore {
   setSelectedPodTier: (tier: PodTierId) => void;
   setOrbitMode: (mode: OrbitMode) => void;
   setActiveLaunchProviders: (providers: LaunchProviderId[]) => void;
-  toggleLaunchProvider: (provider: LaunchProviderId) => void;
+  toggleLaunchProviderOld: (provider: LaunchProviderId) => void;
   setOffloadPct: (pct: number) => void;
   setDensityMode: (mode: DensityMode) => void;
   incrementTotalPodsBuilt: () => void;
@@ -110,6 +112,10 @@ interface SandboxStore {
   // Deployment controls
   setLaunchThreshold: (threshold: number) => void;
   performLaunch: () => { success: boolean; error?: string; podsLaunched?: number };
+  setLaunchReliability: (reliability: number) => void;
+  setCoolingOverhead: (overhead: number) => void;
+  setGroundEnergyPrice: (price: number) => void;
+  setLaunchCapacity: (capacity: number) => void;
 }
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
@@ -151,6 +157,8 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   fuelAvailableLaunches: 10, // Start with 10 launches worth of fuel
   launchSlotsThisMonth: 12, // 12 launches per month capacity
   podsPerLaunchCapacity: 6, // Default 6 pods per launch
+  launchReliability: 0.95, // 95% default
+  coolingOverhead: 0.20, // 20% default
   lastLaunchMetrics: null,
   setOrbitalComputeUnits: (units) => {
     set({ orbitalComputeUnits: units });
@@ -341,35 +349,24 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
     const targetShare = Math.max(0, Math.min(100, percent)) / 100;
     const state = get();
     
-    // Base ground capacity: 100 units
-    // Formula: orbitShare = orbitalUnits / (orbitalUnits + groundCapacity) * 100
-    // Solving for orbitalUnits: orbitalUnits = (targetShare * groundCapacity) / (1 - targetShare)
+    if (!state.simState) return;
     
-    const baseGroundCapacity = 100;
+    // Calculate target pods based on orbital share
+    // Formula: orbitalShare = (podsInOrbit * podComputeKw) / targetComputeKw
+    // Solving: podsInOrbit = (targetShare * targetComputeKw) / podComputeKw
+    const targetComputeKw = state.simState.targetComputeKw;
+    const podComputeKw = state.simState.orbitalPodSpec.computeKw;
+    const targetPods = Math.round((targetShare * targetComputeKw) / podComputeKw);
     
-    if (targetShare === 0) {
-      // 0% orbit: all ground, no reduction
-      set({ orbitalComputeUnits: 0, groundDCReduction: 0, isMostlySpaceMode: false });
-    } else if (targetShare === 1) {
-      // 100% orbit: all orbital, all ground reduced
-      set({ orbitalComputeUnits: 200, groundDCReduction: 100, isMostlySpaceMode: true });
-    } else {
-      // Calculate required orbital units to achieve target share
-      // Strategy: Set ground reduction proportionally, then calculate orbital units
-      // More orbit share = more ground reduction
-      const groundReduction = targetShare * 100;
-      const remainingGroundCapacity = baseGroundCapacity * (1 - groundReduction / 100);
-      
-      // Now solve: targetShare = orbitalUnits / (orbitalUnits + remainingGroundCapacity)
-      // orbitalUnits = (targetShare * remainingGroundCapacity) / (1 - targetShare)
-      const requiredOrbitalUnits = (targetShare * remainingGroundCapacity) / (1 - targetShare);
-      
-      set({ 
-        orbitalComputeUnits: Math.max(0, Math.round(requiredOrbitalUnits)),
-        groundDCReduction: Math.round(groundReduction),
-        isMostlySpaceMode: targetShare > 0.5,
-      });
-    }
+    // Directly set podsInOrbit in simState
+    set({
+      simState: {
+        ...state.simState,
+        podsInOrbit: targetPods,
+      },
+      orbitalComputeUnits: targetPods, // Keep in sync
+      isMostlySpaceMode: targetShare > 0.5,
+    });
   },
   resetSandbox: () => {
     const state = get();
@@ -399,7 +396,7 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   setSelectedPodTier: (tier) => set({ selectedPodTier: tier }),
   setOrbitMode: (mode) => set({ orbitMode: mode }),
   setActiveLaunchProviders: (providers) => set({ activeLaunchProviders: providers }),
-  toggleLaunchProvider: (provider) => set((state) => {
+  toggleLaunchProviderOld: (provider) => set((state) => {
     const current = state.activeLaunchProviders;
     if (current.includes(provider)) {
       // Remove if already active (but keep at least one)
@@ -649,6 +646,26 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
     });
     
     return { success: true, podsLaunched: podsThisLaunch };
+  },
+  setLaunchReliability: (reliability: number) => {
+    set({ launchReliability: Math.max(0.80, Math.min(0.999, reliability)) });
+    window.dispatchEvent(new CustomEvent('controls-changed'));
+  },
+  setCoolingOverhead: (overhead: number) => {
+    set({ coolingOverhead: Math.max(0.10, Math.min(0.50, overhead)) });
+    window.dispatchEvent(new CustomEvent('controls-changed'));
+  },
+  setGroundEnergyPrice: (price: number) => {
+    const state = get();
+    if (state.simState) {
+      state.simState.groundDcSpec.energyPricePerMwh = Math.max(30, Math.min(100, price));
+      set({ simState: { ...state.simState } });
+      window.dispatchEvent(new CustomEvent('controls-changed'));
+    }
+  },
+  setLaunchCapacity: (capacity: number) => {
+    set({ launchSlotsThisMonth: Math.max(1, Math.min(40, Math.floor(capacity))) });
+    window.dispatchEvent(new CustomEvent('controls-changed'));
   },
 }));
 

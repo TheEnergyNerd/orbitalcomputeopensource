@@ -14,29 +14,30 @@ export interface PodTier {
   baseBuildDays: number; // initial build time per pod
 }
 
+// NEW POWER-FIRST POD TIERS (all >= 100kW)
 export const POD_TIERS: PodTier[] = [
   {
     id: "tier1",
-    label: "Tier 1 Pod",
-    powerKW: 150, // 150 kW base capacity
+    label: "Base Pod",
+    powerKW: 100, // 100 kW minimum (2025 physics floor)
     unlockAtTotalPods: 0,
-    baseCostM: 50,
+    baseCostM: 2, // $2M (BASE_POD cost)
     baseBuildDays: 180,
   },
   {
     id: "tier2",
-    label: "Tier 2 Pod",
-    powerKW: 1000, // 1 MW
-    unlockAtTotalPods: 100,
-    baseCostM: 80,
+    label: "Enhanced Pod",
+    powerKW: 500, // 500 kW
+    unlockAtTotalPods: 50,
+    baseCostM: 5,
     baseBuildDays: 150,
   },
   {
     id: "tier3",
-    label: "Tier 3 Pod",
-    powerKW: 5000, // 5 MW
-    unlockAtTotalPods: 500,
-    baseCostM: 120,
+    label: "High-Power Pod",
+    powerKW: 1000, // 1 MW
+    unlockAtTotalPods: 200,
+    baseCostM: 10,
     baseBuildDays: 120,
   },
 ];

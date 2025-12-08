@@ -4,6 +4,9 @@ import { useSandboxStore } from "../store/sandboxStore";
 import { getOrbitalComputeKw } from "../lib/sim/orbitConfig";
 import { formatSigFigs, formatDecimal } from "../lib/utils/formatNumber";
 import OrbitalAdvantagePanelV2 from "./OrbitalAdvantagePanelV2";
+import MissionBar from "./MissionBar";
+import OrbitScore from "./OrbitScore";
+import SimpleControls from "./SimpleControls";
 
 /**
  * SimpleView - Clean, minimal view showing only:
@@ -37,23 +40,14 @@ export default function SimpleView() {
 
   return (
     <div className="fixed inset-0 flex flex-col pointer-events-none">
-      {/* Top Controls - Simplified */}
-      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-30 panel pointer-events-auto">
-        <div className="flex items-center gap-4 text-xs">
-          <div>
-            <span className="text-gray-400">Orbital Share:</span>
-            <span className="ml-2 text-white font-semibold">{formatDecimal(orbitalShare, 1)}%</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Pods/Year:</span>
-            <span className="ml-2 text-white font-semibold">{formatDecimal(podsPerYear, 0)}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Launches/Year:</span>
-            <span className="ml-2 text-white font-semibold">{formatDecimal(launchesPerYear, 0)}</span>
-          </div>
-        </div>
-      </div>
+      {/* Mission Bar - Top */}
+      <MissionBar />
+      
+      {/* Orbit Score - Below Mission Bar */}
+      <OrbitScore />
+
+      {/* Simple Controls - 3-4 global sliders */}
+      <SimpleControls />
 
       {/* Globe - Center (already rendered in page.tsx) */}
       {/* Metrics Panel - Bottom Center */}

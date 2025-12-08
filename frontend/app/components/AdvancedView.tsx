@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
-import FactoryStrip from "./factory/FactoryStrip";
+import FactoryStrip from "./FactoryStrip";
 import FactorySystemsPanelV2 from "./FactorySystemsPanelV2";
 import FactoryNodeDetailPanel from "./FactoryNodeDetailPanel";
 import FactoryStartGuide from "./FactoryStartGuide";
 import PodsReadyIndicator from "./PodsReadyIndicator";
+import TimeScaleControl from "./TimeScaleControl";
 import { formatDecimal } from "../lib/utils/formatNumber";
 
 /**
@@ -58,6 +59,9 @@ export default function AdvancedView() {
 
       {/* Pods Ready Indicator */}
       <PodsReadyIndicator />
+
+      {/* Time Scale Control - Advanced tab only */}
+      <TimeScaleControl />
 
       {/* Capability Summary - Top Right */}
       <div className="fixed top-[50px] right-6 w-64 z-40 panel pointer-events-auto">

@@ -22,31 +22,55 @@ export function SimProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
     const pollState = async () => {
       try {
-        const response = await axios.get<SimState>(`${API_BASE}/state`);
+        const response = await axios.get<SimState>(`${API_BASE}/state`, {
+          timeout: 5000, // 5 second timeout
+          validateStatus: () => true, // Don't throw on any status
+        });
         // Validate response structure
-        if (response.data && response.data.metrics) {
+        if (response.status === 200 && response.data && response.data.metrics) {
           setState(response.data);
           setLoading(false);
-        } else {
-          console.error("Invalid state structure:", response.data);
+          retryCount = 0; // Reset retry count on success
+        } else if (response.status >= 400) {
+          // Backend error - silently handle
+          retryCount++;
+          if (retryCount >= MAX_RETRIES) {
+            setLoading(false);
+            if (interval) {
+              clearInterval(interval);
+              interval = null;
+            }
+          }
         }
       } catch (error: any) {
-        console.error("Error fetching state:", error);
-        if (error.response?.status === 503) {
-          // Simulation not initialized yet, keep trying
-          console.log("Waiting for simulation to initialize...");
-        } else {
+        // Silently handle all backend errors - new OrbitSim doesn't need backend
+        retryCount++;
+        if (retryCount >= MAX_RETRIES) {
+          // Stop polling after max retries
           setLoading(false);
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
         }
+        // Don't log errors - backend is optional
       }
     };
 
     pollState();
-    const interval = setInterval(pollState, 2000); // Poll every 2 seconds
+    interval = setInterval(pollState, 2000); // Poll every 2 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, []);
 
   const updateScenario = async (mode?: string, orbitOffloadPercent?: number) => {
@@ -54,6 +78,8 @@ export function SimProvider({ children }: { children: ReactNode }) {
       await axios.post(`${API_BASE}/scenario`, {
         mode,
         orbitOffloadPercent,
+      }, {
+        validateStatus: () => true, // Don't throw on any status
       });
       // Optimistically update local state
       if (state) {
@@ -66,7 +92,7 @@ export function SimProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (error) {
-      console.error("Error updating scenario:", error);
+      // Silently handle - backend is optional
     }
   };
 

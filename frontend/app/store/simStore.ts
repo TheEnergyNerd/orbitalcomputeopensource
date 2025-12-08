@@ -23,6 +23,7 @@ export type GroundSite = {
   jobsRunning: number;
   carbonIntensity: number; // kgCO2/MWh
   energyPrice: number; // $/MWh
+  type?: "data_center" | "launch_site"; // Type of ground site
 };
 
 export type Workload = {

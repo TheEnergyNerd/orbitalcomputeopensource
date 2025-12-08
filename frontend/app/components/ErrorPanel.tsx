@@ -27,7 +27,23 @@ export default function ErrorPanel() {
     }
   }, [error]);
 
+  // Don't show backend-related errors - app works without backend
   if (!error) return null;
+  
+  // Filter out expected backend errors
+  const backendErrors = [
+    'Invalid state structure',
+    'Backend not available',
+    'Network Error',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'timeout',
+    'ECONNABORTED',
+  ];
+  
+  if (backendErrors.some(err => error.toLowerCase().includes(err.toLowerCase()))) {
+    return null; // Don't show backend errors
+  }
 
   return (
     <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] max-w-2xl w-full mx-4">

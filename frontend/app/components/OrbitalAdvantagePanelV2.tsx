@@ -13,71 +13,114 @@ import { useState, useEffect } from "react";
 interface MetricBoxProps {
   title: string;
   icon: string;
-  baseline: number;
-  current: number;
+  baseline: number; // Ground only
+  current: number; // Ground + Orbit mix
   unit: string;
   formatValue: (val: number) => string;
-  positiveIsGood: boolean;
+  formatDelta: (val: number) => string; // Format for delta line
+  lowerIsBetter: boolean; // true for cost, OPEX, carbon, latency
 }
 
-function MetricBox({ title, icon, baseline, current, unit, formatValue, positiveIsGood }: MetricBoxProps) {
-  const delta = baseline > 0 ? ((baseline - current) / baseline) * 100 : 0;
-  const isPositive = positiveIsGood ? delta > 0 : delta < 0;
-  const borderColor = isPositive ? "#22c55e" : "#ef4444";
+function MetricBox({ title, icon, baseline, current, unit, formatValue, formatDelta, lowerIsBetter }: MetricBoxProps) {
+  // Calculate delta
+  const deltaAbs = current - baseline;
+  const deltaPct = baseline > 0 ? (deltaAbs / baseline) * 100 : 0;
   
-  // Mini sparkline data
-  const sparklineData = [baseline, current];
-  const maxVal = Math.max(baseline, current);
+  // Determine if mix is better (lower is better for cost/OPEX/carbon/latency)
+  const isBetter = lowerIsBetter ? deltaAbs < 0 : deltaAbs > 0;
+  const isWorse = lowerIsBetter ? deltaAbs > 0 : deltaAbs < 0;
+  const isNeutral = Math.abs(deltaPct) <= 5;
+  
+  // Verdict pill text and color
+  let verdictText = "Tradeoff";
+  let verdictColor = "bg-gray-600";
+  if (isBetter && !isNeutral) {
+    verdictText = "Better with Orbit";
+    verdictColor = "bg-green-600";
+  } else if (isWorse && !isNeutral) {
+    verdictText = "Worse with Orbit";
+    verdictColor = "bg-red-600";
+  }
+  
+  // Delta line color
+  const deltaColor = isBetter ? "text-green-400" : isWorse ? "text-red-400" : "text-gray-400";
+  
+  // Compact relative bar
   const minVal = Math.min(baseline, current);
+  const maxVal = Math.max(baseline, current);
   const range = maxVal - minVal || 1;
+  const baselinePos = ((baseline - minVal) / range) * 100;
+  const currentPos = ((current - minVal) / range) * 100;
+  const barColor = isBetter ? "bg-green-500/30" : isWorse ? "bg-red-500/30" : "bg-gray-500/30";
   
   return (
     <div 
-      className="panel border-2"
-      style={{ borderColor, width: "240px", height: "140px" }}
+      className="panel border border-gray-700"
+      style={{ width: "240px", minHeight: "160px" }}
     >
-      <div className="flex items-start justify-between mb-1">
+      {/* Top: Title + Verdict pill */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-1">
+          <span className="text-sm">{icon}</span>
         <span className="text-xs font-semibold text-gray-300">{title}</span>
-        <span className="text-lg">{icon}</span>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full ${verdictColor} text-white`}>
+          {verdictText}
+        </span>
       </div>
       
-      <div className="space-y-0.5 mb-2">
-        <div className="flex justify-between text-[10px]">
-          <span className="text-gray-500">G:</span>
-          <span className="text-gray-300">{formatValue(baseline)}</span>
+      {/* Middle: Two rows with values */}
+      <div className="space-y-1 mb-3">
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] text-gray-500">Ground only:</span>
+          <span className="text-xs text-gray-300 font-mono">{formatValue(baseline)} {unit}</span>
         </div>
-        <div className="flex justify-between text-[10px]">
-          <span className="text-gray-500">O:</span>
-          <span className="text-white font-semibold">{formatValue(current)}</span>
-        </div>
-        <div className="flex justify-between text-[10px]">
-          <span className="text-gray-500">Δ:</span>
-          <span className={isPositive ? "text-green-400" : "text-red-400"}>
-            {isPositive ? "+" : ""}{formatDecimal(Math.abs(delta), 1)}%
-          </span>
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] text-gray-500">Ground + Orbit mix:</span>
+          <span className="text-xs text-white font-mono font-semibold">{formatValue(current)} {unit}</span>
         </div>
       </div>
       
-      {/* Mini sparkline */}
-      <div className="h-4 flex items-end gap-0.5 mb-1">
-        {sparklineData.map((val, i) => {
-          const height = ((val - minVal) / range) * 100;
-          return (
-            <div
-              key={i}
-              className="flex-1 bg-accent-blue/40 rounded-t"
-              style={{ height: `${height}%` }}
-            />
-          );
-        })}
-      </div>
-      
-      {/* Subtle improvement bar */}
-      <div className="h-1 bg-gray-700/50 rounded-full overflow-hidden">
-        <div
-          className={`h-full transition-all ${isPositive ? "bg-green-500/60" : "bg-red-500/60"}`}
-          style={{ width: `${Math.min(100, Math.abs(delta))}%` }}
+      {/* Compact relative bar */}
+      <div className="relative h-2 bg-gray-800 rounded-full mb-3 overflow-visible">
+        <div 
+          className={`absolute h-full ${barColor} rounded-full`}
+          style={{
+            left: `${Math.min(baselinePos, currentPos)}%`,
+            width: `${Math.abs(currentPos - baselinePos)}%`,
+          }}
         />
+        <div
+          className="absolute top-1/2 transform -translate-y-1/2 w-2 h-2 bg-gray-400 rounded-full border border-white"
+          style={{ left: `${baselinePos}%`, transform: 'translate(-50%, -50%)' }}
+        >
+          <span className="absolute -top-4 left-1/2 transform -translate-x-1/2 text-[8px] text-gray-400">G</span>
+        </div>
+        <div
+          className="absolute top-1/2 transform -translate-y-1/2 w-2 h-2 bg-cyan-400 rounded-full border border-white"
+          style={{ left: `${currentPos}%`, transform: 'translate(-50%, -50%)' }}
+        >
+          <span className="absolute -top-4 left-1/2 transform -translate-x-1/2 text-[8px] text-cyan-400">Mix</span>
+        </div>
+      </div>
+      
+      {/* Bottom: Delta line */}
+      <div className={`text-[10px] ${deltaColor} text-center`}>
+        {(() => {
+          const deltaText = formatDelta(Math.abs(deltaAbs));
+          let directionText = "";
+          if (unit === "ms") {
+            // Latency: faster/slower
+            directionText = deltaAbs < 0 ? "faster" : "slower";
+          } else if (unit.includes("$") || unit.includes("t/yr")) {
+            // Cost/OPEX/Carbon: cheaper/more expensive
+            directionText = deltaAbs < 0 ? "cheaper" : "more expensive";
+          } else {
+            // Resilience: better/worse
+            directionText = deltaAbs > 0 ? "better" : "worse";
+          }
+          return `${deltaAbs >= 0 ? "+" : "-"}${deltaText} ${directionText} (${deltaPct >= 0 ? "+" : ""}${formatDecimal(Math.abs(deltaPct), 1)}%)`;
+        })()}
       </div>
     </div>
   );
@@ -195,8 +238,9 @@ export default function OrbitalAdvantagePanelV2() {
           baseline={baselineLatency}
           current={currentLatency}
           unit="ms"
-          formatValue={(v) => formatDecimal(v, 0)}
-          positiveIsGood={true}
+          formatValue={(v) => formatDecimal(v, 1)}
+          formatDelta={(v) => `${formatDecimal(v, 2)} ms`}
+          lowerIsBetter={true}
         />
         <MetricBox
           title="Energy Cost"
@@ -205,7 +249,8 @@ export default function OrbitalAdvantagePanelV2() {
           current={currentEnergyCost}
           unit="$/yr"
           formatValue={(v) => `$${formatSigFigs(v / 1_000_000, 1)}M`}
-          positiveIsGood={true}
+          formatDelta={(v) => `$${formatSigFigs(v / 1_000_000, 1)}M`}
+          lowerIsBetter={true}
         />
         <MetricBox
           title="Carbon"
@@ -214,7 +259,8 @@ export default function OrbitalAdvantagePanelV2() {
           current={currentCo2}
           unit="t/yr"
           formatValue={(v) => formatSigFigs(v / 1000, 1) + "k"}
-          positiveIsGood={true}
+          formatDelta={(v) => `${formatSigFigs(v / 1000, 1)}k t/yr`}
+          lowerIsBetter={true}
         />
         <MetricBox
           title="Resilience"
@@ -223,7 +269,8 @@ export default function OrbitalAdvantagePanelV2() {
           current={currentResilience}
           unit="%"
           formatValue={(v) => formatDecimal(v, 0)}
-          positiveIsGood={true}
+          formatDelta={(v) => `${formatDecimal(v, 1)}%`}
+          lowerIsBetter={false}
         />
       </div>
     </div>

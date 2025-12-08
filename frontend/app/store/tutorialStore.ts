@@ -1,32 +1,73 @@
-import { create } from "zustand";
+/**
+ * Tutorial Store
+ * Manages tutorial state - always available, shown on every visit
+ */
 
-export type TutorialStep = 1 | 2 | 3 | 4 | null;
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export type TutorialStep = 
+  | 1  // Welcome & overview
+  | 2  // Understanding the year system
+  | 3  // Strategy selection
+  | 4  // Viewing metrics
+  | 5  // Globe interaction
+  | 6  // AI Router (required)
+  | 7  // Constellation deployment (required)
+  | 8  // Fast-forward
+  | 9  // Futures tab (required)
+  | "done";
 
 interface TutorialStore {
-  currentStep: TutorialStep;
   isActive: boolean;
-  isCompleted: boolean;
-  setStep: (step: TutorialStep) => void;
+  currentStep: TutorialStep;
+  showTutorialOnVisit: boolean; // Show tutorial on every visit
+  
+  // Actions
   startTutorial: () => void;
   nextStep: () => void;
-  completeTutorial: () => void;
-  resetTutorial: () => void;
+  previousStep: () => void;
+  closeTutorial: () => void;
+  setShowTutorialOnVisit: (show: boolean) => void;
 }
 
-export const useTutorialStore = create<TutorialStore>((set) => ({
-  currentStep: null,
+export const useTutorialStore = create<TutorialStore>((set, get) => ({
   isActive: false,
-  isCompleted: false,
-  setStep: (step) => set({ currentStep: step }),
-  startTutorial: () => set({ isActive: true, currentStep: 1, isCompleted: false }),
-  nextStep: () => set((state) => {
-    if (state.currentStep === null || state.currentStep >= 4) {
-      return { currentStep: null, isActive: false, isCompleted: true };
+  currentStep: 1,
+  showTutorialOnVisit: true, // Always show on visit by default
+  
+  startTutorial: () => {
+    set({ isActive: true, currentStep: 1 });
+  },
+  
+  nextStep: () => {
+    const { currentStep } = get();
+    if (currentStep === "done") return;
+    
+    const next: TutorialStep = currentStep === 9 ? "done" : ((currentStep + 1) as TutorialStep);
+    set({ currentStep: next });
+    
+    // Auto-close when done
+    if (next === "done") {
+      setTimeout(() => {
+        set({ isActive: false });
+      }, 2000);
     }
-    return { currentStep: (state.currentStep + 1) as TutorialStep };
-  }),
-  completeTutorial: () => set({ isActive: false, currentStep: null, isCompleted: true }),
-  resetTutorial: () => set({ isActive: false, currentStep: null, isCompleted: false }),
+  },
+  
+  previousStep: () => {
+    const { currentStep } = get();
+    if (currentStep === 1 || currentStep === "done") return;
+    
+    const prev: TutorialStep = currentStep === "done" ? 9 : ((currentStep - 1) as TutorialStep);
+    set({ currentStep: prev });
+  },
+  
+  closeTutorial: () => {
+    set({ isActive: false });
+  },
+  
+  setShowTutorialOnVisit: (show: boolean) => {
+    set({ showTutorialOnVisit: show });
+  },
 }));
-
-

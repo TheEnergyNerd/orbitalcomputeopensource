@@ -6,6 +6,7 @@ import { useSimStore } from "../store/simStore";
 import { useSandboxStore } from "../store/sandboxStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { getGlobalViewer } from "../hooks/useCesiumViewer";
+import { getOrbitalComputeKw } from "../lib/sim/orbitConfig";
 
 // Helper function to generate sun-synchronous orbital positions
 // Sun-synchronous orbits maintain constant solar illumination (~98° inclination)
@@ -99,12 +100,584 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
   const mostlySpaceModeCameraFlewRef = useRef(false);
   const launchArcsRef = useRef<Cesium.Entity[]>([]);
   const lastLaunchCountRef = useRef(0);
+  
+  // Memory management: Track all intervals, timeouts, and animation frames for cleanup
+  const activeIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+  const activeTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+  const activeAnimationFramesRef = useRef<Set<number>>(new Set());
+  const lastMemoryCleanupRef = useRef<number>(0);
+  const entityCreationTimesRef = useRef<Map<string, number>>(new Map()); // Track when entities were created
+  const entityTypeCountsRef = useRef<Map<string, number>>(new Map()); // Track entity types
+  const memoryHistoryRef = useRef<Array<{ time: number; usedMB: number; entities: number }>>([]); // Track memory over time
+  const entityCreationLogRef = useRef<Array<{ time: number; type: string; id: string }>>([]); // Log entity creations
+  const entityRemovalLogRef = useRef<Array<{ time: number; type: string; id: string }>>([]); // Log entity removals
+  
+  // Rate limiter for entity creation
+  const entityCreationRateLimiterRef = useRef<{ count: number; resetTime: number }>({ count: 0, resetTime: Date.now() });
+  const MAX_ENTITIES_PER_SECOND = 20; // Hard limit on entity creation rate
+  
+  // Wrapper functions to track intervals/timeouts/animation frames
+  const trackedSetInterval = (callback: () => void, delay: number): NodeJS.Timeout => {
+    const id = setInterval(() => {
+      callback();
+    }, delay);
+    activeIntervalsRef.current.add(id);
+    return id;
+  };
+  
+  const trackedSetTimeout = (callback: () => void, delay: number): NodeJS.Timeout => {
+    const id = setTimeout(() => {
+      activeTimeoutsRef.current.delete(id);
+      callback();
+    }, delay);
+    activeTimeoutsRef.current.add(id);
+    return id;
+  };
+  
+  const trackedRequestAnimationFrame = (callback: () => void): number => {
+    const id = requestAnimationFrame(() => {
+      activeAnimationFramesRef.current.delete(id);
+      callback();
+    });
+    activeAnimationFramesRef.current.add(id);
+    return id;
+  };
+  
+  // Helper function to add entity and track creation time
+  const addTrackedEntity = (entities: Cesium.EntityCollection, entityOptions: Cesium.Entity.ConstructorOptions): Cesium.Entity | null => {
+    const now = Date.now();
+    const limiter = entityCreationRateLimiterRef.current;
+    
+    // Reset counter if a second has passed
+    if (now - limiter.resetTime > 1000) {
+      limiter.count = 0;
+      limiter.resetTime = now;
+    }
+    
+    // Rate limit: if we're creating too many entities, skip this one
+    if (limiter.count >= MAX_ENTITIES_PER_SECOND) {
+      // Only warn occasionally to avoid spam
+      if (limiter.count === MAX_ENTITIES_PER_SECOND) {
+        console.warn(`[MemoryDebug] ⚠️ Rate limit exceeded: ${limiter.count} entities created in last second, skipping further entity creation`);
+      }
+      return null; // Don't create the entity
+    }
+    
+    limiter.count++;
+    
+    const entity = entities.add(entityOptions);
+    const entityId = entity.id as string;
+    
+    if (entityId) {
+      entityCreationTimesRef.current.set(entityId, now);
+      
+      // Track entity type
+      const entityType = (entity as any)._entityType || 'unknown';
+      const typeCount = entityTypeCountsRef.current.get(entityType) || 0;
+      entityTypeCountsRef.current.set(entityType, typeCount + 1);
+      
+      // Log entity creation (keep last 100)
+      entityCreationLogRef.current.push({ time: now, type: entityType, id: entityId });
+      if (entityCreationLogRef.current.length > 100) {
+        entityCreationLogRef.current.shift();
+      }
+      
+      // Log if creating many entities quickly
+      const recentCreations = entityCreationLogRef.current.filter(e => now - e.time < 1000);
+      if (recentCreations.length > 10) {
+        console.warn(`[MemoryDebug] ⚠️ Creating entities rapidly: ${recentCreations.length} in last second`);
+        // Trigger aggressive cleanup if creating too fast
+        if (recentCreations.length > 30) {
+          console.error(`[MemoryDebug] 🚨 EMERGENCY: Creating ${recentCreations.length} entities/sec - triggering emergency cleanup`);
+          setTimeout(() => performMemoryCleanup(), 100);
+        }
+      }
+    }
+    return entity;
+  };
+  
+  // Helper function to remove entity and track removal
+  const removeTrackedEntity = (entities: Cesium.EntityCollection, entity: Cesium.Entity) => {
+    const entityId = entity.id as string;
+    const entityType = (entity as any)._entityType || 'unknown';
+    const now = Date.now();
+    
+    try {
+      entities.remove(entity);
+      
+      if (entityId) {
+        entityCreationTimesRef.current.delete(entityId);
+        
+        // Update type count
+        const typeCount = entityTypeCountsRef.current.get(entityType) || 0;
+        if (typeCount > 0) {
+          entityTypeCountsRef.current.set(entityType, typeCount - 1);
+        }
+        
+        // Log entity removal (keep last 100)
+        entityRemovalLogRef.current.push({ time: now, type: entityType, id: entityId });
+        if (entityRemovalLogRef.current.length > 100) {
+          entityRemovalLogRef.current.shift();
+        }
+      }
+    } catch (e) {
+      // Entity already removed
+    }
+  };
+  
+  // Comprehensive memory cleanup function with debugging
+  const performMemoryCleanup = () => {
+    const viewer = actualViewerRef.current || getGlobalViewer();
+    if (!viewer || viewer.isDestroyed()) return;
+    
+    try {
+      const entities = viewer.entities;
+      const now = Date.now();
+      const MAX_ENTITY_AGE_MS = 300000; // 5 minutes - remove entities older than this
+      const MAX_ENTITIES = 80; // Aggressive limit
+      
+      // Get all entities
+      const allEntities = Array.from(entities.values);
+      const entityCount = allEntities.length;
+      
+      // Enhanced memory debugging
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo) {
+        const usedMB = memoryInfo.usedJSHeapSize / 1048576;
+        const totalMB = memoryInfo.totalJSHeapSize / 1048576;
+        const limitMB = memoryInfo.jsHeapSizeLimit / 1048576;
+        const usagePercent = (usedMB / limitMB) * 100;
+        
+        // Log entity breakdown for debugging
+        const entityBreakdown: Record<string, number> = {};
+        allEntities.forEach(entity => {
+          const id = entity.id as string;
+          if (id) {
+            const prefix = id.split('_')[0] + '_' + (id.split('_')[1] || '');
+            entityBreakdown[prefix] = (entityBreakdown[prefix] || 0) + 1;
+          }
+        });
+        
+        // Track memory history (keep last 20 snapshots)
+        memoryHistoryRef.current.push({ time: now, usedMB, entities: entityCount });
+        if (memoryHistoryRef.current.length > 20) {
+          memoryHistoryRef.current.shift();
+        }
+        
+        // Calculate memory growth rate
+        let memoryGrowthRate = 0;
+        if (memoryHistoryRef.current.length >= 2) {
+          const oldest = memoryHistoryRef.current[0];
+          const newest = memoryHistoryRef.current[memoryHistoryRef.current.length - 1];
+          const timeDiff = (newest.time - oldest.time) / 1000; // seconds
+          if (timeDiff > 0) {
+            memoryGrowthRate = (newest.usedMB - oldest.usedMB) / timeDiff; // MB per second
+          }
+        }
+        
+        // Calculate entity creation/removal rates
+        const recentCreations = entityCreationLogRef.current.filter(e => now - e.time < 5000).length;
+        const recentRemovals = entityRemovalLogRef.current.filter(e => now - e.time < 5000).length;
+        
+        // Only log warnings for high memory usage - disable verbose logging
+        if (usagePercent > 80 || memoryGrowthRate > 5 || entityCount > 100) {
+          console.warn(`[MemoryDebug] High memory: ${usedMB.toFixed(1)}MB (${usagePercent.toFixed(1)}%), Entities: ${entityCount}, Growth: ${memoryGrowthRate >= 0 ? '+' : ''}${memoryGrowthRate.toFixed(2)}MB/s`);
+        }
+        
+        // Warn if memory is getting critical
+        if (usagePercent > 85) {
+          console.warn(`[MemoryDebug] ⚠️ CRITICAL: Memory usage at ${usagePercent.toFixed(1)}% (${usedMB.toFixed(1)}MB / ${limitMB.toFixed(1)}MB)`);
+          console.warn(`[MemoryDebug] Entity breakdown:`, entityBreakdown);
+          console.warn(`[MemoryDebug] Active timers: intervals=${activeIntervalsRef.current.size}, timeouts=${activeTimeoutsRef.current.size}, frames=${activeAnimationFramesRef.current.size}`);
+          console.warn(`[MemoryDebug] Launch arcs: ${launchArcsRef.current.length}, Active launches: ${activeLaunchesRef.current.length}, Job flows: ${jobFlowRef.current.length}`);
+          console.warn(`[MemoryDebug] Deployed pod satellites: ${deployedPodSatellitesRef.current.size}, Animation refs: ${animationRefs.current.size}`);
+          console.warn(`[MemoryDebug] Aggressively cleaning up entities...`);
+        }
+        
+        // Log before OOM to help diagnose
+        if (usagePercent > 90) {
+          console.error(`[MemoryDebug] 🚨 PRE-OOM: Memory at ${usagePercent.toFixed(1)}% - System may crash soon!`);
+          console.error(`[MemoryDebug] Top entity prefixes:`, Object.entries(entityBreakdown)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([type, count]) => `${type}:${count}`)
+            .join(', '));
+          console.error(`[MemoryDebug] Top entity types:`, Object.entries(Object.fromEntries(entityTypeCountsRef.current))
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([type, count]) => `${type}:${count}`)
+            .join(', '));
+          console.error(`[MemoryDebug] Recent entity creations (last 10):`, entityCreationLogRef.current.slice(-10));
+          console.error(`[MemoryDebug] Memory history:`, memoryHistoryRef.current.map(h => `${h.usedMB.toFixed(1)}MB@${((now - h.time)/1000).toFixed(0)}s`).join(' → '));
+          
+          // Analyze what's taking up space
+          const largeEntityTypes = Object.entries(Object.fromEntries(entityTypeCountsRef.current))
+            .filter(([_, count]) => count > 10)
+            .sort((a, b) => b[1] - a[1]);
+          if (largeEntityTypes.length > 0) {
+            console.error(`[MemoryDebug] Large entity type groups (>10 entities):`, largeEntityTypes);
+          }
+        }
+      }
+      
+      // If we have too many entities, aggressively clean up
+      if (entityCount > MAX_ENTITIES) {
+        // Sort entities by creation time (oldest first)
+        const entitiesWithAge = allEntities.map(entity => ({
+          entity,
+          age: entityCreationTimesRef.current.get(entity.id as string) || 0,
+          id: entity.id as string,
+        })).sort((a, b) => a.age - b.age);
+        
+        // Remove oldest entities (keep launch sites, country outlines, and recent entities)
+        let removed = 0;
+        const targetRemoval = entityCount - MAX_ENTITIES;
+        
+        for (const { entity, id } of entitiesWithAge) {
+          if (removed >= targetRemoval) break;
+          
+          // Preserve important entities
+          if (id && (
+            id.startsWith('launch_site_') ||
+            id.startsWith('country_outline_') ||
+            id.startsWith('deployed_pod_') ||
+            id.startsWith('deployed_server_farm_') ||
+            id.startsWith('deployed_geo_hub_')
+          )) {
+            continue;
+          }
+          
+          // Remove old entity
+          try {
+            entities.remove(entity);
+            entityCreationTimesRef.current.delete(id);
+            removed++;
+          } catch (e) {
+            // Entity already removed
+          }
+        }
+      }
+      
+      // Clean up old entities based on age
+      allEntities.forEach(entity => {
+        const entityId = entity.id as string;
+        if (!entityId) return;
+        
+        const creationTime = entityCreationTimesRef.current.get(entityId);
+        if (!creationTime) return;
+        
+        // Skip important entities
+        if (entityId.startsWith('launch_site_') || 
+            entityId.startsWith('country_outline_') ||
+            entityId.startsWith('deployed_pod_') ||
+            entityId.startsWith('deployed_server_farm_') ||
+            entityId.startsWith('deployed_geo_hub_')) {
+          return;
+        }
+        
+        // Remove entities older than MAX_ENTITY_AGE_MS
+        if (now - creationTime > MAX_ENTITY_AGE_MS) {
+          try {
+            entities.remove(entity);
+            entityCreationTimesRef.current.delete(entityId);
+          } catch (e) {
+            // Entity already removed
+          }
+        }
+      });
+      
+      // Clean up completed launch animations
+      const completedLaunches = activeLaunchesRef.current.filter(launch => {
+        const elapsed = now - launch.startTime;
+        return elapsed > launch.durationMs + 5000; // 5 seconds after completion
+      });
+      
+      completedLaunches.forEach(launch => {
+        const arcId = `launch_arc_${launch.id}`;
+        const podId = `launch_pod_${launch.id}`;
+        // REMOVED: dotId - cosmetic traffic removed
+        
+        try {
+          const arcEntity = entities.getById(arcId);
+          const podEntity = entities.getById(podId);
+          
+          if (arcEntity) entities.remove(arcEntity);
+          if (podEntity) entities.remove(podEntity);
+          if (dotEntity) entities.remove(dotEntity);
+          
+          entityCreationTimesRef.current.delete(arcId);
+          entityCreationTimesRef.current.delete(podId);
+          entityCreationTimesRef.current.delete(dotId);
+        } catch (e) {
+          // Already removed
+        }
+      });
+      
+      activeLaunchesRef.current = activeLaunchesRef.current.filter(launch => {
+        const elapsed = now - launch.startTime;
+        return elapsed <= launch.durationMs + 5000;
+      });
+      
+      // Clean up old job flow entities
+      if (jobFlowRef.current.length > 5) {
+        const toRemove = jobFlowRef.current.splice(0, jobFlowRef.current.length - 5);
+        toRemove.forEach(entity => {
+          try {
+            entities.remove(entity);
+            if (entity.id) entityCreationTimesRef.current.delete(entity.id as string);
+          } catch (e) {
+            // Already removed
+          }
+        });
+      }
+      
+      // Clean up old launch arcs
+      const oldArcs = launchArcsRef.current.filter(arc => {
+        const arcId = arc.id as string;
+        if (!arcId) return false;
+        const creationTime = entityCreationTimesRef.current.get(arcId);
+        if (!creationTime) return false;
+        return now - creationTime > 300000; // 5 minutes
+      });
+      
+      oldArcs.forEach(arc => {
+        try {
+          entities.remove(arc);
+          const arcId = arc.id as string;
+          if (arcId) entityCreationTimesRef.current.delete(arcId);
+        } catch (e) {
+          // Already removed
+        }
+      });
+      
+      launchArcsRef.current = launchArcsRef.current.filter(arc => {
+        const arcId = arc.id as string;
+        if (!arcId) return true;
+        const creationTime = entityCreationTimesRef.current.get(arcId);
+        if (!creationTime) return true;
+        return now - creationTime <= 300000;
+      });
+      
+      // Clean up old deployed pod satellites (keep only recent ones)
+      const maxDeployedSatellites = 30;
+      if (deployedPodSatellitesRef.current.size > maxDeployedSatellites) {
+        const entries = Array.from(deployedPodSatellitesRef.current.entries());
+        const toRemove = entries.slice(0, entries.length - maxDeployedSatellites);
+        
+        toRemove.forEach(([unitId, podData]) => {
+          podData.entityIds.forEach(entityId => {
+            try {
+              const entity = entities.getById(entityId);
+              if (entity) entities.remove(entity);
+              entityCreationTimesRef.current.delete(entityId);
+            } catch (e) {
+              // Already removed
+            }
+          });
+          deployedPodSatellitesRef.current.delete(unitId);
+        });
+      }
+      
+      // Clean up old animation refs
+      const maxAnimationRefs = 10;
+      if (animationRefs.current.size > maxAnimationRefs) {
+        const entries = Array.from(animationRefs.current.entries());
+        const toRemove = entries.slice(0, entries.length - maxAnimationRefs);
+        
+        toRemove.forEach(([id, data]) => {
+          try {
+            entities.remove(data.entity);
+            entityCreationTimesRef.current.delete(id);
+          } catch (e) {
+            // Already removed
+          }
+        });
+        
+        toRemove.forEach(([id]) => animationRefs.current.delete(id));
+      }
+      
+      lastMemoryCleanupRef.current = now;
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  };
+  
+  // Launch animation system
+  interface LaunchEvent {
+    id: string;
+    startLat: number;
+    startLng: number;
+    targetLat: number;
+    targetLng: number;
+    t: number; // 0 → 1 animation progress
+    durationMs: number;
+    startTime: number;
+    currentPos?: Cesium.Cartesian3; // Current position for callback
+  }
+  
+  const activeLaunchesRef = useRef<LaunchEvent[]>([]);
+  const lastOrbitalShareRef = useRef<number>(-1); // Initialize to -1 to detect first load
+  const lastPodsInOrbitRef = useRef<number>(-1); // Initialize to -1 to detect first load
+  const lastLaunchesNeededRef = useRef<number>(-1); // Track launchesNeeded for animation triggers
+  const lastLaunchSpawnTimeRef = useRef<number>(0); // Track last launch spawn time for cooldown
+  const launchAnimationFrameRef = useRef<number | null>(null);
+  const animationLoopStartedRef = useRef<boolean>(false);
+  const initialSpawnDoneRef = useRef<boolean>(false);
+  
+  // Fixed launch sites
+  const LAUNCH_SITES = [
+    { lat: 28.5623, lng: -80.5774, name: "Cape Canaveral" }, // SLC-40
+    { lat: 25.9971, lng: -97.1554, name: "Boca Chica" }, // SpaceX Starbase
+    { lat: 34.7420, lng: -120.5724, name: "Vandenberg" }, // LC-576E
+    { lat: 5.2397, lng: -52.7686, name: "Kourou" }, // Guiana Space Centre
+  ];
 
+  // Periodic memory snapshot - runs every 5 seconds for detailed tracking
+  useEffect(() => {
+    const snapshotInterval = trackedSetInterval(() => {
+      const viewer = actualViewerRef.current || getGlobalViewer();
+      if (!viewer || viewer.isDestroyed()) return;
+      
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo) {
+        const usedMB = memoryInfo.usedJSHeapSize / 1048576;
+        const totalMB = memoryInfo.totalJSHeapSize / 1048576;
+        const limitMB = memoryInfo.jsHeapSizeLimit / 1048576;
+        const usagePercent = (usedMB / limitMB) * 100;
+        const entities = viewer.entities;
+        const entityCount = entities.values.length;
+        
+        // Detailed snapshot
+        const snapshot = {
+          time: Date.now(),
+          memory: {
+            usedMB: usedMB.toFixed(1),
+            totalMB: totalMB.toFixed(1),
+            limitMB: limitMB.toFixed(1),
+            usagePercent: usagePercent.toFixed(1),
+          },
+          entities: {
+            total: entityCount,
+            byType: Object.fromEntries(entityTypeCountsRef.current),
+            creationRate: entityCreationLogRef.current.filter(e => Date.now() - e.time < 5000).length,
+            removalRate: entityRemovalLogRef.current.filter(e => Date.now() - e.time < 5000).length,
+          },
+          refs: {
+            intervals: activeIntervalsRef.current.size,
+            timeouts: activeTimeoutsRef.current.size,
+            animationFrames: activeAnimationFramesRef.current.size,
+            launchArcs: launchArcsRef.current.length,
+            activeLaunches: activeLaunchesRef.current.length,
+            jobFlows: jobFlowRef.current.length,
+            deployedPodSatellites: deployedPodSatellitesRef.current.size,
+            animationRefs: animationRefs.current.size,
+          },
+        };
+        
+        // Log snapshot if memory is high or growing
+        if (usagePercent > 70 || entityCount > 50) {
+          console.log(`[MemorySnapshot]`, snapshot);
+        }
+      }
+    }, 5000); // Every 5 seconds
+    
+    return () => {
+      if (snapshotInterval) {
+        clearInterval(snapshotInterval);
+        activeIntervalsRef.current.delete(snapshotInterval);
+      }
+    };
+  }, [actualViewerRef]);
+
+  // Periodic memory cleanup - runs every 30 seconds
+  useEffect(() => {
+    const cleanupInterval = trackedSetInterval(() => {
+      performMemoryCleanup();
+    }, 30000); // Every 30 seconds
+    
+    // Also run cleanup immediately
+    performMemoryCleanup();
+    
+    return () => {
+      if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        activeIntervalsRef.current.delete(cleanupInterval);
+      }
+    };
+  }, [actualViewerRef]);
+  
+  // Comprehensive cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear all tracked intervals
+      activeIntervalsRef.current.forEach(id => {
+        try {
+          clearInterval(id);
+        } catch (e) {
+          // Ignore
+        }
+      });
+      activeIntervalsRef.current.clear();
+      
+      // Clear all tracked timeouts
+      activeTimeoutsRef.current.forEach(id => {
+        try {
+          clearTimeout(id);
+        } catch (e) {
+          // Ignore
+        }
+      });
+      activeTimeoutsRef.current.clear();
+      
+      // Cancel all tracked animation frames
+      activeAnimationFramesRef.current.forEach(id => {
+        try {
+          cancelAnimationFrame(id);
+        } catch (e) {
+          // Ignore
+        }
+      });
+      activeAnimationFramesRef.current.clear();
+      
+      // Clear launch animation frame
+      if (launchAnimationFrameRef.current !== null) {
+        try {
+          cancelAnimationFrame(launchAnimationFrameRef.current);
+        } catch (e) {
+          // Ignore
+        }
+        launchAnimationFrameRef.current = null;
+      }
+      
+      // Clear pulse interval
+      if (pulseIntervalRef.current) {
+        try {
+          clearInterval(pulseIntervalRef.current);
+        } catch (e) {
+          // Ignore
+        }
+        pulseIntervalRef.current = null;
+      }
+      
+      // Clear all refs
+      activeLaunchesRef.current = [];
+      jobFlowRef.current = [];
+      launchArcsRef.current = [];
+      deployedPodSatellitesRef.current.clear();
+      animationRefs.current.clear();
+      entityCreationTimesRef.current.clear();
+      deployedUnitsRef.current.clear();
+      
+      // Final memory cleanup
+      performMemoryCleanup();
+    };
+  }, []);
+  
   // Listen for surge events
   useEffect(() => {
     const handleSurgeEvent = () => {
       setIsSurgeActive(true);
-      setTimeout(() => setIsSurgeActive(false), 5000);
+      trackedSetTimeout(() => setIsSurgeActive(false), 5000);
     };
     window.addEventListener("surge-event" as any, handleSurgeEvent);
     return () => window.removeEventListener("surge-event" as any, handleSurgeEvent);
@@ -199,7 +772,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 [-10, 71, 40, 71, 40, 35, -10, 35, -10, 71],
               ];
               outlines.forEach((coords, idx) => {
-                viewer.entities.add({
+                addTrackedEntity(viewer.entities, {
                   id: `country_outline_${idx}`,
                   polyline: {
                     positions: Cesium.Cartesian3.fromDegreesArray(coords),
@@ -235,7 +808,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
 
   // Configure shared viewer for sandbox (viewer is created by useCesiumViewer hook)
   useEffect(() => {
-    console.log("[SandboxGlobe] Mounted, checking for viewer");
+    // Mounted, checking for viewer
 
     // Wait for viewer to be ready - use interval to check periodically
     let retryCount = 0;
@@ -266,7 +839,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         return;
       }
 
-      console.log("[SandboxGlobe] Configuring viewer for sandbox mode");
+      // Configuring viewer for sandbox mode
 
       // Configure viewer settings for sandbox
       // Only set initial view once on first mount
@@ -285,6 +858,29 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         viewer.scene.fog.enabled = false;
         viewer.scene.globe.showGroundAtmosphere = false;
         viewer.scene.globe.showWaterEffect = false;
+        
+        // Disable scroll wheel zoom - allow page scrolling instead
+        viewer.scene.screenSpaceCameraController.enableZoom = false;
+        
+        // Disable depth testing against terrain for performance
+        viewer.scene.globe.depthTestAgainstTerrain = false;
+        
+        // ALWAYS ensure globe is visible - set multiple times to ensure it sticks
+        viewer.scene.globe.show = true;
+        
+        // Force multiple renders to ensure globe shows
+        setTimeout(() => {
+          if (!viewer.isDestroyed()) {
+            viewer.scene.globe.show = true;
+            viewer.scene.requestRender();
+          }
+        }, 100);
+        setTimeout(() => {
+          if (!viewer.isDestroyed()) {
+            viewer.scene.globe.show = true;
+            viewer.scene.requestRender();
+          }
+        }, 500);
 
         if (viewer.scene.globe.imageryLayers.length > 0) {
           viewer.scene.globe.imageryLayers.get(0).alpha = 0.15;
@@ -292,7 +888,6 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
 
         // Force initial render - requestRenderMode might prevent initial render
         viewer.scene.requestRender();
-        console.log("[SandboxGlobe] Forced render request");
         
         // Also ensure canvas is visible
         const container = document.getElementById("cesium-globe-container");
@@ -308,12 +903,8 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             (canvas as HTMLElement).style.top = "0";
             (canvas as HTMLElement).style.left = "0";
             (canvas as HTMLElement).style.zIndex = "0";
-            console.log("[SandboxGlobe] Canvas styles applied, dimensions:", canvas.width, "x", canvas.height);
-          } else {
-            console.warn("[SandboxGlobe] Canvas not found in container");
+            // Canvas styles applied
           }
-        } else {
-          console.warn("[SandboxGlobe] Container cesium-globe-container not found");
         }
         
         // Force multiple renders to ensure it shows
@@ -351,15 +942,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 const targetHeight = isViewportSuspicious ? window.screen.height : viewportHeight;
                 const targetWidth = isViewportSuspicious ? window.screen.width : viewportWidth;
                 
-                console.warn("[SandboxGlobe] ResizeObserver detected container collapse!", {
-                  height,
-                  width,
-                  viewportHeight,
-                  viewportWidth,
-                  screenHeight: window.screen.height,
-                  screenWidth: window.screen.width,
-                  isViewportSuspicious,
-                });
+                // ResizeObserver detected container collapse - fixing silently
                 const el = entry.target as HTMLElement;
                 // Use !important via setProperty to override any conflicting styles
                 el.style.setProperty('height', `${targetHeight}px`, 'important');
@@ -396,12 +979,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
                 
                 // If style changed and container is now collapsed, fix it
                 if (height < viewportHeight * 0.5 || width < viewportWidth * 0.5) {
-                  console.warn("[SandboxGlobe] MutationObserver detected container collapse after style change!", {
-                    height,
-                    width,
-                    viewportHeight,
-                    viewportWidth,
-                  });
+                  // MutationObserver detected container collapse - fixing silently
                   el.style.setProperty('height', `${viewportHeight}px`, 'important');
                   el.style.setProperty('width', `${viewportWidth}px`, 'important');
                   el.style.setProperty('min-height', `${viewportHeight}px`, 'important');
@@ -425,12 +1003,56 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           });
         }
         
+        // Continuous render loop to keep globe visible (less frequent to reduce GPU load)
+        const renderInterval = setInterval(() => {
+          if (viewer.isDestroyed()) {
+            clearInterval(renderInterval);
+            return;
+          }
+          // Force render periodically to keep globe visible (reduced frequency to prevent memory issues)
+          try {
+            viewer.scene.requestRender();
+          } catch (e) {
+            // Ignore render errors to prevent crashes
+          }
+        }, 2000); // Every 2 seconds (reduced from 500ms to prevent memory issues)
+        
         const watchdogInterval = setInterval(() => {
           if (viewer.isDestroyed()) {
             clearInterval(watchdogInterval);
+            clearInterval(renderInterval);
             if (resizeObserver) resizeObserver.disconnect();
+            if (mutationObserver) mutationObserver.disconnect();
             return;
           }
+          
+      // ALWAYS ensure globe is visible - force it every check
+      viewer.scene.globe.show = true;
+      
+      // Ensure globe base color is set
+      if (!viewer.scene.globe.baseColor) {
+        viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#1a2332");
+      }
+      
+      // Ensure canvas is visible
+      const viewerCanvas = viewer.canvas;
+      if (viewerCanvas) {
+        if (viewerCanvas.style.display === "none") {
+          viewerCanvas.style.display = "block";
+        }
+        if (viewerCanvas.style.visibility === "hidden") {
+          viewerCanvas.style.visibility = "visible";
+        }
+        if (viewerCanvas.style.opacity === "0") {
+          viewerCanvas.style.opacity = "1";
+        }
+      }
+      
+      // Ensure imagery layers are visible
+      if (viewer.scene.globe.imageryLayers.length === 0) {
+        // Default imagery should already be added by Cesium, but ensure it's there
+        // Don't try to add it manually as it may cause issues
+      }
           
           const widget = (viewer as any).cesiumWidget;
           const widgetContainer = widget?.container as HTMLElement | null;
@@ -447,24 +1069,26 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             const containerWidth = container.offsetWidth || container.clientWidth;
             
             // Check if viewport itself is suspiciously small (likely a layout bug)
-            const isViewportSuspicious = viewportHeight < 400 || viewportWidth < 400;
-            const isContainerCollapsed = containerHeight < viewportHeight * 0.5 || containerWidth < viewportWidth * 0.5;
+            // Only flag as suspicious if very small (< 200px) to avoid false positives
+            const isViewportSuspicious = viewportHeight < 200 || viewportWidth < 200;
+            const isContainerCollapsed = containerHeight < viewportHeight * 0.3 || containerWidth < viewportWidth * 0.3;
             
             // If container is collapsed OR viewport is suspicious, fix it
+            // Only log if container is actually collapsed (not just suspicious viewport)
             if (isContainerCollapsed || isViewportSuspicious) {
               // Use screen dimensions as fallback if viewport is suspicious
               const targetHeight = isViewportSuspicious ? window.screen.height : viewportHeight;
               const targetWidth = isViewportSuspicious ? window.screen.width : viewportWidth;
               
-              console.warn("[SandboxGlobe] React Container collapsed, fixing...", {
-                containerHeight,
-                containerWidth,
-                viewportHeight,
-                viewportWidth,
-                screenHeight: window.screen.height,
-                screenWidth: window.screen.width,
-                isViewportSuspicious,
-              });
+              // Only log if container is actually collapsed, not just viewport suspicious
+              if (isContainerCollapsed) {
+                console.warn("[SandboxGlobe] React Container collapsed, fixing...", {
+                  containerHeight,
+                  containerWidth,
+                  viewportHeight,
+                  viewportWidth,
+                });
+              }
               container.style.setProperty('height', `${targetHeight}px`, 'important');
               container.style.setProperty('width', `${targetWidth}px`, 'important');
               container.style.setProperty('min-height', `${targetHeight}px`, 'important');
@@ -484,12 +1108,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             const widgetWidth = widgetContainer.offsetWidth || widgetContainer.clientWidth;
             
             if (widgetHeight === 0 || widgetHeight < viewportHeight * 0.5) {
-              console.warn("[SandboxGlobe] Widget container height is too small, fixing...", {
-                widgetHeight,
-                widgetWidth,
-                viewportHeight,
-                viewportWidth,
-              });
+              // Widget container height is too small - fixing silently
               widgetContainer.style.height = `${viewportHeight}px`;
               widgetContainer.style.width = `${viewportWidth}px`;
               widgetContainer.style.position = "relative";
@@ -498,33 +1117,42 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             }
           }
           
-          // Ensure canvas is visible and properly sized
+          // Ensure canvas is visible and properly sized - ALWAYS enforce
           if (canvas) {
             const canvasHeight = canvas.height || canvas.clientHeight;
             const canvasWidth = canvas.width || canvas.clientWidth;
             
-            if (canvas.style.display === "none" || canvas.style.visibility === "hidden") {
-              console.warn("[SandboxGlobe] Canvas is hidden, fixing...");
-              canvas.style.display = "block";
-              canvas.style.visibility = "visible";
-              canvas.style.opacity = "1";
+            // Always enforce visibility
+            if (canvas.style.display === "none" || canvas.style.visibility === "hidden" || canvas.style.opacity === "0") {
+              canvas.style.setProperty('display', 'block', 'important');
+              canvas.style.setProperty('visibility', 'visible', 'important');
+              canvas.style.setProperty('opacity', '1', 'important');
               needsFix = true;
             }
             
-            if (canvasHeight < viewportHeight * 0.5 || canvasWidth < viewportWidth * 0.5) {
-              console.warn("[SandboxGlobe] Canvas dimensions are too small, forcing resize...", {
-                canvasHeight,
-                canvasWidth,
-                viewportHeight,
-                viewportWidth,
-              });
-              // Force canvas to match viewport
+            // Always enforce size
+            if (canvasHeight < viewportHeight * 0.9 || canvasWidth < viewportWidth * 0.9) {
               canvas.width = viewportWidth;
               canvas.height = viewportHeight;
-              canvas.style.width = "100%";
-              canvas.style.height = "100%";
+              canvas.style.setProperty('width', '100%', 'important');
+              canvas.style.setProperty('height', '100%', 'important');
+              canvas.style.setProperty('position', 'absolute', 'important');
+              canvas.style.setProperty('top', '0', 'important');
+              canvas.style.setProperty('left', '0', 'important');
               needsFix = true;
             }
+          }
+          
+          // Always ensure container is full size
+          if (container) {
+            container.style.setProperty('position', 'fixed', 'important');
+            container.style.setProperty('top', '0', 'important');
+            container.style.setProperty('left', '0', 'important');
+            container.style.setProperty('right', '0', 'important');
+            container.style.setProperty('bottom', '0', 'important');
+            container.style.setProperty('width', `${viewportWidth}px`, 'important');
+            container.style.setProperty('height', `${viewportHeight}px`, 'important');
+            container.style.setProperty('z-index', '0', 'important');
           }
           
           // Force render and resize if any fixes were applied
@@ -538,15 +1166,16 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               }
             }, 100);
           }
-        }, 1000); // Check every 1 second (very frequent)
+        }, 2000); // Check every 2 seconds (less frequent)
         
         return () => {
           clearInterval(watchdogInterval);
+          clearInterval(renderInterval);
           if (resizeObserver) resizeObserver.disconnect();
           if (mutationObserver) mutationObserver.disconnect();
         };
         
-        console.log("[SandboxGlobe] Viewer configuration complete");
+        // Viewer configuration complete
       } catch (error) {
         console.error("[SandboxGlobe] Error configuring viewer:", error);
       }
@@ -580,19 +1209,51 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
   }, [actualViewerRef, orbitalComputeUnits, groundDCReduction, state]);
 
 
+  // Track last rendered satellite IDs to prevent unnecessary recreations
+  const lastRenderedSatIdsRef = useRef<Set<string>>(new Set());
+  const lastStateHashRef = useRef<string>('');
+
   // Update visualization based on sandbox state
   useEffect(() => {
     const viewer = actualViewerRef.current || getGlobalViewer();
     if (!viewer || viewer.isDestroyed() || !state) return;
     const entities = viewer.entities;
 
+    // Create a hash of the state to detect actual changes
+    const stateHash = JSON.stringify({
+      satelliteCount: state.satellites?.length || 0,
+      groundSiteCount: state.groundSites?.length || 0,
+      orbitalUnits: orbitalComputeUnits,
+      groundDC: groundDCReduction,
+      // Include first few satellite IDs to detect if satellites actually changed
+      firstSatIds: state.satellites?.slice(0, 5).map(s => s.id).join(',') || '',
+    });
+    
+    // Skip if state hasn't actually changed
+    if (stateHash === lastStateHashRef.current) {
+      return; // Skip render if state unchanged
+    }
+    
+    lastStateHashRef.current = stateHash;
+
     // Don't clear all entities - preserve country outlines, deployed units, and data sources
     // Remove only ground sites, backend satellites, and job flows from entities collection
+    // BUT: Only remove entities that are NOT in our tracked set (to avoid removing and recreating)
     const entitiesToRemove: Cesium.Entity[] = [];
+    const currentSatIds = new Set<string>();
+    
+    // First, collect IDs of satellites we want to keep
+    // Use same aggressive sampling as below
+    if (state.satellites && state.satellites.length > 0) {
+      const MAX_SATS = 10; // Match the limit used below
+      const sampleRate = Math.max(1, Math.floor(state.satellites.length / MAX_SATS));
+      const sampledSats = state.satellites.filter((_, idx) => idx % sampleRate === 0).slice(0, MAX_SATS);
+      sampledSats.forEach(sat => currentSatIds.add(sat.id));
+    }
+    
     entities.values.forEach((entity: Cesium.Entity) => {
       const id = entity.id as string;
-      // Preserve: country outlines, deployed unit satellites (deployed_pod_, deployed_server_farm_, deployed_geo_hub_), deployment animations
-      // Note: deployed_geo_hub_ entities are marked as ground type, so they should be preserved
+      // Preserve: country outlines, deployed unit satellites, launch animations, and satellites we want to keep
       if (id && 
           !id.startsWith("country_outline_") && 
           !id.startsWith("deployment_") && 
@@ -600,11 +1261,21 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           !id.startsWith("deployed_pod_") &&
           !id.startsWith("deployed_server_farm_") &&
           !id.startsWith("deployed_geo_hub_") &&
-          !id.endsWith("_glow")) { // Preserve glow effects
+          !id.startsWith("launch_arc_") &&
+          !id.startsWith("launch_pod_") &&
+          // REMOVED: launch_dot filter - cosmetic traffic removed
+          !id.startsWith("launch_site_") &&
+          !currentSatIds.has(id) && // Don't remove satellites we want to keep
+          !lastRenderedSatIdsRef.current.has(id)) { // Don't remove satellites we just rendered
         entitiesToRemove.push(entity);
       }
     });
-    entitiesToRemove.forEach(e => entities.remove(e));
+    
+    // Only remove if we have entities to remove (avoid unnecessary operations)
+    if (entitiesToRemove.length > 0) {
+      // Removed excessive logging
+      entitiesToRemove.forEach(e => removeTrackedEntity(entities, e));
+    }
     jobFlowRef.current = [];
     
     // Ensure country outlines data source is still present
@@ -612,7 +1283,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       const existingOutlines = viewer.dataSources.getByName("country_outlines");
       if (!existingOutlines || existingOutlines.length === 0) {
         // Country outlines were removed, try to re-add them
-        console.log("[SandboxGlobe] Country outlines missing, re-adding...");
+        // Country outlines missing, re-adding
         setTimeout(() => {
           const addCountryOutlines = () => {
             const COUNTRY_GEOJSON_URL = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson";
@@ -624,7 +1295,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               if (viewer && !viewer.isDestroyed()) {
                 dataSource.name = "country_outlines";
                 viewer.dataSources.add(dataSource);
-                console.log("[SandboxGlobe] Country outlines re-added successfully");
+                // Country outlines re-added successfully
               }
             }).catch(() => {
               // Fallback outlines
@@ -701,16 +1372,16 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
     // LEO pods: Each pod = 50 satellites
     // Server farms: Each farm = 1 large satellite at GEO altitude
     // GEO hubs: Each hub = 1 satellite at GEO altitude
-    console.log(`[SandboxGlobe] Processing ${deployedUnits.length} deployed units`);
+    // Processing deployed units
     deployedUnits.forEach((unit) => {
       if (unit.status === "deployed" && unit.deployedAt) {
-        console.log(`[SandboxGlobe] Creating satellites for deployed unit: ${unit.type} ${unit.id}`);
+        // Creating satellites for deployed unit
         if (unit.type === "leo_pod") {
           // Check if we've already created satellites for this unit
           if (!deployedPodSatellitesRef.current.has(unit.id)) {
           const entityIds: string[] = [];
           // Each LEO pod = 50 satellites
-          const satellitesPerPod = 50;
+          const satellitesPerPod = 1; // Reduced to 1 to prevent memory issues (was 2, originally 50)
           
           // Generate consistent seed from unit ID for reproducible positions
           let seed = 0;
@@ -782,92 +1453,33 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             entityIds.push(podSatId);
           }
           deployedPodSatellitesRef.current.set(unit.id, { unitId: unit.id, entityIds });
-          console.log(`[SandboxGlobe] Created ${entityIds.length} satellites for LEO pod ${unit.id}`);
+          // Created satellites for LEO pod
         } else {
-          // Update existing LEO pod satellites
+          // Update existing LEO pod satellites - animate their orbital motion
           const podData = deployedPodSatellitesRef.current.get(unit.id);
           if (podData) {
-              // Generate consistent seed from unit ID
-              let seed = 0;
-              for (let j = 0; j < unit.id.length; j++) {
-                seed = ((seed << 5) - seed) + unit.id.charCodeAt(j);
-                seed = seed & seed;
-              }
-              
+            // Update positions with time-based animation
+            const timeOffset = Date.now() / 1000;
+            const satellitesPerPod = 1; // Reduced to 1 to prevent memory issues (was 2, originally 50) // Same as creation
             podData.entityIds.forEach((podSatId, i) => {
-                // Recalculate position using same logic as creation
-                const planeIndex = Math.floor(i / 10);
-                const satInPlane = i % 10;
-                const longitudeOfAscendingNode = (planeIndex / 5) * 360 + (seed % 180);
-                const meanAnomaly = (satInPlane / 10) * 360 + (seed % 60);
-                
-                const altitude = 550;
-                const inclination = 53;
-                const inclinationRad = inclination * Math.PI / 180;
-                const meanAnomalyRad = meanAnomaly * Math.PI / 180;
-                const lonAscNodeRad = longitudeOfAscendingNode * Math.PI / 180;
-                
-                const lat = Math.asin(Math.sin(meanAnomalyRad) * Math.sin(inclinationRad)) * 180 / Math.PI;
-                const argLat = Math.atan2(
-                  Math.tan(meanAnomalyRad) * Math.cos(inclinationRad),
-                  Math.cos(meanAnomalyRad)
-                );
-                let lon = (longitudeOfAscendingNode + argLat * 180 / Math.PI) % 360;
-                if (lon > 180) lon -= 360;
-                
-                const existingEntity = entities.getById(podSatId);
-                if (existingEntity) {
-                  // Update position
-                  try {
-                    existingEntity.position = new Cesium.ConstantPositionProperty(
-                      Cesium.Cartesian3.fromDegrees(lon, lat, altitude * 1000)
-                    );
-                  } catch (e) {
-                    // If update fails, remove and recreate
-                    entities.remove(existingEntity);
-                    const newEntity = entities.add({
-                      id: podSatId,
-                      position: Cesium.Cartesian3.fromDegrees(lon, lat, altitude * 1000),
-                      point: {
-                        pixelSize: 8,
-                        color: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.9), // Cyan for deployed LEO pods
-                        outlineColor: Cesium.Color.WHITE,
-                        outlineWidth: 2,
-                        heightReference: Cesium.HeightReference.NONE,
-                        scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
-                      },
-                    });
-                    (newEntity as any)._entityType = "satellite";
-                    (newEntity as any)._satelliteId = podSatId;
-                    (newEntity as any)._deployedUnitId = unit.id;
-                    (newEntity as any)._unitType = unit.type;
-                  }
-                } else {
-                  // Entity doesn't exist, recreate it
-                  const newEntity = entities.add({
-                    id: podSatId,
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat, altitude * 1000),
-                    point: {
-                      pixelSize: 8,
-                      color: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.9), // Cyan for deployed LEO pods
-                      outlineColor: Cesium.Color.WHITE,
-                      outlineWidth: 2,
-                      heightReference: Cesium.HeightReference.NONE,
-                      scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
-                    },
-                  });
-                  (newEntity as any)._entityType = "satellite";
-                  (newEntity as any)._satelliteId = podSatId;
-                  (newEntity as any)._deployedUnitId = unit.id;
-                  (newEntity as any)._unitType = unit.type;
+              const orbitPos = generateSunSyncOrbitPosition(unit.id, i, satellitesPerPod, timeOffset);
+              const existingEntity = entities.getById(podSatId);
+              if (existingEntity) {
+                try {
+                  existingEntity.position = new Cesium.ConstantPositionProperty(
+                    Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000)
+                  );
+                } catch (e) {
+                  // If update fails, ignore
                 }
+              }
             });
           }
         }
-        } else if (unit.type === "server_farm") {
+      } else if (unit.type === "server_farm") {
           // Server farms: Create multiple satellites in sun-synchronous orbits
-          // Each server farm = 50 satellites spread across realistic sun-sync orbits
-          const satellitesPerFarm = 50;
+          // Each server farm = 10 satellites (reduced from 50 to prevent memory issues)
+          const satellitesPerFarm = 1; // Reduced to 1 to prevent memory issues (was 2, originally 10)
           
           if (!deployedPodSatellitesRef.current.has(unit.id)) {
             const entityIds: string[] = [];
@@ -898,7 +1510,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
               entityIds.push(farmSatId);
             }
             deployedPodSatellitesRef.current.set(unit.id, { unitId: unit.id, entityIds });
-            console.log(`[SandboxGlobe] Created ${entityIds.length} satellites in sun-sync orbits for server farm ${unit.id}`);
+            // Created satellites in sun-sync orbits for server farm
           } else {
             // Update existing server farm satellites - animate their orbital motion
             const farmData = deployedPodSatellitesRef.current.get(unit.id);
@@ -988,13 +1600,13 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             
             entityIds.push(unitSatId);
             deployedPodSatellitesRef.current.set(unit.id, { unitId: unit.id, entityIds });
-            console.log(`[SandboxGlobe] Created ground entity for GEO hub ${unit.id}`);
+            // Created ground entity for GEO hub
           }
         }
       }
     });
     
-    console.log(`[SandboxGlobe] Total deployed unit satellites tracked: ${deployedPodSatellitesRef.current.size} units`);
+    // Total deployed unit satellites tracked
     
     // Clean up satellites for units that are no longer deployed
     const currentDeployedIds = new Set(deployedUnits.filter(u => u.status === "deployed").map(u => u.id));
@@ -1009,24 +1621,74 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       }
     });
 
-    // Render only 10% of background satellites for performance
+    // Hard cap satellite count to prevent memory issues
+    // Aggressively limit to prevent OOM
+    const MAX_SATS = 10; // Reduced from 20 to 10
+    
     // Safety check: ensure state.satellites exists and is an array
     if (!state || !state.satellites || !Array.isArray(state.satellites) || state.satellites.length === 0) {
       return; // Don't render if no satellites
     }
     
-    const RENDER_RATIO = 0.1;
-    const totalSats = state.satellites.length;
-    const sampledSats = state.satellites.filter((_, idx) => idx % Math.ceil(1 / RENDER_RATIO) === 0);
-    sampledSats.forEach((sat) => {
+    // Aggressively sample satellites - only show a tiny fraction
+    // If we have 8991 satellites, sample every 900th to get ~10
+    const sampleRate = Math.max(1, Math.floor(state.satellites.length / MAX_SATS));
+    let sampledSats = state.satellites.filter((_, idx) => idx % sampleRate === 0).slice(0, MAX_SATS);
+    
+    // Track which satellites we're about to render
+    const newSatIds = new Set(sampledSats.map(s => s.id));
+    
+    // Only log if we're actually changing the satellite set
+    const existingSatIds = new Set(Array.from(entities.values)
+      .filter(e => (e as any)._entityType === 'satellite' && !(e.id as string)?.startsWith('deployed_'))
+      .map(e => e.id as string));
+    
+    const idsChanged = newSatIds.size !== existingSatIds.size || 
+      Array.from(newSatIds).some(id => !existingSatIds.has(id));
+    
+    if (idsChanged && process.env.NODE_ENV === 'development') {
+      // Only log in dev mode and throttle
+      const logKey = `${sampledSats.length}-${state.satellites.length}`;
+      if (!(window as any).__lastSatLog || (window as any).__lastSatLog !== logKey) {
+        (window as any).__lastSatLog = logKey;
+        console.log(`[MemoryDebug] Rendering ${sampledSats.length} of ${state.satellites.length} satellites`);
+      }
+      
+      // If we're trying to create too many new satellites, reduce the target
+      const newSatellitesToCreate = sampledSats.filter(s => !existingSatIds.has(s.id)).length;
+      if (newSatellitesToCreate > MAX_SATS) {
+        // Further limit: only create first MAX_SATS that don't exist
+        const limitedSats = sampledSats.filter(s => !existingSatIds.has(s.id)).slice(0, MAX_SATS);
+        // Update sampledSats to only include existing + limited new ones
+        const existingSats = sampledSats.filter(s => existingSatIds.has(s.id));
+        sampledSats = [...existingSats, ...limitedSats].slice(0, MAX_SATS);
+      }
+    }
+    
+    // Update last rendered set
+    lastRenderedSatIdsRef.current = newSatIds;
+    
+    // Process satellites incrementally - only a few per render to respect rate limiter
+    // Separate existing (update) vs new (create) satellites
+    const existingSats: typeof sampledSats = [];
+    const newSats: typeof sampledSats = [];
+    
+    sampledSats.forEach(sat => {
+      const existing = entities.getById(sat.id);
+      if (existing) {
+        existingSats.push(sat);
+      } else {
+        newSats.push(sat);
+      }
+    });
+    
+    // Always update existing satellites (no rate limit on updates)
+    existingSats.forEach((sat) => {
       // Use static color - no sun position logic
       const color = Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.9);
-      
-      const size = isMostlySpaceMode ? 6 : 4 + sat.utilization * 2; // Smaller satellites: 4-6 pixels
-      
-      // Check if entity already exists and update it, otherwise create new
-      const existingEntity = entities.getById(sat.id);
+      const size = isMostlySpaceMode ? 6 : 4 + sat.utilization * 2;
       const position = Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000);
+      const existingEntity = entities.getById(sat.id);
       
       if (existingEntity) {
         // Update existing entity position (satellites move with accelerated time)
@@ -1038,64 +1700,58 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
             existingEntity.point.outlineColor = new Cesium.ConstantProperty(Cesium.Color.WHITE);
           }
         } catch (e) {
-          // If update fails, remove and recreate
-          entities.remove(existingEntity);
-          const satEntity = entities.add({
-            id: sat.id,
-            position: position,
-            point: {
-              pixelSize: size,
-              color: color,
-              outlineColor: Cesium.Color.WHITE,
-              outlineWidth: isMostlySpaceMode ? 3 : 2,
-              heightReference: Cesium.HeightReference.NONE,
-              scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
-            },
-          });
-          (satEntity as any)._entityType = "satellite";
-          (satEntity as any)._satelliteId = sat.id;
+          // If update fails, skip - don't recreate to avoid rate limit issues
+          console.warn(`[MemoryDebug] Failed to update satellite ${sat.id}, skipping`);
         }
-      } else {
-        // Create new entity
-        const satEntity = entities.add({
-          id: sat.id,
-          position: position,
-          point: {
-            pixelSize: size,
-            color: color,
-            outlineColor: Cesium.Color.WHITE,
-            outlineWidth: isMostlySpaceMode ? 3 : 2,
-            heightReference: Cesium.HeightReference.NONE,
-            scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
-          },
-        });
-        
-        // Mark entity type for click detection
+      }
+    });
+    
+    // Process new satellites incrementally (respecting rate limiter)
+    // Only create a few new satellites per render to prevent overwhelming the rate limiter
+    const MAX_NEW_PER_RENDER = 2; // Reduced from 5 to 2 to prevent memory issues
+    const newSatsToCreate = newSats.slice(0, MAX_NEW_PER_RENDER);
+    
+    newSatsToCreate.forEach((sat) => {
+      const color = Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.9);
+      const size = isMostlySpaceMode ? 6 : 4 + sat.utilization * 2;
+      const position = Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000);
+      
+      // Create new entity using tracked function (may return null if rate limited)
+      const satEntity = addTrackedEntity(entities, {
+        id: sat.id,
+        position: position,
+        point: {
+          pixelSize: size,
+          color: color,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: isMostlySpaceMode ? 3 : 2,
+          heightReference: Cesium.HeightReference.NONE,
+          scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.3),
+        },
+      });
+      
+      // Only mark if entity was created (not rate limited)
+      if (satEntity) {
         (satEntity as any)._entityType = "satellite";
         (satEntity as any)._satelliteId = sat.id;
       }
-      
-      // Add glow effect for all satellites (visual only, no sun position logic)
-      const glowId = `${sat.id}_glow`;
-      const existingGlow = entities.getById(glowId);
-      if (!existingGlow) {
-        entities.add({
-          id: glowId,
-          position: Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000),
-          ellipse: {
-            semiMajorAxis: 15000,
-            semiMinorAxis: 15000,
-            material: Cesium.Color.fromCssColorString("#ffd700").withAlpha(0.15),
-            heightReference: Cesium.HeightReference.NONE,
-          },
-        });
-      } else {
-        // Update existing glow position
-        existingGlow.position = new Cesium.ConstantPositionProperty(
-          Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
-        );
-      }
+      // If rate limited, skip this satellite (it will be created on next render if rate allows)
     });
+    
+    // If we have more new satellites to create, schedule incremental creation
+    // But only if we're not already at MAX_SATS
+    if (newSats.length > MAX_NEW_PER_RENDER && sampledSats.length < MAX_SATS) {
+      // Don't log every time - too noisy
+      // Schedule next batch after rate limiter resets (2 seconds - longer delay)
+      const timeoutId = setTimeout(() => {
+        const viewer = actualViewerRef.current || getGlobalViewer();
+        if (viewer && !viewer.isDestroyed()) {
+          // Trigger a re-render to process next batch
+          viewer.scene.requestRender();
+        }
+      }, 2000); // Wait 2 seconds for rate limiter to reset
+      activeTimeoutsRef.current.add(timeoutId);
+    }
 
     // Job flows - more orbital flows as orbit share increases
     const numOrbitalFlows = Math.floor(orbitShare * 10);
@@ -1186,19 +1842,33 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
     if (pulseIntervalRef.current) {
       clearInterval(pulseIntervalRef.current);
     }
-    pulseIntervalRef.current = setInterval(() => {
-      pulsePhase += 0.1;
-      jobFlowRef.current.forEach((entity, idx) => {
-        if (entity.polyline) {
-          const alpha = 0.4 + Math.sin(pulsePhase + idx * 0.5) * 0.3;
-          const currentColor = entity.polyline.material as Cesium.ColorMaterialProperty;
-          if (currentColor) {
-            entity.polyline.material = currentColor.color?.getValue()?.withAlpha(alpha) || 
-              Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
-          }
+    // Limit job flow entities to prevent memory issues (reduced to 5, disable animation)
+    if (jobFlowRef.current.length > 5) {
+      // Remove oldest entities
+      const toRemove = jobFlowRef.current.splice(0, jobFlowRef.current.length - 5);
+      toRemove.forEach(entity => {
+        try {
+          viewer.entities.remove(entity);
+        } catch (e) {
+          // Ignore errors
         }
       });
-    }, 50);
+    }
+    
+    // Disable job flow animation to save memory
+    // pulseIntervalRef.current = setInterval(() => {
+    //   pulsePhase += 0.1;
+    //   jobFlowRef.current.slice(0, 5).forEach((entity, idx) => {
+    //     if (entity.polyline) {
+    //       const alpha = 0.4 + Math.sin(pulsePhase + idx * 0.5) * 0.3;
+    //       const currentColor = entity.polyline.material as Cesium.ColorMaterialProperty;
+    //       if (currentColor) {
+    //         entity.polyline.material = currentColor.color?.getValue()?.withAlpha(alpha) || 
+    //           Cesium.Color.fromCssColorString("#00d4ff").withAlpha(alpha);
+    //       }
+    //     }
+    //   });
+    // }, 200);
 
     // Mostly Space Mode: Zoom out and show halo lattice
     // Only fly once when entering mostly space mode, not on every render
@@ -1213,42 +1883,607 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       mostlySpaceModeCameraFlewRef.current = false;
     }
 
-    // Add orbital mesh visualization (only in mostly space mode)
-    if (isMostlySpaceMode && state.satellites.length > 0) {
-      // Remove existing mesh if it exists
-      const existingMesh = entities.getById("orbital_mesh");
-      if (existingMesh) {
-        entities.remove(existingMesh);
-      }
-      
-        const meshPositions = state.satellites.slice(0, Math.min(200, state.satellites.length)).map((sat) =>
-          Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt_km * 1000)
-        );
-
-        // Create a simple mesh visualization
-        entities.add({
-          id: "orbital_mesh",
-          polyline: {
-            positions: meshPositions,
-            material: Cesium.Color.fromCssColorString("#00d4ff").withAlpha(0.2),
-            width: 1,
-          },
-        });
-    } else {
-      // Remove mesh when not in mostly space mode
-      const existingMesh = entities.getById("orbital_mesh");
-      if (existingMesh) {
-        entities.remove(existingMesh);
-      }
+    // Disable orbital mesh visualization to prevent memory issues
+    // Remove existing mesh if it exists
+    const existingMesh = entities.getById("orbital_mesh");
+    if (existingMesh) {
+      entities.remove(existingMesh);
     }
 
+    // Animation loop to update satellite positions continuously
+    const satelliteAnimationInterval = trackedSetInterval(() => {
+      if (!viewer || viewer.isDestroyed()) return;
+      
+      // Check if cesiumWidget exists (viewer is fully initialized)
+      const cesiumWidget = (viewer as any)._cesiumWidget;
+      if (!cesiumWidget) {
+        // Viewer not fully initialized yet, skip this update
+        return;
+      }
+      
+      let entities: Cesium.EntityCollection;
+      try {
+        entities = viewer.entities;
+        // Limit total entities to prevent memory issues (reduced to 100)
+        const allEntities = entities.values;
+        if (allEntities.length > 100) {
+          // Too many entities, aggressively clean up old entities
+          const entitiesToRemove: string[] = [];
+          allEntities.forEach((entity, idx) => {
+            // Keep launch sites, keep first 50 entities, remove rest
+            if (idx > 50 && !entity.id?.startsWith('launch_site_') && !entity.id?.startsWith('country_')) {
+              entitiesToRemove.push(entity.id || '');
+            }
+          });
+          entitiesToRemove.forEach(id => {
+            try {
+              if (id) entities.removeById(id);
+            } catch (e) {
+              // Ignore
+            }
+          });
+          // Skip this update cycle after cleanup
+          return;
+        }
+      } catch (e) {
+        // Viewer entities not accessible, skip this update
+        return;
+      }
+      
+      // Limit deployed units processing to prevent memory issues
+      const currentDeployedUnits = getDeployedUnits().slice(0, 20); // Max 20 units
+      currentDeployedUnits.forEach((unit) => {
+        if (unit.status === "deployed" && unit.deployedAt) {
+          const podData = deployedPodSatellitesRef.current.get(unit.id);
+          if (podData && unit.type === "leo_pod") {
+            const satellitesPerPod = 1; // Reduced to 1 to prevent memory issues
+            const timeOffset = Date.now() / 1000;
+            // Limit to 1 satellite per pod
+            if (podData.entityIds.length > 0) {
+              const satId = podData.entityIds[0];
+              const i = 0;
+              const orbitPos = generateSunSyncOrbitPosition(unit.id, i, satellitesPerPod, timeOffset);
+              const existingEntity = entities.getById(satId);
+              if (existingEntity) {
+                try {
+                  existingEntity.position = new Cesium.ConstantPositionProperty(
+                    Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000)
+                  );
+                } catch (e) {
+                  // Ignore update errors
+                }
+              }
+            }
+          } else if (podData && unit.type === "server_farm") {
+            const satellitesPerFarm = 1; // Reduced to 1 to prevent memory issues
+            const timeOffset = Date.now() / 1000;
+            // Limit to 1 satellite per farm to prevent memory issues
+            if (podData.entityIds.length > 0) {
+              const satId = podData.entityIds[0];
+              const i = 0;
+              const orbitPos = generateSunSyncOrbitPosition(unit.id, i, satellitesPerFarm, timeOffset);
+              const existingEntity = entities.getById(satId);
+              if (existingEntity) {
+                try {
+                  existingEntity.position = new Cesium.ConstantPositionProperty(
+                    Cesium.Cartesian3.fromDegrees(orbitPos.lon, orbitPos.lat, orbitPos.alt * 1000)
+                  );
+                } catch (e) {
+                  // Ignore update errors
+                }
+              }
+            }
+          }
+        }
+      });
+      // Only render if entity count is reasonable
+      try {
+        const entityCount = entities.values.length;
+        if (entityCount < 100) { // Only render if under 100 entities
+          viewer.scene.requestRender();
+        }
+      } catch (e) {
+        // Ignore render errors
+      }
+    }, 120000); // Update every 2 minutes (120 seconds) - reduced frequency
+
     return () => {
+      if (satelliteAnimationInterval) {
+        clearInterval(satelliteAnimationInterval);
+        activeIntervalsRef.current.delete(satelliteAnimationInterval);
+      }
       if (pulseIntervalRef.current) {
         clearInterval(pulseIntervalRef.current);
+        activeIntervalsRef.current.delete(pulseIntervalRef.current);
         pulseIntervalRef.current = null;
       }
     };
-  }, [state, orbitalComputeUnits, groundDCReduction, isMostlySpaceMode, isSurgeActive, actualViewerRef, getDeployedUnits]);
+  }, [state?.satellites?.length, state?.groundSites?.length, orbitalComputeUnits, groundDCReduction, isMostlySpaceMode, isSurgeActive, actualViewerRef]);
+
+  // Launch animation: detect changes and spawn launches
+  // Check both old sandboxStore and new orbitSimStore
+  useEffect(() => {
+    // Try Simple Mode first (new), then orbit sim store, then old sandbox store
+    const simpleModeState = (window as any).__simpleModeState;
+    const orbitSimState = (window as any).__orbitSimState;
+    let podsInOrbit = 0;
+    let launchesPerYear = 0;
+    let orbitalShare = 0;
+    
+    if (simpleModeState) {
+      // Use Simple Mode state
+      podsInOrbit = Math.floor(simpleModeState.podsDeployed || 0);
+      launchesPerYear = simpleModeState.launchesPerYear || 0;
+      orbitalShare = simpleModeState.orbitShare || 0;
+    } else if (orbitSimState) {
+      // Use new orbit sim store (check both old flow format and new direct format)
+      if (orbitSimState.flow) {
+        // Old format with flow object
+        podsInOrbit = Math.floor(orbitSimState.flow.liveOrbitPods);
+        launchesPerYear = orbitSimState.flow.launchesPerYear;
+        orbitalShare = orbitSimState.orbitComputeShare || 0;
+      } else {
+        // New format with direct properties
+        podsInOrbit = Math.floor(orbitSimState.podsInOrbit || 0);
+        launchesPerYear = orbitSimState.launchesPerYear || 0;
+        orbitalShare = orbitSimState.orbitalShare || 0;
+      }
+    } else if (simState) {
+      // Fallback to old sandbox store
+      podsInOrbit = Math.floor(simState.podsInOrbit);
+      const orbitalComputeKw = getOrbitalComputeKw(
+        podsInOrbit,
+        simState.orbitalPodSpec,
+        simState.podDegradationFactor
+      );
+      orbitalShare = simState.targetComputeKw > 0 
+        ? (orbitalComputeKw / simState.targetComputeKw) 
+        : 0;
+      
+      // Calculate launchesNeeded with reliability
+      const podsPerLaunchCapacity = useSandboxStore.getState().podsPerLaunchCapacity || 1;
+      const launchReliability = useSandboxStore.getState().launchReliability || 0.95;
+      const rawLaunchesNeeded = podsInOrbit > 0 ? Math.ceil(podsInOrbit / podsPerLaunchCapacity) : 0;
+      const effectiveLaunchesNeeded = launchReliability > 0 ? rawLaunchesNeeded / launchReliability : rawLaunchesNeeded;
+      launchesPerYear = Math.ceil(effectiveLaunchesNeeded);
+    } else {
+      return; // No state available
+    }
+    
+    // Detect significant changes - primarily based on launchesPerYear increase
+    const podsDelta = podsInOrbit - lastPodsInOrbitRef.current;
+    const shareDelta = Math.abs(orbitalShare - lastOrbitalShareRef.current);
+    const launchesDelta = launchesPerYear - lastLaunchesNeededRef.current;
+    
+    // On first load, if there are pods already, spawn a few launches to show the system
+    const isFirstLoad = lastPodsInOrbitRef.current === -1;
+    const shouldSpawnInitial = !initialSpawnDoneRef.current && podsInOrbit > 0;
+    
+    // Helper function to spawn launches
+    const spawnLaunches = (numLaunches: number) => {
+      for (let i = 0; i < numLaunches && activeLaunchesRef.current.length < 3; i++) { // Reduced from 20 to 3
+        // Pick random launch site
+        const launchSite = LAUNCH_SITES[Math.floor(Math.random() * LAUNCH_SITES.length)];
+        
+        // Pick random target point along orbit ring (sample from deployed satellites or use default)
+        let targetLat = 0;
+        let targetLng = 0;
+        
+        const deployedUnits = getDeployedUnits();
+        if (deployedUnits.length > 0) {
+          // Sample from deployed unit satellites
+          const randomUnit = deployedUnits[Math.floor(Math.random() * deployedUnits.length)];
+          if (randomUnit.type === "leo_pod") {
+            // Use LEO orbit altitude ~550km, random position
+            const altitude = 550;
+            const inclination = 53;
+            const meanAnomaly = Math.random() * 360;
+            const lonAscNode = Math.random() * 360;
+            const inclinationRad = inclination * Math.PI / 180;
+            const meanAnomalyRad = meanAnomaly * Math.PI / 180;
+            const lonAscNodeRad = lonAscNode * Math.PI / 180;
+            
+            targetLat = Math.asin(Math.sin(meanAnomalyRad) * Math.sin(inclinationRad)) * 180 / Math.PI;
+            const argLat = Math.atan2(
+              Math.tan(meanAnomalyRad) * Math.cos(inclinationRad),
+              Math.cos(meanAnomalyRad)
+            );
+            targetLng = (lonAscNode + argLat * 180 / Math.PI) % 360;
+            if (targetLng > 180) targetLng -= 360;
+          } else {
+            // Default to random point
+            targetLat = (Math.random() - 0.5) * 60; // -30 to +30 degrees
+            targetLng = Math.random() * 360 - 180;
+          }
+        } else {
+          // No deployed units, use random point
+          targetLat = (Math.random() - 0.5) * 60;
+          targetLng = Math.random() * 360 - 180;
+        }
+        
+        const launch: LaunchEvent = {
+          id: `launch_${Date.now()}_${i}`,
+          startLat: launchSite.lat,
+          startLng: launchSite.lng,
+          targetLat,
+          targetLng,
+          t: 0,
+          durationMs: 3000 + Math.random() * 500, // 3000-3500ms (3-3.5 seconds - faster, snappier)
+          startTime: Date.now(),
+        };
+        
+        activeLaunchesRef.current.push(launch);
+      }
+    };
+    
+    // Listen for mission changes or control changes - ONLY way to spawn launches
+    const handleMissionChange = (event?: CustomEvent) => {
+      // Only spawn launches when explicitly triggered via controls-changed event
+      // Check if event has detail with podsDelta (from deploy button)
+      const podsDelta = event?.detail?.podsDelta || 0;
+      if (podsDelta > 0 && activeLaunchesRef.current.length < 3) {
+        // Spawn launches based on podsDelta, capped at 3
+        const numLaunches = Math.min(3, Math.max(1, Math.ceil(podsDelta / 2)));
+        spawnLaunches(numLaunches);
+        lastLaunchSpawnTimeRef.current = Date.now();
+      }
+    };
+    
+    window.addEventListener('mission-completed', handleMissionChange);
+    window.addEventListener('controls-changed', handleMissionChange);
+    
+    // ONLY spawn launches when explicitly triggered via controls-changed event
+    // Do NOT spawn automatically based on state changes
+    // The handleMissionChange function will be called when controls-changed event fires
+    
+    lastPodsInOrbitRef.current = podsInOrbit;
+    lastOrbitalShareRef.current = orbitalShare;
+    lastLaunchesNeededRef.current = launchesPerYear;
+    
+    return () => {
+      window.removeEventListener('mission-completed', handleMissionChange);
+      window.removeEventListener('controls-changed', handleMissionChange);
+    };
+  }, [simState, getDeployedUnits]);
+
+  // Render launch site markers
+  useEffect(() => {
+    const viewer = actualViewerRef.current || getGlobalViewer();
+    if (!viewer || viewer.isDestroyed()) return;
+    
+    const entities = viewer.entities;
+    
+    // Remove old launch site markers
+    LAUNCH_SITES.forEach((site, idx) => {
+      const markerId = `launch_site_${idx}`;
+      const existing = entities.getById(markerId);
+      if (existing) entities.remove(existing);
+    });
+    
+    // Add visible launch site markers
+    LAUNCH_SITES.forEach((site, idx) => {
+      const markerId = `launch_site_${idx}`;
+      entities.add({
+        id: markerId,
+        position: Cesium.Cartesian3.fromDegrees(site.lng, site.lat, 0),
+        point: {
+          pixelSize: 20,
+          color: Cesium.Color.fromCssColorString("#ff6b35").withAlpha(1.0),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 3,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.0, 8.0e7, 0.5),
+        },
+        label: {
+          text: site.name,
+          font: "14px 'JetBrains Mono', monospace",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -30),
+        },
+      });
+    });
+    
+    // Launch site markers rendered
+  }, [actualViewerRef]);
+
+  // Launch animation loop - start immediately and keep running
+  useEffect(() => {
+    // Only start one animation loop
+    if (animationLoopStartedRef.current) {
+      return;
+    }
+    
+      const startLoop = () => {
+      const viewer = actualViewerRef.current || getGlobalViewer();
+      if (!viewer || viewer.isDestroyed()) {
+        // Retry after a short delay
+        trackedSetTimeout(startLoop, 100);
+        return;
+      }
+      
+      animationLoopStartedRef.current = true;
+    
+    const animate = () => {
+      // Check if viewer is still valid before accessing entities
+      if (!viewer || viewer.isDestroyed()) {
+        animationLoopStartedRef.current = false;
+        return;
+      }
+      
+      // Check if cesiumWidget exists (viewer is fully initialized)
+      const cesiumWidget = (viewer as any)._cesiumWidget;
+      if (!cesiumWidget) {
+        // Viewer not fully initialized yet, skip this frame
+        launchAnimationFrameRef.current = trackedRequestAnimationFrame(animate);
+        return;
+      }
+      
+      const now = Date.now();
+      let entities;
+      try {
+        entities = viewer.entities;
+      } catch (e) {
+        // Viewer entities not accessible, stop animation
+        animationLoopStartedRef.current = false;
+        return;
+      }
+      
+      // Update launch positions and remove completed ones
+      activeLaunchesRef.current = activeLaunchesRef.current.filter((launch) => {
+        const elapsed = now - launch.startTime;
+        launch.t = Math.min(1, elapsed / launch.durationMs);
+        
+        if (launch.t >= 1) {
+          // Remove launch entities immediately to prevent memory buildup
+          const arcEntity = entities.getById(`launch_arc_${launch.id}`);
+          const podEntity = entities.getById(`launch_pod_${launch.id}`);
+          // REMOVED: Static dot removal - cosmetic traffic removed
+          if (arcEntity) entities.remove(arcEntity);
+          if (podEntity) entities.remove(podEntity);
+          dotEntities.forEach(dot => entities.remove(dot));
+          return false; // Remove from array
+        }
+        
+        // Calculate Bezier curve points
+        const earthRadius = 6371000; // meters
+        const startPos = Cesium.Cartesian3.fromDegrees(launch.startLng, launch.startLat, 0);
+        const targetPos = Cesium.Cartesian3.fromDegrees(launch.targetLng, launch.targetLat, 550000); // 550km altitude
+        
+        // P0 = ground point at launch site
+        const P0 = startPos;
+        
+        // P1 = slightly above ground (20% above surface)
+        const startNormal = Cesium.Cartesian3.normalize(startPos, new Cesium.Cartesian3());
+        const P1 = Cesium.Cartesian3.multiplyByScalar(
+          startNormal,
+          earthRadius * 1.2,
+          new Cesium.Cartesian3()
+        );
+        
+        // P2 = high point (60% above surface, midway)
+        const targetNormal = Cesium.Cartesian3.normalize(targetPos, new Cesium.Cartesian3());
+        const midNormal = Cesium.Cartesian3.normalize(
+          Cesium.Cartesian3.add(startNormal, targetNormal, new Cesium.Cartesian3()),
+          new Cesium.Cartesian3()
+        );
+        const P2 = Cesium.Cartesian3.multiplyByScalar(
+          midNormal,
+          earthRadius * 1.6,
+          new Cesium.Cartesian3()
+        );
+        
+        // P3 = target point at orbit altitude
+        const P3 = targetPos;
+        
+        // Cubic Bezier interpolation: B(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
+        const t = launch.t;
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const mt3 = mt2 * mt;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        
+        const B = new Cesium.Cartesian3();
+        Cesium.Cartesian3.multiplyByScalar(P0, mt3, B);
+        Cesium.Cartesian3.add(
+          B,
+          Cesium.Cartesian3.multiplyByScalar(P1, 3 * mt2 * t, new Cesium.Cartesian3()),
+          B
+        );
+        Cesium.Cartesian3.add(
+          B,
+          Cesium.Cartesian3.multiplyByScalar(P2, 3 * mt * t2, new Cesium.Cartesian3()),
+          B
+        );
+        Cesium.Cartesian3.add(
+          B,
+          Cesium.Cartesian3.multiplyByScalar(P3, t3, new Cesium.Cartesian3()),
+          B
+        );
+        
+        // Update or create arc polyline
+        const arcId = `launch_arc_${launch.id}`;
+        let arcEntity = entities.getById(arcId);
+        
+        // Always update arc positions based on current progress
+        const numSegments = 50; // More segments for smoother curve
+        const arcPositions: Cesium.Cartesian3[] = [];
+        // Always start with P0
+        arcPositions.push(P0.clone());
+        
+        // Draw arc from start to current position (B)
+        // Ensure we have enough segments even at low t values
+        const minSegments = Math.max(10, Math.ceil(numSegments * Math.max(t, 0.1)));
+        for (let i = 1; i <= minSegments; i++) {
+          const segT = (i / minSegments) * t; // Scale by current progress
+          if (segT > t) break; // Don't go beyond current progress
+          
+          const segMt = 1 - segT;
+          const segMt2 = segMt * segMt;
+          const segMt3 = segMt2 * segMt;
+          const segT2 = segT * segT;
+          const segT3 = segT2 * segT;
+          
+          const segB = new Cesium.Cartesian3();
+          Cesium.Cartesian3.multiplyByScalar(P0, segMt3, segB);
+          Cesium.Cartesian3.add(
+            segB,
+            Cesium.Cartesian3.multiplyByScalar(P1, 3 * segMt2 * segT, new Cesium.Cartesian3()),
+            segB
+          );
+          Cesium.Cartesian3.add(
+            segB,
+            Cesium.Cartesian3.multiplyByScalar(P2, 3 * segMt * segT2, new Cesium.Cartesian3()),
+            segB
+          );
+          Cesium.Cartesian3.add(
+            segB,
+            Cesium.Cartesian3.multiplyByScalar(P3, segT3, new Cesium.Cartesian3()),
+            segB
+          );
+          arcPositions.push(segB);
+        }
+        
+        // Always end with current position B
+        if (arcPositions.length === 0 || !Cesium.Cartesian3.equals(arcPositions[arcPositions.length - 1], B)) {
+          arcPositions.push(B.clone());
+        }
+        
+        // Ensure we have at least 2 points for the polyline to render
+        if (arcPositions.length < 2) {
+          arcPositions.push(B.clone());
+        }
+        
+        // Create/update the main trail polyline - use PolylineGlowMaterialProperty for visibility
+        if (!arcEntity && arcPositions.length >= 2) {
+          // Create polyline with bright glow material
+          arcEntity = entities.add({
+            id: arcId,
+            polyline: {
+              positions: arcPositions,
+              width: 25, // Very thick trail
+              material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 5.0, // Very strong glow
+                color: Cesium.Color.fromCssColorString("#00ffff").withAlpha(1.0), // Bright cyan
+                taperPower: 0.1, // Minimal taper
+              }),
+              clampToGround: false,
+              arcType: Cesium.ArcType.NONE,
+              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, Number.MAX_VALUE),
+              show: true,
+            },
+          });
+          // Track the arc
+          launchArcsRef.current.push(arcEntity);
+          viewer.scene.requestRender();
+        } else if (arcEntity && arcEntity.polyline && arcPositions.length >= 2) {
+          // Update arc positions
+          arcEntity.polyline.positions = new Cesium.ConstantProperty(arcPositions);
+          arcEntity.polyline.width = new Cesium.ConstantProperty(25);
+          // Dynamic glow that pulses as rocket moves
+          const pulseGlow = 4.5 + 0.5 * Math.sin(t * Math.PI * 4);
+          arcEntity.polyline.material = new Cesium.PolylineGlowMaterialProperty({
+            glowPower: pulseGlow,
+            color: Cesium.Color.fromCssColorString("#00ffff").withAlpha(1.0),
+            taperPower: 0.1,
+          });
+        }
+        
+        // Update or create pod icon
+        const podId = `launch_pod_${launch.id}`;
+        let podEntity = entities.getById(podId);
+        
+        // Calculate pulsing effect based on progress
+        const pulsePhase = t * Math.PI * 4; // Faster pulse
+        const pulseSize = 20 + 6 * Math.sin(pulsePhase); // More dramatic size change
+        const pulseGlow = 0.8 + 0.3 * Math.sin(pulsePhase + Math.PI / 2); // Offset glow pulse
+        
+        if (!podEntity) {
+          // Create rocket as a billboard with an image or use a more visible point
+          podEntity = entities.add({
+            id: podId,
+            position: B,
+            // Use both point and billboard for better visibility
+            point: {
+              pixelSize: 12, // Smaller, more realistic size
+              color: Cesium.Color.fromCssColorString("#ff6b35").withAlpha(1.0), // Orange/red rocket color
+              outlineColor: Cesium.Color.WHITE.withAlpha(1.0), // Bright white outline
+              outlineWidth: 3, // Thick outline
+              heightReference: Cesium.HeightReference.NONE,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY, // Always on top
+              scaleByDistance: new Cesium.NearFarScalar(1.5e7, 1.2, 8.0e7, 0.8), // Reasonable size
+              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, Number.MAX_VALUE), // Always visible
+            },
+            // Add a small trail particle effect using a second point
+            // This creates a "rocket with exhaust" effect
+            billboard: {
+              image: undefined, // We'll use point instead
+              scale: 1.0,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            },
+            // Make pod clickable with description
+            description: `Launch Pod ${launch.id}\nClick to view launch details`,
+          });
+          // Mark as launch pod for click detection
+          (podEntity as any)._entityType = "launch_pod";
+          (podEntity as any)._launchId = launch.id;
+          // Pod entity created
+        } else {
+          podEntity.position = new Cesium.ConstantPositionProperty(B);
+          // Update rocket position and make it more visible
+          const pulsePhase = t * Math.PI * 4; // Faster pulse
+          const pulseSize = 12 + 3 * Math.sin(pulsePhase); // Subtle pulsing (12-15px)
+          
+          // Fade out near end
+          if (launch.t > 0.9) {
+            const fadeAlpha = Math.max(0.7, (1 - launch.t) * 10);
+            podEntity.point!.color = new Cesium.ConstantProperty(
+              Cesium.Color.fromCssColorString("#ff6b35").withAlpha(fadeAlpha) // Orange/red rocket
+            );
+            podEntity.point!.pixelSize = new Cesium.ConstantProperty(pulseSize * 0.8);
+            podEntity.point!.outlineColor = new Cesium.ConstantProperty(
+              Cesium.Color.WHITE.withAlpha(fadeAlpha)
+            );
+          } else {
+            podEntity.point!.color = new Cesium.ConstantProperty(
+              Cesium.Color.fromCssColorString("#ff6b35").withAlpha(1.0) // Orange/red rocket
+            );
+            podEntity.point!.pixelSize = new Cesium.ConstantProperty(pulseSize); // Subtle pulsing
+            podEntity.point!.outlineColor = new Cesium.ConstantProperty(
+              Cesium.Color.WHITE.withAlpha(1.0)
+            );
+            podEntity.point!.outlineWidth = new Cesium.ConstantProperty(3); // Thick outline
+          }
+        }
+        
+        // REMOVED: Static orbit dots - these were cosmetic and not tied to real state
+        
+        return true; // Keep in array
+      });
+      
+      launchAnimationFrameRef.current = trackedRequestAnimationFrame(animate);
+    };
+    
+      // Start the animation loop
+      launchAnimationFrameRef.current = trackedRequestAnimationFrame(animate);
+      // Animation loop running
+    };
+    
+    // Try to start immediately
+    startLoop();
+    
+    return () => {
+      if (launchAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(launchAnimationFrameRef.current);
+        launchAnimationFrameRef.current = null;
+      }
+      animationLoopStartedRef.current = false;
+    };
+  }, [actualViewerRef]);
 
   // Handle entity selection and zoom
   useEffect(() => {
@@ -1276,7 +2511,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       const rawId: string =
         typeof entity.id === "string" ? entity.id : (entity.id?.id as string);
 
-      console.log("[SandboxGlobe] Clicked entity:", rawId, entity, "entityType:", entity._entityType);
+        // Clicked entity
 
       // Check entity type first (like CesiumGlobe does)
       if (entity._entityType === "ground") {
@@ -1285,7 +2520,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           const deployedUnits = getDeployedUnits();
           const unit = deployedUnits.find(u => u.id === entity._deployedUnitId);
           if (unit) {
-            console.log("[SandboxGlobe] Clicked GEO hub:", unit.name);
+            // Clicked GEO hub
             setSelectedEntity({ type: "ground", id: rawId, unitId: unit.id } as any);
             const position = entity.position?.getValue(Cesium.JulianDate.now());
             if (position) {
@@ -1309,7 +2544,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         // Regular ground site
         const groundSite = state.groundSites.find((s) => s.id === rawId);
         if (groundSite) {
-          console.log("[SandboxGlobe] Zooming to ground site:", groundSite.id);
+          // Zooming to ground site
           setSelectedEntity({ type: "ground", id: groundSite.id });
           isFlying = true;
           const position = Cesium.Cartesian3.fromDegrees(groundSite.lon, groundSite.lat, 0);
@@ -1317,6 +2552,28 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           viewer.camera.flyToBoundingSphere(boundingSphere, {
             duration: 2.0,
             offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 50000), // Birds-eye view: -90 degrees pitch
+            complete: () => {
+              isFlying = false;
+            },
+            cancel: () => {
+              isFlying = false;
+            },
+          });
+        }
+        return;
+      }
+
+      // Check if this is a launch pod
+      if (entity._entityType === "launch_pod") {
+        const launchId = entity._launchId || rawId.replace(/^launch_pod_/, "");
+        setSelectedEntity({ type: "launch_pod", id: launchId } as any);
+        const position = entity.position?.getValue(Cesium.JulianDate.now());
+        if (position) {
+          isFlying = true;
+          const boundingSphere = new Cesium.BoundingSphere(position, 50000);
+          viewer.camera.flyToBoundingSphere(boundingSphere, {
+            duration: 2.0,
+            offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 50000),
             complete: () => {
               isFlying = false;
             },
@@ -1336,7 +2593,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           const deployedUnits = getDeployedUnits();
           const unit = deployedUnits.find(u => u.id === entity._deployedUnitId);
           if (unit) {
-            console.log("[SandboxGlobe] Clicked deployed unit satellite:", unit.name);
+            // Clicked deployed unit satellite
             setSelectedEntity({ type: "satellite", id: satId, unitId: unit.id } as any);
             const position = entity.position?.getValue(Cesium.JulianDate.now());
             if (position) {
@@ -1374,7 +2631,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
         }
         
         if (satellite) {
-          console.log("[SandboxGlobe] Found satellite:", satellite.id, "Setting selectedEntity");
+          // Found satellite, setting selectedEntity
           setSelectedEntity({ type: "satellite", id: satellite.id });
           isFlying = true;
           const position = Cesium.Cartesian3.fromDegrees(satellite.lon, satellite.lat, satellite.alt_km * 1000);
@@ -1402,7 +2659,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
       const satellite = state.satellites.find((s) => s.id === rawId || s.id === rawId.replace("sat_", ""));
 
       if (groundSite) {
-        console.log("[SandboxGlobe] Fallback: Zooming to ground site:", groundSite.id);
+        // Fallback: Zooming to ground site
         setSelectedEntity({ type: "ground", id: groundSite.id });
         isFlying = true;
         const position = Cesium.Cartesian3.fromDegrees(groundSite.lon, groundSite.lat, 0);
@@ -1418,7 +2675,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           },
         });
       } else if (satellite) {
-        console.log("[SandboxGlobe] Fallback: Zooming to satellite:", satellite.id);
+        // Fallback: Zooming to satellite
         setSelectedEntity({ type: "satellite", id: satellite.id });
         isFlying = true;
         const position = Cesium.Cartesian3.fromDegrees(satellite.lon, satellite.lat, satellite.alt_km * 1000);
@@ -1434,7 +2691,7 @@ export default function SandboxGlobe({ viewerRef }: { viewerRef?: React.MutableR
           },
         });
       } else {
-        console.log("[SandboxGlobe] No matching entity found for:", rawId);
+        // No matching entity found
         setSelectedEntity(null);
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);

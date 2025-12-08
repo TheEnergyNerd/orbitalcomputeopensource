@@ -18,9 +18,11 @@ export function useSimPolling() {
       try {
         const response = await axios.get<SimState>(`${API_BASE}/state`, {
           timeout: 180000, // 180 second timeout for large responses
+          validateStatus: () => true, // Don't throw on any status code
           // Add signal for cancellation if component unmounts
         });
-        if (response.data && response.data.metrics) {
+        // Check if response is valid (200 status) and has expected structure
+        if (response.status === 200 && response.data && response.data.metrics) {
           // Set state first, then loading to false
           setState(response.data);
           setError(null);
@@ -42,11 +44,22 @@ export function useSimPolling() {
           } catch (e) {
             // Silently handle simulation step errors
           }
-        } else {
-          setError("Invalid state structure");
+        } else if (response.status >= 400 || response.status === 0) {
+          // Backend error or not available - silently handle, don't set error
           retryCount++;
           if (retryCount >= MAX_RETRIES) {
+            setError(null); // Clear any previous errors
             setLoading(false);
+            return; // Stop polling
+          }
+        } else {
+          // Invalid structure but not an error status - backend might be returning something unexpected
+          // Silently handle, don't show error to user
+          retryCount++;
+          if (retryCount >= MAX_RETRIES) {
+            setError(null);
+            setLoading(false);
+            return; // Stop polling
           }
         }
       } catch (error: any) {
@@ -59,25 +72,19 @@ export function useSimPolling() {
           }
         } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error') || error.code === 'ECONNREFUSED') {
           // Network error - backend might not be running
-          // Only show error after a few retries to avoid flashing error messages
+          // New OrbitSim doesn't need backend, so stop polling gracefully
           if (retryCount >= 3) {
-            setError("Cannot connect to backend. Please ensure the server is running.");
-          }
-          if (retryCount >= MAX_RETRIES) {
+            setError(null); // Don't show error - new OrbitSim is self-contained
             setLoading(false);
+            return; // Stop polling
           }
         } else if (error.response?.status === 500) {
-          // Backend error - could be CORS or server error
+          // Backend error - new OrbitSim doesn't need backend, so stop polling gracefully
           if (retryCount >= 3) {
-            const isCorsError = error.message?.includes('CORS') || error.message?.includes('Access-Control-Allow-Origin');
-            if (isCorsError) {
-              setError("CORS error: Backend is not configured to allow requests from this origin.");
-            } else {
-              setError("Backend server error (500). Check backend logs for details.");
-            }
-          }
-          if (retryCount >= MAX_RETRIES) {
+            // Don't show error - new OrbitSim is self-contained
+            setError(null);
             setLoading(false);
+            return; // Stop polling
           }
         } else if (error.code === 'ECONNABORTED' || error.code === 5 || error.message?.includes('timeout')) {
           // Error code 5 is ECONNABORTED (timeout)
