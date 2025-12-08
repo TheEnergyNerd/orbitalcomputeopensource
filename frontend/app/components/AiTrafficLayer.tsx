@@ -44,8 +44,8 @@ export default function AiTrafficLayer({
 }: AiTrafficLayerProps) {
   const particlesRef = useRef<Array<{
     id: string;
-    origin: { lat: number; lon: number };
-    dest: { lat: number; lon: number };
+    origin: { name: string; lat: number; lon: number };
+    dest: { name: string; lat: number; lon: number };
     isOrbit: boolean;
     progress: number;
     element: SVGLineElement | null;
