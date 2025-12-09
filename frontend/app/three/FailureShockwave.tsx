@@ -16,41 +16,9 @@ interface Shockwave {
 }
 
 export function FailureShockwave() {
-  const shockwavesRef = useRef<Map<string, Shockwave>>(new Map());
-  const lastEventsHash = useRef<string>("");
-
-  // Detect failure events
-  useEffect(() => {
-    const unsubscribe = useSimStore.subscribe((state) => {
-      const events = state.state?.events || [];
-      const eventsHash = events.map(e => `${e.type}-${e.timestamp}`).join(",");
-      
-      if (eventsHash === lastEventsHash.current) return;
-      lastEventsHash.current = eventsHash;
-
-      // Find failure events
-      const failures = events.filter(e => 
-        e.type === "failure" || e.type === "satellite_failure" || e.type === "system_failure"
-      );
-
-      failures.forEach((event) => {
-        // Get position from event (or use default)
-        const position: [number, number, number] = event.position || [0, 1.1, 0];
-        const shell: 1 | 2 | 3 = (event.shell as 1 | 2 | 3) || 1;
-
-        shockwavesRef.current.set(`shockwave_${event.timestamp}`, {
-          id: `shockwave_${event.timestamp}`,
-          position: position,
-          radius: 0.05,
-          opacity: 1.0,
-          lifetime: 3000, // 3 seconds
-          shell: shell,
-        });
-      });
-    });
-
-    return () => unsubscribe();
-  }, []);
+  // NOTE: SimState.events is string[], not structured event objects
+  // This component is stubbed out until events are restructured
+  return null;
 
   // Get simulation time state - use separate selectors to avoid infinite loops
   const simPaused = useOrbitSim((s) => s.simPaused);
