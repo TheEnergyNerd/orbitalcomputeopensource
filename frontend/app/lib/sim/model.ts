@@ -2,7 +2,7 @@
  * Core data model for Factorio-style production chain simulation
  */
 
-export type ResourceId = 'silicon' | 'steel' | 'chips' | 'computeUnits' | 'pods' | 'launchOpsResource' | 'launches';
+export type ResourceId = 'silicon' | 'steel' | 'chips' | 'racks' | 'computeUnits' | 'pods' | 'methane' | 'lox' | 'fuel' | 'launchOpsResource' | 'launches';
 
 export interface ResourceState {
   id: ResourceId;
