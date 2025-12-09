@@ -1,6 +1,6 @@
 "use client";
 
-import { useOrbitSim } from "../state/orbitStore";
+import { useOrbitSim, type Satellite } from "../state/orbitStore";
 import { Vector3 } from "three";
 
 /**

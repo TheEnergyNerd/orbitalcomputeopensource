@@ -89,23 +89,24 @@ export function ClickableMarkers() {
       const clickRay = raycaster.current.ray;
       
       // Launch sites (from LaunchSites component - regular meshes)
-      const launchSites: Array<{ id: string; lat: number; lon: number; name: string }> = [
+      type LaunchSite = { id: string; lat: number; lon: number; name: string };
+      const launchSites: LaunchSite[] = [
         { id: "capecanaveral", lat: 28.5623, lon: -80.5774, name: "Cape Canaveral" },
         { id: "vandenberg", lat: 34.7420, lon: -120.5724, name: "Vandenberg" },
         { id: "bocachica", lat: 25.9971, lon: -97.1554, name: "Boca Chica" },
       ];
       
-      let closestLaunchSite: typeof launchSites[0] | null = null;
+      let closestLaunchSite: LaunchSite | null = null;
       let minLaunchDist = Infinity;
       const LAUNCH_SITE_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
       
-      launchSites.forEach((site) => {
+      for (const site of launchSites) {
         const [x, y, z] = latLonAltToXYZ(site.lat, site.lon, 0.002);
         const sitePos = new Vector3(x, y, z);
         const rayToSite = sitePos.clone().sub(clickRay.origin);
         const projectionLength = rayToSite.dot(clickRay.direction);
         
-        if (projectionLength < 0) return; // Behind camera
+        if (projectionLength < 0) continue; // Behind camera
         
         const closestPoint = clickRay.origin.clone().add(clickRay.direction.clone().multiplyScalar(projectionLength));
         const dist = closestPoint.distanceTo(sitePos);
@@ -114,11 +115,11 @@ export function ClickableMarkers() {
           minLaunchDist = dist;
           closestLaunchSite = site;
         }
-      });
+      }
       
-      if (closestLaunchSite) {
+      if (closestLaunchSite !== null) {
         console.log(`[ClickableMarkers] ✅ Clicked on launch site: ${closestLaunchSite.name}, distance=${minLaunchDist.toFixed(3)}`);
-        setSelectedEntity({ type: "launch_site", id: closestLaunchSite.id });
+        setSelectedEntity({ type: "ground", id: closestLaunchSite.id });
         event.stopPropagation();
         event.preventDefault();
         return;
@@ -128,17 +129,18 @@ export function ClickableMarkers() {
       const simState = useSimStore.getState().state;
       if (simState?.groundSites) {
         const dataCenters = simState.groundSites.filter(s => !s.type || s.type === "data_center");
-        let closestDataCenter: typeof dataCenters[0] | null = null;
+        type GroundSite = typeof simState.groundSites[0];
+        let closestDataCenter: GroundSite | null = null;
         let minDataCenterDist = Infinity;
         const DATA_CENTER_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
         
-        dataCenters.forEach((site) => {
+        for (const site of dataCenters) {
           const [x, y, z] = latLonAltToXYZ(site.lat, site.lon, 0);
           const sitePos = new Vector3(x, y, z);
           const rayToSite = sitePos.clone().sub(clickRay.origin);
           const projectionLength = rayToSite.dot(clickRay.direction);
           
-          if (projectionLength < 0) return; // Behind camera
+          if (projectionLength < 0) continue; // Behind camera
           
           const closestPoint = clickRay.origin.clone().add(clickRay.direction.clone().multiplyScalar(projectionLength));
           const dist = closestPoint.distanceTo(sitePos);
@@ -147,9 +149,9 @@ export function ClickableMarkers() {
             minDataCenterDist = dist;
             closestDataCenter = site;
           }
-        });
+        }
         
-        if (closestDataCenter) {
+        if (closestDataCenter !== null) {
           console.log(`[ClickableMarkers] ✅ Clicked on data center: ${closestDataCenter.id}, distance=${minDataCenterDist.toFixed(3)}`);
           setSelectedEntity({ type: "ground", id: closestDataCenter.id });
           event.stopPropagation();
@@ -172,7 +174,7 @@ export function ClickableMarkers() {
           // This is a launch site mesh with userData
           const siteId = object.userData.siteId;
           console.log(`[ClickableMarkers] ✅ Clicked on launch site mesh: ${siteId}`);
-          setSelectedEntity({ type: "launch_site", id: siteId });
+          setSelectedEntity({ type: "ground", id: siteId });
           event.stopPropagation();
           event.preventDefault();
           return;
@@ -181,10 +183,10 @@ export function ClickableMarkers() {
         // Check if it's an instanced mesh (satellites or ground sites)
         if (object.type === "InstancedMesh") {
           const instanceId = intersect.instanceId;
-          if (instanceId !== undefined) {
+          if (instanceId !== undefined && "getMatrixAt" in object) {
             // Get the position of this instance
             const matrix = new Matrix4();
-            object.getMatrixAt(instanceId, matrix);
+            (object as any).getMatrixAt(instanceId, matrix);
             const position = new Vector3();
             position.setFromMatrixPosition(matrix);
 
@@ -213,18 +215,24 @@ export function ClickableMarkers() {
               // Fallback to simStore if orbitStore doesn't have it
               if (!closestSat && simState?.satellites) {
                 const satellites = simState.satellites;
-                satellites.forEach((sat) => {
+                for (const sat of satellites) {
                   const [x, y, z] = latLonAltToXYZ(sat.lat, sat.lon, sat.alt_km);
                   const satPos = new Vector3(x, y, z);
                   const dist = position.distanceTo(satPos);
                   if (dist < minDist && dist < 0.08) {
                     minDist = dist;
-                    closestSat = sat;
+                    // Convert SimSatellite to Satellite for orbitStore
+                    const orbitSat: Satellite = {
+                      x, y, z,
+                      id: sat.id,
+                      shell: sat.alt_km >= 800 ? 3 : sat.alt_km >= 500 ? 2 : 1,
+                    };
+                    closestSat = orbitSat;
                   }
-                });
+                }
               }
               
-              if (closestSat) {
+              if (closestSat !== null) {
                 console.log(`[ClickableMarkers] ✅ Clicked on satellite: ${closestSat.id}, distance=${minDist.toFixed(3)}`);
                 setSelectedEntity({ type: "satellite", id: closestSat.id });
                 event.stopPropagation();
@@ -253,10 +261,11 @@ export function ClickableMarkers() {
             } else if (!isOrbital && simState?.groundSites) {
               // Find closest ground site (data center or launch site from GroundSites component)
               const groundSites = simState.groundSites;
-              let closestSite: typeof groundSites[0] | null = null;
+              type GroundSite = typeof groundSites[0];
+              let closestSite: GroundSite | null = null;
               let minDist = Infinity;
               
-              groundSites.forEach((site) => {
+              for (const site of groundSites) {
                 const [x, y, z] = latLonAltToXYZ(site.lat, site.lon, 0);
                 const sitePos = new Vector3(x, y, z);
                 const dist = position.distanceTo(sitePos);
@@ -265,12 +274,11 @@ export function ClickableMarkers() {
                   minDist = dist;
                   closestSite = site;
                 }
-              });
+              }
               
-              if (closestSite) {
-                const siteType = closestSite.type === "launch_site" ? "launch_site" : "ground";
-                console.log(`[ClickableMarkers] ✅ Clicked on ${siteType}: ${closestSite.id}, distance=${minDist.toFixed(3)}`);
-                setSelectedEntity({ type: siteType, id: closestSite.id });
+              if (closestSite !== null) {
+                console.log(`[ClickableMarkers] ✅ Clicked on ground site: ${closestSite.id}, distance=${minDist.toFixed(3)}`);
+                setSelectedEntity({ type: "ground", id: closestSite.id });
                 event.stopPropagation();
                 event.preventDefault();
                 return;
