@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { useThree } from "@react-three/fiber";
-import { Raycaster, Vector3, Matrix4 } from "three";
+import { Raycaster, Vector2, Vector3, Matrix4 } from "three";
 import { useSimStore } from "../store/simStore";
 import { useOrbitSim } from "../state/orbitStore";
 import { latLonAltToXYZ } from "../lib/three/coordinateUtils";
@@ -30,7 +30,7 @@ export function ClickableMarkers() {
       }
 
       const rect = gl.domElement.getBoundingClientRect();
-      const mouse = new Vector3();
+      const mouse = new Vector2();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
