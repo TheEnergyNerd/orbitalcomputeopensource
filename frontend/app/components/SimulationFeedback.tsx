@@ -94,12 +94,9 @@ export default function SimulationFeedback() {
     const coverage = calculateCoverage(orbitShare, orbitMode);
     const populationServed = calculatePopulationServed(orbitShare, orbitMode);
 
-    // Calculate factory metrics
-    const monthlyOpex = factory.facilities.reduce((sum, fac) => {
-      const cfg = FACILITY_BUILD_CONFIG[fac.type];
-      return sum + fac.lines * cfg.opexPerLinePerMonth;
-    }, 0);
-    const factoryCash = factory.inventory.cash ?? 0;
+    // Calculate factory metrics (simplified - factory model may vary)
+    const monthlyOpex = 0; // Factory OPEX calculation not available in current model
+    const factoryCash = 0; // Factory cash not tracked in current model
     const factoryPL = previousMetrics.factoryCash !== undefined 
       ? factoryCash - previousMetrics.factoryCash 
       : 0;
@@ -362,9 +359,9 @@ export default function SimulationFeedback() {
                     )}
                     {metric.label === "Factory P/L" && (
                       <div className={`text-[9px] sm:text-xs mt-0.5 sm:mt-1 ${
-                        (factory.inventory.cash ?? 0) >= 0 ? "text-green-400" : "text-red-400"
+                        "text-gray-400"
                       }`}>
-                        Cash: ${formatValue(factory.inventory.cash ?? 0, "$M")}
+                        Cash: N/A
                       </div>
                     )}
                   </div>
