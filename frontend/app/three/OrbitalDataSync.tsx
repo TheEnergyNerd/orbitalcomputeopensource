@@ -52,7 +52,6 @@ function generateTestSatellites(): SimSatellite[] {
       capacityMw: 0.003,
       nearestGatewayId: "test_gateway",
       latencyMs: 50 + Math.random() * 50,
-      orbitalState: orbitalState as any,
     });
   }
   
