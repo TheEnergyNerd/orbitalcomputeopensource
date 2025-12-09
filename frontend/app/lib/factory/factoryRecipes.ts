@@ -8,7 +8,7 @@ export type ResourceId = 'chips' | 'racks' | 'pods' | 'fuel' | 'orbitPods';
 export type ResourceInventory = Record<ResourceId, number>;
 
 // FactoryNodeId types differ between files - use local definition for recipes
-export type FactoryNodeId = 'chipFab' | 'rackLine' | 'podFactory' | 'fuelDepot' | 'launchComplex';
+export type RecipeFactoryNodeId = 'chipFab' | 'rackLine' | 'podFactory' | 'fuelDepot' | 'launchComplex';
 
 export interface Recipe {
   input: Partial<ResourceInventory>;
