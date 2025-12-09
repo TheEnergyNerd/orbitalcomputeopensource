@@ -460,7 +460,7 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
       // Check infra cap
       const newUsedInfra = state.factory.usedInfraPoints + delta;
       if (newUsedInfra > state.factory.maxInfraPoints) {
-        return false; // Can't exceed infra cap
+        return state; // Can't exceed infra cap - return state unchanged
       }
       
       // Update lines
@@ -477,6 +477,10 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
         },
       };
     });
+    // Check if update was successful (state changed)
+    const newState = get();
+    const wasSuccessful = newState.factory.lines[nodeId] === newLines;
+    return wasSuccessful;
   },
   toggleLaunchProvider: (providerId) => {
     set((state) => {
