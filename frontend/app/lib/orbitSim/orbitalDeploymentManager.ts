@@ -35,56 +35,6 @@ export function generateDeploymentForYear(year: number): DeploymentEvent[] {
   // deploymentSchedule.ts was removed - return empty array for now
   // This function needs to be reimplemented using simulation config if needed
   return [];
-  
-  const events: DeploymentEvent[] = [];
-  let satIndex = 0;
-  
-  // Distribute launches throughout the year
-  for (let launchNum = 0; launchNum < deployment.launches; launchNum++) {
-    const launchSite = LAUNCH_SITES[launchNum % LAUNCH_SITES.length];
-    const shell = assignSatelliteToShell(satIndex, deployment.newSats);
-    const altitude = getAltitudeForShell(shell);
-    
-    // Generate satellites for this launch
-    const satellites: Satellite[] = [];
-    for (let i = 0; i < deployment.satsPerLaunch; i++) {
-      const inclination = getRandomInclination();
-      const orbitalState = generateOrbitalState(altitude, inclination);
-      
-      // Spread satellites around orbit
-      orbitalState.theta += (i / deployment.satsPerLaunch) * 2 * Math.PI;
-      
-      // Calculate initial position
-      const [x, y, z] = calculateOrbitalPosition(
-        orbitalState.altitudeRadius,
-        orbitalState.inclination,
-        orbitalState.theta
-      );
-      
-      satellites.push({
-        x,
-        y,
-        z,
-        id: `year_${year}_launch_${launchNum}_sat_${i}`,
-        congestion: 0,
-        shell: shell.shell === "LEO-1" ? 1 : shell.shell === "LEO-2" ? 2 : 3,
-        orbitalState,
-      });
-      
-      satIndex++;
-    }
-    
-    events.push({
-      year,
-      launchId: `year_${year}_launch_${launchNum}`,
-      launchSite,
-      satsPerLaunch: deployment.satsPerLaunch,
-      targetShell: shell.shell,
-      satellites,
-    });
-  }
-  
-  return events;
 }
 
 /**
