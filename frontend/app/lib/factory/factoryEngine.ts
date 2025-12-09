@@ -471,9 +471,10 @@ export function runFactoryTick(
     }
   });
 
-  // Spawn and process random events
-  const { newEvents, updatedEvents } = spawnRandomEvents(withBuilds, days);
-  withBuilds.activeEvents = [...updatedEvents, ...newEvents];
+  // Spawn and process random events (disabled - spawnRandomEvents not implemented)
+  // const { newEvents, updatedEvents } = spawnRandomEvents(withBuilds, days);
+  // withBuilds.activeEvents = [...updatedEvents, ...newEvents];
+  withBuilds.activeEvents = withBuilds.activeEvents || [];
   
   // Apply event effects to facilities
   const withEvents = applyEventEffects(withBuilds, withBuilds.activeEvents);
