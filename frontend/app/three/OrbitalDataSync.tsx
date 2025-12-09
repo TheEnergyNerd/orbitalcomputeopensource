@@ -619,8 +619,7 @@ export function OrbitalDataSync() {
               capacityMw: 0.1, // 100kW = 0.1MW
               nearestGatewayId: "test_gateway",
               latencyMs: 50,
-              // Store satellite class (orbitalState not part of SimStore Satellite type)
-              satelliteClass: satelliteClass as any,
+              // satelliteClass and orbitalState not part of SimStore Satellite type
             });
             
             // Add to existing positions for next satellite

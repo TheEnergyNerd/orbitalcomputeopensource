@@ -20,7 +20,6 @@ import { Line } from "@react-three/drei";
 export function StaticOrbitalShells() {
   const { satellites } = useOrbitSim();
   const timeline = useSimulationStore((s) => s.timeline);
-  const timeline = useSimulationStore((s) => s.timeline);
   const selectedYearIndex = useSimulationStore((s) => s.selectedYearIndex);
   const currentYear = timeline[selectedYearIndex]?.year || 2025;
 
