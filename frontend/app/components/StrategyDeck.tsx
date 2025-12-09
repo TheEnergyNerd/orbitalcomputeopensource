@@ -7,8 +7,8 @@ import { calculateDeploymentEngine, type DeploymentState } from "../lib/deployme
 import { POD_TIERS, getAvailableTiers, type PodTierId } from "../lib/deployment/podTiers";
 import { LAUNCH_PROVIDERS, type LaunchProviderId } from "../lib/deployment/launchProviders";
 import { getDensityBand } from "../lib/deployment/orbitalDensity";
-import type { FacilityType } from "../lib/factory/factoryEngine";
-import { FACILITY_BUILD_CONFIG, LINE_POINTS } from "../lib/factory/factoryEngine";
+// import type { FacilityType } from "../lib/factory/factoryEngine"; // Not used - using FactoryNodeId instead
+// import { FACILITY_BUILD_CONFIG, LINE_POINTS } from "../lib/factory/factoryEngine"; // Not used
 
 export default function StrategyDeck() {
   const {
@@ -52,14 +52,8 @@ export default function StrategyDeck() {
     ground: false,
   });
 
-  // Error flash state for facility sliders
-  const [rejectionFlash, setRejectionFlash] = useState<Record<FacilityType, { reason: string; timestamp: number } | null>>({
-    chipFab: null,
-    rackLine: null,
-    podFactory: null,
-    fuelDepot: null,
-    launchComplex: null,
-  });
+  // Error flash state removed - not using facilities anymore, using factory.lines directly
+  // const [rejectionFlash, setRejectionFlash] = useState<Record<string, { reason: string; timestamp: number } | null>>({});
 
   // Auto-expand accordions during tutorial
   useEffect(() => {
@@ -82,13 +76,17 @@ export default function StrategyDeck() {
   };
 
   // Calculate deployment engine metrics
+  // FactoryState doesn't have podsReadyOnGround or launchSlots - use inventory.pods as proxy
+  const podsReadyOnGround = factory.inventory.pods ?? 0;
+  const launchSlotsAvailable = 0; // Not tracked in current FactoryState
+  
   const deploymentState: DeploymentState = {
     totalPodsBuilt,
     totalPodsInOrbit,
     totalPodsInQueue,
     activeLaunchProviders,
-    podsReadyOnGround: factory.podsReadyOnGround,
-    launchSlotsAvailable: factory.inventory.launchSlots,
+    podsReadyOnGround,
+    launchSlotsAvailable,
   };
 
   const engine = useMemo(() => calculateDeploymentEngine(deploymentState), [
@@ -96,8 +94,8 @@ export default function StrategyDeck() {
     totalPodsInOrbit,
     totalPodsInQueue,
     activeLaunchProviders,
-    factory.podsReadyOnGround,
-    factory.inventory.launchSlots,
+    podsReadyOnGround,
+    launchSlotsAvailable,
   ]);
 
   // Get available pod tiers
@@ -107,7 +105,7 @@ export default function StrategyDeck() {
   const budgetRemaining = activeMissionId ? 200 : null;
   const maxSatellites = activeMissionId ? 100 : null;
   const debrisRisk = densityMode === "Aggressive" ? "HIGH" : densityMode === "Optimized" ? "MED" : "LOW";
-  const energyCostMultiplier = 1.0;
+  const energyCostMultiplier: number = 1.0;
 
   return (
     <>
@@ -251,7 +249,13 @@ export default function StrategyDeck() {
                         type="checkbox"
                         checked={isActive}
                         disabled={!isUnlocked || (isActive && activeLaunchProviders.length === 1)}
-                        onChange={() => toggleLaunchProvider(providerId)}
+                        onChange={() => {
+                          // Convert LaunchProviderId from deployment format to launchQueue format
+                          const queueProviderId = providerId === "F9" ? "f9" : 
+                                                 providerId === "Starship" ? "starship" : 
+                                                 providerId === "SmallLift" ? "smallLift" : "f9";
+                          toggleLaunchProvider(queueProviderId as any);
+                        }}
                         className="accent-accent-blue"
                       />
                       <span className="flex-1">
@@ -450,46 +454,32 @@ export default function StrategyDeck() {
           <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
             <span>Infra</span>
             <span>
-              {factory.infrastructurePointsUsed} / {factory.infrastructurePointsCap} pts
+              {factory.usedInfraPoints} / {factory.maxInfraPoints} pts
             </span>
           </div>
-          <div className="flex justify-between text-[10px] text-gray-400">
-            <span>RD Points</span>
-            <span className="text-accent-green font-semibold">
-              {Math.round(factory.inventory.rdPoints ?? 0)}
-            </span>
-          </div>
-          {factory.podsReadyOnGround > 0 && (
+          {podsReadyOnGround > 0 && (
             <div className="flex justify-between text-[10px] text-gray-400">
               <span>Pods Ready</span>
               <span className="text-white font-semibold">
-                {factory.podsReadyOnGround}
-              </span>
-            </div>
-          )}
-          {factory.inventory.launchSlots > 0 && (
-            <div className="flex justify-between text-[10px] text-gray-400">
-              <span>Launch Slots</span>
-              <span className="text-white font-semibold">
-                {factory.inventory.launchSlots}
+                {podsReadyOnGround}
               </span>
             </div>
           )}
           <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div
               className={`h-1.5 rounded-full ${
-                factory.infrastructurePointsUsed >= factory.infrastructurePointsCap
+                factory.usedInfraPoints >= factory.maxInfraPoints
                   ? "bg-red-500"
-                  : factory.infrastructurePointsUsed / factory.infrastructurePointsCap > 0.85
+                  : factory.usedInfraPoints / factory.maxInfraPoints > 0.85
                   ? "bg-yellow-400"
                   : "bg-accent-blue"
               }`}
               style={{
                 width: `${
-                  factory.infrastructurePointsCap > 0
+                  factory.maxInfraPoints > 0
                     ? Math.min(
                         100,
-                        (factory.infrastructurePointsUsed / factory.infrastructurePointsCap) *
+                        (factory.usedInfraPoints / factory.maxInfraPoints) *
                           100
                       )
                     : 0
@@ -499,130 +489,30 @@ export default function StrategyDeck() {
           </div>
         </div>
         <div className="space-y-2">
-          {factory.facilities.map((fac) => {
-            const pendingAdds =
-              factory.buildQueue.filter(
-                (o) => o.facilityType === fac.type && o.deltaLines > 0
-              ).length || 0;
-            const pendingRemovals =
-              factory.buildQueue.filter(
-                (o) => o.facilityType === fac.type && o.deltaLines < 0
-              ).length || 0;
+          {/* Factory lines - using FactoryNodeId from factoryRecipes */}
+          {(Object.keys(factory.lines) as Array<keyof typeof factory.lines>).map((nodeId) => {
+            const lines = factory.lines[nodeId];
+            const utilization = factory.utilization[nodeId] ?? 0;
+            const nodeName = nodeId === 'chipFab' ? 'Chip Fab' :
+                           nodeId === 'rackLine' ? 'Rack Line' :
+                           nodeId === 'podFactory' ? 'Pod Factory' :
+                           nodeId === 'fuelDepot' ? 'Fuel Depot' :
+                           nodeId === 'launchComplex' ? 'Launch Complex' : nodeId;
+            
             return (
-              <div key={fac.type} className="flex flex-col gap-1 text-xs">
+              <div key={nodeId} className="flex flex-col gap-1 text-xs">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-300 capitalize">{fac.type}</span>
+                  <span className="text-gray-300 capitalize">{nodeName}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400">
-                      Lines:{" "}
-                      <span className="text-white font-semibold">
-                        {fac.lines}
-                      </span>
-                      {pendingAdds > 0 || pendingRemovals > 0 ? (
+                      Lines: <span className="text-white font-semibold">{lines}</span>
+                      {utilization > 0 && (
                         <span className="ml-1 text-[10px] text-gray-500">
-                          (build +{pendingAdds} / -{pendingRemovals})
+                          ({Math.round(utilization * 100)}% util)
                         </span>
-                      ) : null}{" "}
-                      · L{fac.level}
+                      )}
                     </span>
-                    <button
-                      onClick={() => {
-                        // upgradeFactoryFacility removed - not in SandboxStore
-                        const success = false;
-                        console.warn('upgradeFactoryFacility not available');
-                        if (!success) {
-                          // Show error flash
-                          setRejectionFlash(prev => ({
-                            ...prev,
-                            [fac.type]: { reason: "Not enough cash or RD points", timestamp: Date.now() },
-                          }));
-                          setTimeout(() => {
-                            setRejectionFlash(prev => ({
-                              ...prev,
-                              [fac.type]: null,
-                            }));
-                          }, 3000);
-                        }
-                      }}
-                      className="px-2 py-0.5 text-[10px] bg-accent-blue/20 hover:bg-accent-blue/30 border border-accent-blue/50 rounded transition"
-                      title={`Upgrade to L${fac.level + 1}: $${50 * (fac.level + 1)}M + ${10 * (fac.level + 1)} RD`}
-                    >
-                      ↑ L{fac.level + 1}
-                    </button>
                   </div>
-                </div>
-                <div className="relative">
-                  <input
-                    type="range"
-                    min={0}
-                    max={10}
-                    value={fac.desiredLines}
-                    onChange={(e) => {
-                      const requestedValue = Number(e.target.value);
-                      const currentFac = factory.facilities.find(f => f.type === fac.type);
-                      const previousDesired = currentFac?.desiredLines ?? fac.desiredLines;
-                      
-                      // Only check for rejections when increasing desiredLines
-                      if (requestedValue > previousDesired) {
-                        const cfg = FACILITY_BUILD_CONFIG[fac.type];
-                        const pointsPerLine = LINE_POINTS[fac.type];
-                        const cashNeeded = cfg.capexPerLine;
-                        const currentCash = factory.inventory.cash ?? 0;
-                        const currentInfraUsed = factory.infrastructurePointsUsed;
-                        const infraCap = factory.infrastructurePointsCap;
-                        
-                        // Calculate how many lines we're trying to add
-                        const pendingAdds = factory.buildQueue.filter(
-                          o => o.facilityType === fac.type && o.deltaLines > 0
-                        ).length;
-                        const pendingRemovals = factory.buildQueue.filter(
-                          o => o.facilityType === fac.type && o.deltaLines < 0
-                        ).length;
-                        const effectiveCurrentLines = fac.lines + pendingAdds - pendingRemovals;
-                        const linesToAdd = requestedValue - effectiveCurrentLines;
-                        
-                        if (linesToAdd > 0) {
-                          // Check constraints
-                          let rejectionReason: string | null = null;
-                          if (currentInfraUsed + pointsPerLine > infraCap) {
-                            rejectionReason = "Infrastructure cap reached";
-                          } else if (currentCash < cashNeeded) {
-                            rejectionReason = "Not enough cash";
-                          } else if (factory.buildQueue.length >= factory.maxConcurrentBuilds) {
-                            rejectionReason = "Build queue full";
-                          }
-                          
-                          if (rejectionReason) {
-                            // Show error flash immediately
-                            setRejectionFlash(prev => ({
-                              ...prev,
-                              [fac.type]: { reason: rejectionReason!, timestamp: Date.now() },
-                            }));
-                            // Clear flash after 3 seconds
-                            setTimeout(() => {
-                              setRejectionFlash(prev => ({
-                                ...prev,
-                                [fac.type]: null,
-                              }));
-                            }, 3000);
-                            // Still allow the update - reconcileDesiredLines will snap it back
-                          }
-                        }
-                      }
-                      
-                      // updateFactoryFacility removed - not in SandboxStore
-                      console.warn('updateFactoryFacility not available - factory facility updates disabled');
-                    }}
-                    className={`w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent-blue transition-all ${
-                      rejectionFlash[fac.type] ? "ring-2 ring-red-500 animate-pulse" : ""
-                    }`}
-                  />
-                  {rejectionFlash[fac.type] && (
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-[10px] px-2 py-1 rounded shadow-lg z-50 whitespace-nowrap pointer-events-none animate-fade-in">
-                      {rejectionFlash[fac.type]?.reason}
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-red-600"></div>
-                    </div>
-                  )}
                 </div>
               </div>
             );
@@ -643,29 +533,15 @@ export default function StrategyDeck() {
                 color = "text-yellow-400";
               }
               return (
-                <div key={b.stage} className="flex justify-between">
+                <div key={b.resource} className="flex justify-between">
                   <span className="capitalize">
-                    {b.stage}{" "}
+                    {b.resource}{" "}
                     <span className="text-[10px] text-gray-500">({label})</span>
                   </span>
                   <span className={color}>{utilPct.toFixed(0)}%</span>
                 </div>
               );
             })}
-          </div>
-        )}
-        {factory.activeEvents && factory.activeEvents.length > 0 && (
-          <div className="mt-3 text-xs space-y-1">
-            <div className="font-semibold text-red-400">Active Events</div>
-            {factory.activeEvents.map((event) => (
-              <div key={event.id} className="bg-red-900/20 border border-red-500/30 rounded px-2 py-1">
-                <div className="text-red-300 font-semibold text-[10px]">{event.label}</div>
-                <div className="text-gray-400 text-[9px]">{event.description}</div>
-                <div className="text-gray-500 text-[9px] mt-0.5">
-                  {Math.ceil(event.remainingDays)} days remaining
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

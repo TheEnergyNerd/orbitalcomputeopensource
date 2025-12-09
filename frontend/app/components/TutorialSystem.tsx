@@ -20,6 +20,7 @@ interface TutorialStepConfig {
   requiresDeploymentTab?: boolean; // Whether this step requires switching to deployment tab
   requiresOverviewTab?: boolean; // Whether this step requires switching to overview tab
   interactionTime?: number; // Time in ms to allow user interaction before auto-advancing
+  allowGlobeClicks?: boolean; // Allow clicks on globe elements during this step
 }
 
 const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {

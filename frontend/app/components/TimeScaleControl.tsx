@@ -20,7 +20,10 @@ export default function TimeScaleControl() {
         {options.map((option) => (
           <button
             key={option.value}
-            onClick={() => setTimeScale(option.value)}
+            onClick={() => {
+              // setTimeScale removed - time scale control disabled
+              console.warn('setTimeScale not available');
+            }}
             className={`px-3 py-1 text-xs rounded transition ${
               simState.timeScale === option.value
                 ? "bg-accent-blue text-white"

@@ -29,7 +29,7 @@ export default function StrategyDeckNew() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Calculate metrics for display
-  const orbitPods = Math.floor(factory.inventory.orbitPods ?? 0); // Pods must be whole numbers
+  const orbitPods = Math.floor(factory.inventory.orbitPods ?? 0); // orbitPods is a valid ResourceId
   const orbitalCapacityMW = orbitPods * 0.15; // 150kW per pod
   const BASE_GROUND_CAPACITY_GW = 42;
   const baseGroundCapacityMW = BASE_GROUND_CAPACITY_GW * 1000;
