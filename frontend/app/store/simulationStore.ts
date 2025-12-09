@@ -176,7 +176,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
             };
             
             // Add directly to units with deployed status (bypass queue)
-            useOrbitalUnitsStore.setState((storeState) => ({
+            useOrbitalUnitsStore.setState((storeState: any) => ({
               units: [...storeState.units, unit],
             }));
           }
