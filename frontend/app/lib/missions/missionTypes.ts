@@ -154,7 +154,7 @@ export function checkMissionProgress(
 
     if (condition.operator === 'lte') {
       // For "less than or equal", we want value <= threshold
-      conditionMet = value <= condition.threshold;
+      conditionMet = (value ?? 0) <= condition.threshold;
       
       // Calculate progress: how close are we to the threshold?
       if (condition.threshold < 0) {
