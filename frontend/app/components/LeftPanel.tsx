@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useSandboxStore } from "../store/sandboxStore";
 import MissionPanel from "./MissionPanel";
 import FactorySystemsPanel from "./FactorySystemsPanel";
-import { useFactoryNarrator } from "./factory/FactoryNarrator";
 
 type Mode = "factory" | "orbit" | "missions";
 

@@ -6,10 +6,9 @@ import type { MachineId } from "../lib/sim/model";
 
 const MACHINE_ICONS: Record<MachineId, string> = {
   chipFab: '🧠',
-  rackLine: '📦',
+  computeLine: '📦',
   podFactory: '🔧',
-  fuelPlant: '⛽',
-  launchComplex: '🚀',
+  launchOps: '🚀',
 };
 
 export default function FactoryStrip() {

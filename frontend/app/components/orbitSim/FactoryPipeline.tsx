@@ -76,7 +76,7 @@ export default function FactoryPipeline({
                     color={stageDef.color}
                     speed={normalizedSpeed}
                     jammed={isNextBottleneck}
-                    deployPulseKey={deployPulse}
+                    deployPulseKey={deployPulse ?? null}
                   />
                 </div>
               )}

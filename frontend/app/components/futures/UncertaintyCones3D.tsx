@@ -173,9 +173,9 @@ export default function UncertaintyCones3D({
         mesh.rotateX(tilt);
       };
       
-      // Update billboard on camera change
-      camera.addEventListener('change', updateBillboard);
+      // Update billboard initially
       updateBillboard();
+      // Note: Camera changes are handled in useFrame hook instead of event listener
 
       return mesh;
     };

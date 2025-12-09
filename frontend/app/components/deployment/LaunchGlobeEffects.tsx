@@ -73,8 +73,8 @@ export default function LaunchGlobeEffects() {
             const fade = 1 - progress; // Fade out
 
             if (flare.point) {
-              flare.point.pixelSize = 20 * pulse;
-              flare.point.color = Cesium.Color.YELLOW.withAlpha(0.9 * fade);
+              flare.point.pixelSize = new Cesium.ConstantProperty(20 * pulse);
+              flare.point.color = new Cesium.ConstantProperty(Cesium.Color.YELLOW.withAlpha(0.9 * fade));
             }
 
             requestAnimationFrame(animate);
@@ -134,7 +134,7 @@ export default function LaunchGlobeEffects() {
             }
 
             if (podIcon.point) {
-              podIcon.point.color = Cesium.Color.CYAN.withAlpha(0.8 * alpha);
+              podIcon.point.color = new Cesium.ConstantProperty(Cesium.Color.CYAN.withAlpha(0.8 * alpha));
             }
 
             requestAnimationFrame(animate);
@@ -182,8 +182,8 @@ export default function LaunchGlobeEffects() {
           const fade = 1 - progress;
 
           if (ringPulse.polyline) {
-            ringPulse.polyline.material = Cesium.Color.CYAN.withAlpha(pulse * fade);
-            ringPulse.polyline.width = 2 + pulse * 2;
+            ringPulse.polyline.material = new Cesium.ColorMaterialProperty(Cesium.Color.CYAN.withAlpha(pulse * fade));
+            ringPulse.polyline.width = new Cesium.ConstantProperty(2 + pulse * 2);
           }
 
           requestAnimationFrame(animateRing);

@@ -8,12 +8,12 @@ interface RocketTypeSelectorProps {
   onChange: (rocketType: RocketType) => void;
 }
 
-const ROCKET_TYPES: RocketType[] = ["expendable-heavy", "reusable-medium", "cheap-light"];
+const ROCKET_TYPES: RocketType[] = ["heavy", "medium", "light"];
 
 const ROCKET_LABELS: Record<RocketType, string> = {
-  "expendable-heavy": "Heavy",
-  "reusable-medium": "Medium",
-  "cheap-light": "Light",
+  "heavy": "Heavy",
+  "medium": "Medium",
+  "light": "Light",
 };
 
 export default function RocketTypeSelector({ value, onChange }: RocketTypeSelectorProps) {

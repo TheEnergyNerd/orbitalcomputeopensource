@@ -189,3 +189,27 @@ export function getAllocationCost(
   };
   return baseCosts[field] * (currentPoints + 1);
 }
+
+// Stage definitions for UI
+export type ItemSpriteKind = "ingot" | "die" | "rack" | "pod" | "rocket";
+
+export interface StageDef {
+  id: StageId;
+  name: string;
+  label: string; // Short label for UI
+  color: string;
+  icon: string;
+  itemSprite: ItemSpriteKind; // Required sprite for conveyor items
+}
+
+const STAGE_DEFS: Record<StageId, StageDef> = {
+  silicon: { id: "silicon", name: "Silicon", label: "Silicon", color: "#00d4aa", icon: "🧠", itemSprite: "ingot" },
+  chips: { id: "chips", name: "Chips", label: "Chips", color: "#3b82f6", icon: "💾", itemSprite: "die" },
+  racks: { id: "racks", name: "Racks", label: "Racks", color: "#8b5cf6", icon: "📦", itemSprite: "rack" },
+  pods: { id: "pods", name: "Pods", label: "Pods", color: "#f59e0b", icon: "🔧", itemSprite: "pod" },
+  launch: { id: "launch", name: "Launch", label: "Launch", color: "#ef4444", icon: "🚀", itemSprite: "rocket" },
+};
+
+export function getStageDef(id: StageId): StageDef | null {
+  return STAGE_DEFS[id] || null;
+}

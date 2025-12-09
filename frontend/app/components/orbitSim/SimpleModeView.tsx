@@ -4,6 +4,10 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useSimulationStore } from "../../store/simulationStore";
 import KpiCard from "./KpiCard";
 import DeploymentTimelineChart from "./DeploymentTimelineChart";
+import DualClassStackChart from "./DualClassStackChart";
+import PowerComputeScatter from "./PowerComputeScatter";
+import StrategyPhaseDiagram from "./StrategyPhaseDiagram";
+import GlobalKPIStrip from "./GlobalKPIStrip";
 import OrbitLayer from "./OrbitLayer";
 import AiRouterPanelV2 from "./AiRouterPanelV2";
 import ConstellationEditorV2 from "./ConstellationEditorV2";
@@ -12,11 +16,37 @@ import MobileMenu from "../MobileMenu";
 import type { SurfaceType } from "../SurfaceTabs";
 import type { ComputeStrategy, LaunchStrategy } from "../../lib/orbitSim/simulationConfig";
 import type { YearStep } from "../../lib/orbitSim/simulationConfig";
+import type { StrategyMode } from "../../lib/orbitSim/satelliteClasses";
 import { formatDecimal } from "../../lib/utils/formatNumber";
 
 // Simple cn utility for className merging
 function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
+}
+
+/**
+ * Map ComputeStrategy to StrategyMode
+ */
+function mapComputeStrategyToStrategyMode(strategy: ComputeStrategy): StrategyMode {
+  switch (strategy) {
+    case "edge_heavy": return "LATENCY";
+    case "bulk_heavy": return "COST";
+    case "green_heavy": return "CARBON";
+    case "balanced": 
+    default: return "BALANCED";
+  }
+}
+
+/**
+ * Build strategy map from timeline
+ */
+function getStrategyByYear(timeline: YearStep[]): Map<number, StrategyMode> {
+  const strategyMap = new Map<number, StrategyMode>();
+  timeline.forEach(step => {
+    // Try to infer from yearPlan if available, otherwise default to BALANCED
+    strategyMap.set(step.year, "BALANCED");
+  });
+  return strategyMap;
 }
 
 /**
@@ -167,13 +197,13 @@ function MetricsGrid({ timeline }: { timeline: YearStep[] }) {
       {/* Right: tall horizon card */}
       <div className="h-full min-h-[300px] sm:min-h-[360px] rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
         <div className="text-xs font-semibold text-slate-100 mb-1">
-          Compute over time
+          Compute over time (Class A + Class B)
         </div>
         <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-          World compute split between ground (red) and orbit (green).
+          Stacked area: Class A (teal, bottom) + Class B (cyan, top)
         </div>
         <div className="h-[250px] sm:h-[300px] md:h-[360px]">
-          <DeploymentTimelineChart timeline={timeline} />
+          <DualClassStackChart timeline={timeline} strategyByYear={getStrategyByYear(timeline)} />
         </div>
       </div>
     </div>
@@ -481,6 +511,15 @@ export default function SimpleModeView() {
         </div>
       )}
 
+      {/* Global KPI Strip - Fixed top HUD */}
+      {timeline && timeline.length > 0 && (
+        <GlobalKPIStrip 
+          timeline={timeline} 
+          currentYear={currentYear}
+          strategyByYear={getStrategyByYear(timeline)}
+        />
+      )}
+
       {/* Top: Strategy + Utilization Controls - only content blocks events, hidden on mobile */}
       <div className="fixed top-20 left-0 right-0 z-30 pointer-events-none hidden lg:block">
         <div className="px-2 sm:px-4 md:px-6 pointer-events-auto w-full max-w-full overflow-x-auto">
@@ -509,7 +548,42 @@ export default function SimpleModeView() {
           </div>
           {/* Metrics grid */}
           {!chartsCollapsed && timeline && timeline.length > 0 && (
-            <MetricsGrid timeline={timeline} />
+            <>
+              <MetricsGrid timeline={timeline} />
+              
+              {/* Power vs Compute Frontier */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
+                <div className="text-xs font-semibold text-slate-100 mb-1">
+                  Power → Compute Frontier
+                </div>
+                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+                  Animated scatter: Teal = Class A dominated, Cyan = Class B dominated
+                </div>
+                <div className="h-[250px] sm:h-[300px]">
+                  <PowerComputeScatter 
+                    timeline={timeline} 
+                    currentYear={currentYear}
+                    strategyByYear={getStrategyByYear(timeline)}
+                  />
+                </div>
+              </div>
+
+              {/* Strategy Phase Diagram */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
+                <div className="text-xs font-semibold text-slate-100 mb-1">
+                  Strategy Phase Diagram
+                </div>
+                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+                  Timeline with Cost/Compute, Carbon/Compute, Latency/Compute derivatives
+                </div>
+                <div className="h-[320px]">
+                  <StrategyPhaseDiagram 
+                    timeline={timeline} 
+                    strategyByYear={getStrategyByYear(timeline)}
+                  />
+                </div>
+              </div>
+            </>
           )}
 
           {/* Deployment Progress */}

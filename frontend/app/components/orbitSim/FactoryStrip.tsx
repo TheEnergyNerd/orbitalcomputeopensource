@@ -62,8 +62,8 @@ export default function FactoryStrip({ onStageClick }: { onStageClick: (stageId:
                   ''
                 }
               >
-                {isUpgradeable ? (
-                  <FactoryModule stageId={stageId} tier={stage.tier} isBottleneck={isBottleneck} />
+                {isUpgradeable && (stageId === 'silicon' || stageId === 'chips' || stageId === 'racks' || stageId === 'pods') ? (
+                  <FactoryModule stageId={stageId as 'silicon' | 'chips' | 'racks' | 'pods'} tier={stage.tier} isBottleneck={isBottleneck} />
                 ) : (
                   <div className="text-2xl mb-1">{stageId === 'launch' ? '🚀' : '🌍'}</div>
                 )}

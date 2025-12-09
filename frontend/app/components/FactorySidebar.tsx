@@ -8,7 +8,6 @@ import { FACTORY_NODES, type FactoryNodeId } from "../lib/factory/factoryLayout"
 import { classifyNode, getStatusColor, getNetRateColor, type NodeStatus } from "../lib/ui/semantics";
 import { formatSigFigs, formatDecimal } from "../lib/utils/formatNumber";
 import MachineCard from "./MachineCard";
-import FactoryConstraintsPanel from "./factory/FactoryConstraintsPanel";
 
 interface FactorySidebarProps {
   selectedNodeId: FactoryNodeId | null;
@@ -19,8 +18,8 @@ interface FactorySidebarProps {
  * FactorySidebar - HUD for factory view
  * Shows: Factory summary, Selected node detail, Collapsible machines list
  */
-export default function FactorySidebar({ selectedNodeId, onSelectNode, highlightNodeId }: FactorySidebarProps) {
-  const { simState, updateMachineLines, timeScale } = useSandboxStore();
+export default function FactorySidebar({ selectedNodeId, onSelectNode }: FactorySidebarProps) {
+  const { simState, updateMachineLines } = useSandboxStore();
   const [machinesExpanded, setMachinesExpanded] = useState(false);
 
   if (!simState) {
@@ -122,22 +121,14 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
         };
       }
     } else if (selectedNode.type === 'storage') {
-      const resourceMap: Record<string, ResourceId> = {
-        'methaneTank': 'methane',
-        'loxTank': 'lox',
-        'fuelTank': 'fuel',
+      // Storage nodes don't map to resources in current model
+      selectedNodeDetails = {
+        type: 'storage',
+        name: selectedNode.label,
+        buffer: 0,
+        capacity: 1000,
+        netRate: 0,
       };
-      const resourceId = resourceMap[selectedNode.id];
-      if (resourceId) {
-        const resource = resources[resourceId];
-        selectedNodeDetails = {
-          type: 'storage',
-          name: selectedNode.label,
-          buffer: resource?.buffer ?? 0,
-          capacity: 1000,
-          netRate: (resource?.prodPerMin ?? 0) - (resource?.consPerMin ?? 0),
-        };
-      }
     } else if (selectedNode.type === 'source') {
       const resourceMap: Record<string, ResourceId> = {
         'siliconSource': 'silicon',
@@ -168,8 +159,6 @@ export default function FactorySidebar({ selectedNodeId, onSelectNode, highlight
         Factory → {selectedNode ? selectedNode.label : "Overview"}
       </div>
 
-      {/* Factory Systems (Constraints) */}
-      <FactoryConstraintsPanel />
 
       {/* Factory Health Summary */}
       <div className="p-3 rounded-lg border border-gray-700 bg-gray-800/50">

@@ -193,7 +193,7 @@ export default function FuturesMarketView() {
             )}
             {process.env.NODE_ENV === 'development' && (
               <div className="mt-2 p-2 bg-gray-900/50 rounded text-xs font-mono">
-                <div>pOrbitCheaper: {sentimentInfo.pOrbitCheaper.toFixed(2)}</div>
+                <div>pOrbitCheaper: {sentimentInfo.pOrbitCheaper?.toFixed(2) ?? 'N/A'}</div>
                 <div>sentimentScore: {sentimentInfo.score.toFixed(2)}</div>
                 <div>label: {sentimentInfo.label}</div>
                 <div>horizonYear: {sentimentInfo.horizonYear}</div>

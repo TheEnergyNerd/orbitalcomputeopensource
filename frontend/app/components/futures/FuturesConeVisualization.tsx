@@ -166,11 +166,17 @@ export default function FuturesConeVisualization({
         if (particle.x < padding.left) {
           particle.x = padding.left + chartWidth;
           const randomPoint = points[Math.floor(Math.random() * points.length)];
-          particle.y = yScale(randomPoint.mean) + (Math.random() - 0.5) * (yScale(randomPoint.upper_2sigma) - yScale(randomPoint.lower_2sigma));
+          const mean = type === 'orbit' ? randomPoint.meanOrbitCost : randomPoint.meanGroundCost;
+          const upper = type === 'orbit' ? randomPoint.p97_5Orbit : randomPoint.p97_5Ground;
+          const lower = type === 'orbit' ? randomPoint.p2_5Orbit : randomPoint.p2_5Ground;
+          particle.y = yScale(mean) + (Math.random() - 0.5) * (yScale(upper) - yScale(lower));
         } else if (particle.x > padding.left + chartWidth) {
           particle.x = padding.left;
           const randomPoint = points[Math.floor(Math.random() * points.length)];
-          particle.y = yScale(randomPoint.mean) + (Math.random() - 0.5) * (yScale(randomPoint.upper_2sigma) - yScale(randomPoint.lower_2sigma));
+          const mean = type === 'orbit' ? randomPoint.meanOrbitCost : randomPoint.meanGroundCost;
+          const upper = type === 'orbit' ? randomPoint.p97_5Orbit : randomPoint.p97_5Ground;
+          const lower = type === 'orbit' ? randomPoint.p2_5Orbit : randomPoint.p2_5Ground;
+          particle.y = yScale(mean) + (Math.random() - 0.5) * (yScale(upper) - yScale(lower));
         }
         
         // Keep within cone bounds

@@ -4,6 +4,13 @@ import { useEffect, useRef } from "react";
 import * as Cesium from "cesium";
 import { getGlobalViewer } from "../../hooks/useCesiumViewer";
 
+interface LaunchSite {
+  id: string;
+  lat: number;
+  lon: number;
+  name: string;
+}
+
 interface OrbitLayerProps {
   launchSites: LaunchSite[];
   newPodsThisStep: number;
@@ -76,10 +83,8 @@ export default function OrbitLayer({
           width: 6,
           material: Cesium.Color.fromCssColorString("#10b981").withAlpha(0.9), // Very visible
           clampToGround: false,
-          heightReference: Cesium.HeightReference.NONE,
           arcType: Cesium.ArcType.GEODESIC,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.0e9), // Visible from all distances
-          followSurface: false, // Important: don't follow surface, stay at altitude
         },
         show: true,
       });

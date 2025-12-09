@@ -13,6 +13,7 @@ import { LaunchSites } from "./LaunchSites";
 import { LaunchAnimation } from "./LaunchAnimation";
 import { LaunchAnimationV2 } from "./LaunchAnimationV2";
 import { OrbitalShells } from "./OrbitalShells";
+import { StaticOrbitalShells } from "./StaticOrbitalShells";
 import { TrafficFlows } from "./TrafficFlows";
 import { RoutingArrows } from "./RoutingArrows";
 import { FailureShockwave } from "./FailureShockwave";
@@ -89,8 +90,8 @@ export default function OrbitalScene() {
           />
         </mesh>
         
-        {/* 4. Orbital Shells (disabled - user requested removal) */}
-        {/* <OrbitalShells /> */}
+        {/* 4. Static Orbital Shells (Class A LEO + Class B SSO ring) */}
+        <StaticOrbitalShells />
         
         {/* 5. Satellites (optimized, per-shell instanced) */}
         <SatellitesOptimized />
