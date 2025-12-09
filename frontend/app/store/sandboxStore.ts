@@ -454,7 +454,9 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   },
   updateFactoryLines: (nodeId, newLines) => {
     const currentState = get();
-    const currentLines = currentState.factory.lines[nodeId] ?? 0;
+    // Convert FactoryNodeId to RecipeFactoryNodeId if needed
+    const recipeNodeId = nodeId === 'fuelPlant' ? 'fuelDepot' : nodeId as RecipeFactoryNodeId;
+    const currentLines = currentState.factory.lines[recipeNodeId] ?? 0;
     const delta = newLines - currentLines;
     
     // Check infra cap
@@ -466,7 +468,7 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
     // Update lines
     const updatedLines = {
       ...currentState.factory.lines,
-      [nodeId]: Math.max(0, newLines),
+      [recipeNodeId]: Math.max(0, newLines),
     };
     
     set({
