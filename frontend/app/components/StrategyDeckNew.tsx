@@ -2,7 +2,7 @@
 
 import { useSandboxStore, type OrbitMode } from "../store/sandboxStore";
 import { useState } from "react";
-import type { FactoryNodeId } from "../lib/factory/factoryRecipes";
+import type { RecipeFactoryNodeId } from "../lib/factory/factoryRecipes";
 import { FACTORY_RECIPES } from "../lib/factory/factoryRecipes";
 import type { LaunchProviderId } from "../lib/launch/launchQueue";
 import { DEFAULT_LAUNCH_PROVIDERS, calculateDeploymentRate } from "../lib/launch/launchQueue";
