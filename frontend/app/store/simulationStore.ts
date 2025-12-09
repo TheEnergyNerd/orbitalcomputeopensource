@@ -151,15 +151,15 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       try {
         const { useOrbitalUnitsStore } = require("./orbitalUnitsStore");
         // deploymentSchedule.ts removed - deployment info now comes from simulation config
-        // const deployment = getDeploymentForYear(currentYear);
+        // Calculate pods deployed from timeline
+        const podsDelta = Math.max(0, (nextLast.podsTotal || 0) - (prevLast.podsTotal || 0));
         
-        if (deployment) {
-          // Create units based on deployment schedule
-          // Each launch = 60 satellites (Starship capacity)
-          const launches = deployment.launches;
-          const satsPerLaunch = deployment.satsPerLaunch;
+        if (podsDelta > 0) {
+          // Create units based on pods delta
+          // Estimate launches: assume ~6 pods per launch (Starship capacity)
+          const estimatedLaunches = Math.ceil(podsDelta / 6);
           
-          for (let launchNum = 0; launchNum < launches; launchNum++) {
+          for (let launchNum = 0; launchNum < estimatedLaunches; launchNum++) {
             // Create one unit per launch (represents satellites in that launch)
             const unitId = `deploy_${currentYear}_launch_${launchNum}_${Date.now()}`;
             const unit = {
@@ -181,7 +181,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
             }));
           }
           
-          console.log(`[simulationStore] ✅ Created ${launches} launches (${launches * satsPerLaunch} satellites) for year ${currentYear}`);
+          console.log(`[simulationStore] ✅ Created ${estimatedLaunches} launches (${podsDelta} pods) for year ${currentYear}`);
         }
       } catch (e) {
         console.error(`[simulationStore] Error creating deployment units:`, e);
