@@ -150,8 +150,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       // This triggers launch animations in LaunchAnimation component
       try {
         const { useOrbitalUnitsStore } = require("./orbitalUnitsStore");
-        const { getDeploymentForYear } = require("../lib/orbitSim/deploymentSchedule");
-        const deployment = getDeploymentForYear(currentYear);
+        // deploymentSchedule.ts removed - deployment info now comes from simulation config
+        // const deployment = getDeploymentForYear(currentYear);
         
         if (deployment) {
           // Create units based on deployment schedule

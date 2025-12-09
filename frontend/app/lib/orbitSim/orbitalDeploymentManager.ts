@@ -3,13 +3,9 @@
  * Manages year-by-year satellite deployment based on deployment schedule
  */
 
-import { 
-  DEPLOYMENT_SCHEDULE, 
-  getDeploymentForYear,
-  assignSatelliteToShell,
-  getAltitudeForShell,
-  type DeploymentYear 
-} from "./deploymentSchedule";
+// deploymentSchedule.ts removed - using strategyDeployment instead
+import { assignSatelliteToShell } from "./shellAssignment";
+import { getAltitudeForShell } from "./satellitePositioning";
 import { 
   generateOrbitalState,
   getRandomInclination,
