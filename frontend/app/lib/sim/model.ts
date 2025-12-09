@@ -144,6 +144,43 @@ export function createInitialSimState(): SimState {
       prodPerMin: 0,
       consPerMin: 0,
     },
+    // Additional resources for factory layout
+    racks: {
+      id: 'racks',
+      name: 'Racks',
+      units: 'racks',
+      buffer: 0,
+      prodPerMin: 0,
+      consPerMin: 0,
+    },
+    fuel: {
+      id: 'fuel',
+      name: 'Fuel',
+      units: 't',
+      buffer: 0,
+      prodPerMin: 0,
+      consPerMin: 0,
+    },
+    methane: {
+      id: 'methane',
+      name: 'Methane',
+      units: 't',
+      buffer: 0,
+      prodPerMin: 0,
+      consPerMin: 0,
+      isSource: true,
+      baseSourceRate: 10,
+    },
+    lox: {
+      id: 'lox',
+      name: 'LOX',
+      units: 't',
+      buffer: 0,
+      prodPerMin: 0,
+      consPerMin: 0,
+      isSource: true,
+      baseSourceRate: 10,
+    },
   };
 
   const machines: Record<MachineId, Machine> = {
