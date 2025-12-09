@@ -17,7 +17,7 @@ export function calculateScenarioMetricsWithUpgrades(inputs: Omit<ScenarioInputs
   
   // Convert factory throughput to upgrade multipliers format for compatibility
   // The scenario calculator expects upgrade multipliers, but we derive them from factory throughput
-  const launchThroughput = computedStages.launch.throughput; // pods per second
+  const launchThroughput = computedStages.launch.throughput ?? 0; // pods per second
   const podsPerYear = launchThroughput * 365 * 24 * 3600;
   
   // Calculate multipliers based on factory efficiency and reliability
