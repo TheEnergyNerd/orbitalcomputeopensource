@@ -6,7 +6,8 @@
 import type { StageId, SupplyEvent, FactoryGameState } from './factoryModel';
 
 // SupplyEventType is not exported from factoryModel, define it here
-export type SupplyEventType = 'supply_boost' | 'supply_drop' | 'demand_spike' | 'demand_drop';
+// Based on actual usage in this file
+export type SupplyEventType = 'capacity_drop' | 'supply_boost' | 'supply_drop' | 'demand_spike' | 'demand_drop';
 
 /**
  * Event descriptions by type and stage
