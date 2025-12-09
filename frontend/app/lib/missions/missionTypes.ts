@@ -150,6 +150,7 @@ export function checkMissionProgress(
 
   for (const condition of mission.conditions) {
     const value = metrics[`${condition.metric}Delta`];
+    const safeValue = value ?? 0; // Handle undefined values
     let conditionMet = false;
 
     if (condition.operator === 'lte') {
@@ -171,15 +172,15 @@ export function checkMissionProgress(
         // Progress = how far we are from threshold
         // If threshold is 2 and value is 0, we're at 100%
         // If threshold is 2 and value is 2, we're at 0%
-        progress[condition.metric] = Math.min(100, Math.max(0, ((condition.threshold - value) / condition.threshold) * 100));
+        progress[condition.metric] = Math.min(100, Math.max(0, ((condition.threshold - safeValue) / condition.threshold) * 100));
       }
     } else if (condition.operator === 'gte') {
       // For "greater than or equal", we want value >= threshold
-      conditionMet = value >= condition.threshold;
+      conditionMet = safeValue >= condition.threshold;
       if (condition.threshold > 0) {
-        progress[condition.metric] = Math.min(100, Math.max(0, (value / condition.threshold) * 100));
+        progress[condition.metric] = Math.min(100, Math.max(0, (safeValue / condition.threshold) * 100));
       } else {
-        progress[condition.metric] = value >= condition.threshold ? 100 : 0;
+        progress[condition.metric] = safeValue >= condition.threshold ? 100 : 0;
       }
     }
 
