@@ -307,5 +307,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         worldState: { ...s.worldState, ...updates },
       }));
     },
+    
+    setForecastBands: (bands: ForecastBands | null) => {
+      set({ forecastBands: bands });
+    },
   };
 });
