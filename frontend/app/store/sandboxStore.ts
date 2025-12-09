@@ -454,8 +454,17 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   },
   updateFactoryLines: (nodeId, newLines) => {
     const currentState = get();
-    // Convert FactoryNodeId to RecipeFactoryNodeId if needed
-    const recipeNodeId = nodeId === 'fuelPlant' ? 'fuelDepot' : nodeId as RecipeFactoryNodeId;
+    // Convert FactoryNodeId to RecipeFactoryNodeId
+    // Only nodes that exist in RecipeFactoryNodeId can be updated
+    let recipeNodeId: RecipeFactoryNodeId;
+    if (nodeId === 'fuelPlant') {
+      recipeNodeId = 'fuelDepot';
+    } else if (nodeId === 'chipFab' || nodeId === 'rackLine' || nodeId === 'podFactory' || nodeId === 'launchComplex') {
+      recipeNodeId = nodeId as RecipeFactoryNodeId;
+    } else {
+      // Node doesn't exist in RecipeFactoryNodeId (e.g., methaneTank, loxTank, etc.)
+      return false;
+    }
     const currentLines = currentState.factory.lines[recipeNodeId] ?? 0;
     const delta = newLines - currentLines;
     
