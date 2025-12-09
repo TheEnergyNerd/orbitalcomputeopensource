@@ -4,7 +4,7 @@
  */
 
 export type RocketId = 'falcon' | 'newGlenn' | 'starship';
-export type PodTypeId = 'edge' | 'hyperscale' | 'monster';
+export type PodTypeId = 'base' | 'edge' | 'hyperscale' | 'monster';
 
 export interface RocketConfig {
   id: RocketId;
