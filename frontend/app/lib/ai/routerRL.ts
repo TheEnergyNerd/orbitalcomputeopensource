@@ -117,7 +117,7 @@ export function updatePolicyWithRL(
       }
 
       // Normalize
-      const sum = Object.values(newRow).reduce((a: number, b: number) => a + b, 0);
+      const sum = (Object.values(newRow) as number[]).reduce((a: number, b: number) => a + b, 0);
       for (const k in newRow) {
         newRow[k] /= sum;
       }
