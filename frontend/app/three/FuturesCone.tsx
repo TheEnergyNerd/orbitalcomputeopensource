@@ -16,9 +16,16 @@ export function FuturesCone() {
       const metrics = state.state?.metrics;
       if (!metrics) return;
 
+      // Calculate cost per compute mix from available metrics
+      // Simplified: use energy cost as proxy (orbital is free, ground has cost)
+      const totalPower = metrics.totalGroundPowerMw + metrics.totalOrbitalPowerMw;
+      const costPerComputeMix = totalPower > 0
+        ? (metrics.energyCostGround / totalPower) * (1 - metrics.orbitSharePercent / 100)
+        : 0;
+
       const futuresHash = JSON.stringify({
         orbitShare: metrics.orbitSharePercent,
-        cost: metrics.costPerComputeMix,
+        cost: costPerComputeMix,
       });
 
       if (futuresHash === lastFuturesHash.current) return;
@@ -27,7 +34,7 @@ export function FuturesCone() {
       // Update cone based on futures
       if (coneRef.current) {
         const orbitShare = metrics.orbitSharePercent || 0;
-        const cost = metrics.costPerComputeMix || 0;
+        const cost = costPerComputeMix;
         
         // Determine color (green = bullish, gray = neutral, red = bearish)
         let color = new Color(0x888888); // Gray = neutral
