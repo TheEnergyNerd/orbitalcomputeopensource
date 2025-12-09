@@ -140,7 +140,7 @@ export function getActiveEventsForStage(
   return events.filter(
     ev => ev.stageId === stageId &&
           !ev.resolved &&
-          ev.expiresAt > simTime
+          (ev.spawnTime + ev.duration) > simTime
   );
 }
 
