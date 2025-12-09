@@ -47,10 +47,6 @@ function generateTestSatellites(): SimSatellite[] {
       lat: pos.lat,
       lon: pos.lon,
       alt_km: pos.alt,
-      // CRITICAL: Include x, y, z coordinates explicitly
-      x: pos.x,
-      y: pos.y,
-      z: pos.z,
       sunlit: true,
       utilization: Math.random() * 0.8,
       capacityMw: 0.003,
@@ -617,10 +613,6 @@ export function OrbitalDataSync() {
               lat: position.lat,
               lon: position.lon,
               alt_km: position.alt,
-              // CRITICAL: Include x, y, z coordinates so satellites persist
-              x: position.x,
-              y: position.y,
-              z: position.z,
               sunlit: true,
               utilization: 0.5,
               capacityMw: 0.1, // 100kW = 0.1MW
