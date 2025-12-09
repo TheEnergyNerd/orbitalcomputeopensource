@@ -3,7 +3,10 @@
  * Random events that perturb factory stages
  */
 
-import type { StageId, SupplyEvent, SupplyEventType, FactoryGameState } from './factoryModel';
+import type { StageId, SupplyEvent, FactoryGameState } from './factoryModel';
+
+// SupplyEventType is not exported from factoryModel, define it here
+export type SupplyEventType = 'supply_boost' | 'supply_drop' | 'demand_spike' | 'demand_drop';
 
 /**
  * Event descriptions by type and stage
