@@ -54,7 +54,7 @@ export function ClickableMarkers() {
       if (orbitSatellites.length > 0) {
         // Calculate click ray in world space
         const clickRay = raycaster.current.ray;
-        let closestSat = null;
+        let closestSat: typeof orbitSatellites[0] | null = null;
         let minDist = Infinity;
         const CLICK_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
         
@@ -89,13 +89,13 @@ export function ClickableMarkers() {
       const clickRay = raycaster.current.ray;
       
       // Launch sites (from LaunchSites component - regular meshes)
-      const launchSites = [
+      const launchSites: Array<{ id: string; lat: number; lon: number; name: string }> = [
         { id: "capecanaveral", lat: 28.5623, lon: -80.5774, name: "Cape Canaveral" },
         { id: "vandenberg", lat: 34.7420, lon: -120.5724, name: "Vandenberg" },
         { id: "bocachica", lat: 25.9971, lon: -97.1554, name: "Boca Chica" },
       ];
       
-      let closestLaunchSite = null;
+      let closestLaunchSite: typeof launchSites[0] | null = null;
       let minLaunchDist = Infinity;
       const LAUNCH_SITE_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
       
@@ -128,7 +128,7 @@ export function ClickableMarkers() {
       const simState = useSimStore.getState().state;
       if (simState?.groundSites) {
         const dataCenters = simState.groundSites.filter(s => !s.type || s.type === "data_center");
-        let closestDataCenter = null;
+        let closestDataCenter: typeof dataCenters[0] | null = null;
         let minDataCenterDist = Infinity;
         const DATA_CENTER_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
         
@@ -197,7 +197,7 @@ export function ClickableMarkers() {
             
             if (isOrbital) {
               // Try orbitStore first (has xyz directly)
-              let closestSat = null;
+              let closestSat: typeof orbitSatellites[0] | null = null;
               let minDist = Infinity;
               
               orbitSatellites.forEach((sat) => {
@@ -253,7 +253,7 @@ export function ClickableMarkers() {
             } else if (!isOrbital && simState?.groundSites) {
               // Find closest ground site (data center or launch site from GroundSites component)
               const groundSites = simState.groundSites;
-              let closestSite = null;
+              let closestSite: typeof groundSites[0] | null = null;
               let minDist = Infinity;
               
               groundSites.forEach((site) => {
