@@ -15,7 +15,7 @@ export interface Recipe {
   output: Partial<ResourceInventory>;
 }
 
-export const FACTORY_RECIPES: Record<FactoryNodeId, Recipe> = {
+export const FACTORY_RECIPES: Record<RecipeFactoryNodeId, Recipe> = {
   chipFab: {
     input: {},
     output: { chips: 200 }, // per line per month
@@ -104,7 +104,7 @@ export function runFactoryTick(
   };
 
   // Process each factory node
-  const nodeOrder: FactoryNodeId[] = ['chipFab', 'rackLine', 'podFactory', 'fuelDepot', 'launchComplex'];
+  const nodeOrder: RecipeFactoryNodeId[] = ['chipFab', 'rackLine', 'podFactory', 'fuelDepot', 'launchComplex'];
   
   for (const nodeId of nodeOrder) {
     const lines = factory.lines[nodeId];
@@ -188,7 +188,7 @@ export function computeBottlenecks(factory: FactoryState): Bottleneck[] {
   const bottlenecks: Bottleneck[] = [];
   
   // Map factory nodes to resources
-  const nodeToResource: Record<FactoryNodeId, ResourceId> = {
+    const nodeToResource: Record<RecipeFactoryNodeId, ResourceId> = {
     chipFab: 'chips',
     rackLine: 'racks',
     podFactory: 'pods',
