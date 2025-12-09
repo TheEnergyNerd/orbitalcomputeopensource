@@ -59,8 +59,8 @@ export const useTutorialStore = create<TutorialStore>((set, get) => ({
     const { currentStep } = get();
     if (currentStep === 1 || currentStep === "done") return;
     
-    // currentStep is a number at this point (we already checked for "done")
-    const prev: TutorialStep = (typeof currentStep === "number" ? (currentStep - 1) : 9) as TutorialStep;
+    // At this point, currentStep must be a number (2-9) since we've already checked for 1 and "done"
+    const prev: TutorialStep = (currentStep - 1) as TutorialStep;
     set({ currentStep: prev });
   },
   
