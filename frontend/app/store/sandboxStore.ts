@@ -453,34 +453,31 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
     });
   },
   updateFactoryLines: (nodeId, newLines) => {
-    return set((state) => {
-      const currentLines = state.factory.lines[nodeId] ?? 0;
-      const delta = newLines - currentLines;
-      
-      // Check infra cap
-      const newUsedInfra = state.factory.usedInfraPoints + delta;
-      if (newUsedInfra > state.factory.maxInfraPoints) {
-        return state; // Can't exceed infra cap - return state unchanged
-      }
-      
-      // Update lines
-      const updatedLines = {
-        ...state.factory.lines,
-        [nodeId]: Math.max(0, newLines),
-      };
-      
-      return {
-        factory: {
-          ...state.factory,
-          lines: updatedLines,
-          usedInfraPoints: newUsedInfra,
-        },
-      };
+    const currentState = get();
+    const currentLines = currentState.factory.lines[nodeId] ?? 0;
+    const delta = newLines - currentLines;
+    
+    // Check infra cap
+    const newUsedInfra = currentState.factory.usedInfraPoints + delta;
+    if (newUsedInfra > currentState.factory.maxInfraPoints) {
+      return false; // Can't exceed infra cap
+    }
+    
+    // Update lines
+    const updatedLines = {
+      ...currentState.factory.lines,
+      [nodeId]: Math.max(0, newLines),
+    };
+    
+    set({
+      factory: {
+        ...currentState.factory,
+        lines: updatedLines,
+        usedInfraPoints: newUsedInfra,
+      },
     });
-    // Check if update was successful (state changed)
-    const newState = get();
-    const wasSuccessful = newState.factory.lines[nodeId] === newLines;
-    return wasSuccessful;
+    
+    return true; // Success
   },
   toggleLaunchProvider: (providerId) => {
     set((state) => {
