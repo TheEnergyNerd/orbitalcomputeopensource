@@ -1,5 +1,8 @@
 import { RouterPolicy, RouterWeights, JOB_TYPES, DESTS } from "./routerTypes";
 import { evalRouterPolicy, JobDemand } from "./routerEval";
+import type { GlobalCongestionFrame } from "../sim/orbit/congestion";
+import type { FailureEvent } from "../sim/orbit/failure";
+import { adjustPolicyForCongestion } from "./routerPolicy";
 
 export function randomPerturbPolicy(
   policy: RouterPolicy,
