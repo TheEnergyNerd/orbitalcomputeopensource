@@ -59,7 +59,7 @@ export function SatelliteCounters() {
   }, [satellites, routes]);
   
   return (
-    <div className="fixed top-4 right-4 z-50 panel-glass rounded-lg p-4 shadow-xl border border-white/10 min-w-[280px]">
+    <div className="fixed bottom-4 right-4 z-50 panel-glass rounded-lg p-4 shadow-xl border border-white/10 min-w-[280px]">
       <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase">Orbital System Status</h3>
       
       <div className="space-y-2 text-xs">

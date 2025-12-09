@@ -6,8 +6,15 @@ import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { calculateComputeFromPower } from "../lib/orbitSim/computeEfficiency";
 import { getOrbitalCostPerTFLOP } from "../lib/orbitSim/orbitalCostModel";
+import { usePathname } from "next/navigation";
 
 export default function DebugExportPanel() {
+  const pathname = usePathname();
+  
+  // Only show on /data route
+  if (pathname !== "/data") {
+    return null;
+  }
   const { timeline, config } = useSimulationStore();
   const { satellites, routes } = useOrbitSim();
   const simState = useSimStore((s) => s.state);
