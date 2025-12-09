@@ -71,7 +71,7 @@ export const FACTORY_EDGES: FactoryEdge[] = [
  * Get resource color for edges
  */
 export function getResourceColor(resource: ResourceId): string {
-  const colors: Record<ResourceId, string> = {
+  const colors: Partial<Record<ResourceId, string>> = {
     silicon: '#94a3b8', // slate
     steel: '#64748b', // slate-500
     chips: '#06b6d4', // cyan
@@ -81,6 +81,8 @@ export function getResourceColor(resource: ResourceId): string {
     lox: '#60a5fa', // blue-400
     fuel: '#f97316', // orange
     launches: '#ef4444', // red
+    computeUnits: '#10b981', // green
+    launchOpsResource: '#8b5cf6', // purple
   };
   return colors[resource] || '#ffffff';
 }
