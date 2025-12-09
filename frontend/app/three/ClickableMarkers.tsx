@@ -54,7 +54,7 @@ export function ClickableMarkers() {
       if (orbitSatellites.length > 0) {
         // Calculate click ray in world space
         const clickRay = raycaster.current.ray;
-        let closestSat: typeof orbitSatellites[0] | null = null;
+        let closestSat: Satellite | null = null;
         let minDist = Infinity;
         const CLICK_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
         
