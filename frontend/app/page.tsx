@@ -1,6 +1,6 @@
 "use client";
 
-import SandboxGlobe from "./components/SandboxGlobe";
+// import SandboxGlobe from "./components/SandboxGlobe"; // Cesium - not used
 import OrbitalAdvantagePanelV2 from "./components/OrbitalAdvantagePanelV2";
 import OnboardingTutorial from "./components/OnboardingTutorial";
 import ModeTabs from "./components/ModeTabs";
@@ -25,7 +25,7 @@ import FuturesMarketView from "./components/futures/FuturesMarketView";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import ErrorPanel from "./components/ErrorPanel";
-import { useCesiumViewer, getSafeMode } from "./hooks/useCesiumViewer";
+// import { useCesiumViewer, getSafeMode } from "./hooks/useCesiumViewer"; // Cesium - not used
 import { logGpuEvent } from "./lib/debugGpu";
 import OrbitalScene from "./three/OrbitalScene";
 import DebugHud from "./components/DebugHud";
@@ -35,19 +35,15 @@ import DebugExportPanel from "./components/DebugExportPanel";
 import { SatelliteCounters } from "./components/SatelliteCounters";
 import { PerformanceWarning } from "./components/PerformanceWarning";
 
-// Toggle to use lightweight globe instead of Cesium
-const USE_LIGHTWEIGHT_GLOBE = process.env.NEXT_PUBLIC_USE_LIGHTWEIGHT_GLOBE === 'true' || true; // Default to true for now
-
+// Always use lightweight Three.js globe (OrbitalScene)
 export default function Home() {
-  // Use shared Cesium viewer hook - single instance for entire app (only if not using lightweight)
-  const viewerRef = USE_LIGHTWEIGHT_GLOBE ? { current: null } : useCesiumViewer("cesium-globe-container");
-  const safeMode = getSafeMode();
+  // Cesium removed - using Three.js OrbitalScene only
   const [activeSurface, setActiveSurface] = useState<SurfaceType>("overview");
   
   // Log GPU event on mount
   useEffect(() => {
-    logGpuEvent("app_mounted", { safeMode });
-  }, [safeMode]);
+    logGpuEvent("app_mounted", {});
+  }, []);
   const loading = useSimStore((s) => s.loading);
   const error = useSimStore((s) => s.error);
   // Sandbox tutorial auto-start is handled inside SandboxTutorial component
@@ -60,39 +56,17 @@ export default function Home() {
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, overflow: 'auto' }}>
       {/* Globe container - only show on overview and deployment tabs */}
       {(activeSurface === "overview" || activeSurface === "deployment") && (
-        USE_LIGHTWEIGHT_GLOBE ? (
-          typeof window !== 'undefined' && (
-            <div className="fixed inset-0 w-full h-full" style={{ pointerEvents: 'auto', zIndex: 0 }}>
-              <OrbitalScene />
-              <SatelliteCounters />
-              <PerformanceWarning />
-            </div>
-          )
-        ) : (
-        <>
-          <div 
-            id="cesium-globe-container" 
-            className="fixed inset-0 w-full h-full" 
-            style={{ 
-              zIndex: 0,
-              minHeight: '100vh',
-              minWidth: '100vw',
-              height: '100vh',
-              width: '100vw',
-              pointerEvents: 'auto',
-            }} 
-          />
-          {/* Globe Rendering - sandbox only, components just add entities */}
-          <SandboxGlobe viewerRef={viewerRef} />
-        </>
-      ))}
+        typeof window !== 'undefined' && (
+          <div className="fixed inset-0 w-full h-full" style={{ pointerEvents: 'auto', zIndex: 0 }}>
+            <OrbitalScene />
+            <SatelliteCounters />
+            <PerformanceWarning />
+          </div>
+        )
+      )}
       
       <main className="relative w-full" style={{ minHeight: '200vh', position: 'relative', zIndex: 2, pointerEvents: 'none', overflowY: 'auto' }}>
       
-      {/* Dark overlay only behind cards, not full page - skip if using lightweight globe */}
-      {!USE_LIGHTWEIGHT_GLOBE && (
-        <div className="fixed inset-0 bg-dark-bg/30 pointer-events-none" style={{ zIndex: 1 }} />
-      )}
 
       {/* Loading overlay removed - new OrbitSim doesn't need backend */}
       {false && shouldShowLoading && (

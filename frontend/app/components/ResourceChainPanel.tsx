@@ -142,16 +142,12 @@ export default function ResourceChainPanel() {
     }
   }
 
-  // Define resource chain order
+  // Define resource chain order (only valid ResourceId types)
   const chainOrder: ResourceId[] = [
     'silicon',
     'chips',
     'steel',
-    'racks',
     'pods',
-    'methane',
-    'lox',
-    'fuel',
     'launches',
   ];
 
