@@ -301,14 +301,11 @@ export default function SimpleModeView() {
 
   // Launch sites (hardcoded for now - could be derived from Cesium viewer)
   const launchSites = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-    // Approximate screen positions for major launch sites
+    // Launch sites for OrbitLayer
     return [
-      { id: "cape-canaveral", lat: 28.5623, lon: -80.5774, screenX: centerX - 200, screenY: centerY + 100 },
-      { id: "boca-chica", lat: 25.9971, lon: -97.1554, screenX: centerX - 150, screenY: centerY + 120 },
-      { id: "vandenberg", lat: 34.7420, lon: -120.5724, screenX: centerX - 250, screenY: centerY + 50 },
+      { id: "cape-canaveral", name: "Cape Canaveral", lat: 28.5623, lon: -80.5774 },
+      { id: "boca-chica", name: "Boca Chica", lat: 25.9971, lon: -97.1554 },
+      { id: "vandenberg", name: "Vandenberg", lat: 34.7420, lon: -120.5724 },
     ];
   }, []);
 

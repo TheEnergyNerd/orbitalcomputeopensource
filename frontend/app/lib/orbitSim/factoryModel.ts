@@ -213,3 +213,7 @@ const STAGE_DEFS: Record<StageId, StageDef> = {
 export function getStageDef(id: StageId): StageDef | null {
   return STAGE_DEFS[id] || null;
 }
+
+export function getStageLabel(id: StageId): string {
+  return STAGE_DEFS[id]?.label || id;
+}
