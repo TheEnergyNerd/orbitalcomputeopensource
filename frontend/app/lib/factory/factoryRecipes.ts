@@ -7,7 +7,8 @@ export type ResourceId = 'chips' | 'racks' | 'pods' | 'fuel' | 'orbitPods';
 
 export type ResourceInventory = Record<ResourceId, number>;
 
-export type FactoryNodeId = 'chipFab' | 'rackLine' | 'podFactory' | 'fuelDepot' | 'launchComplex';
+// FactoryNodeId is defined in factoryLayout.ts - import it instead
+import type { FactoryNodeId } from './factoryLayout';
 
 export interface Recipe {
   input: Partial<ResourceInventory>;
