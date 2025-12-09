@@ -98,8 +98,8 @@ export default function BuildPanel({ isOpen, onClose }: BuildPanelProps) {
           <label className="block text-sm font-semibold text-gray-300 mb-3">
             Unit Type
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {(["leo_pod", "geo_hub", "server_farm"] as UnitType[]).map((type) => {
+          <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
+            {(["leo_pod"] as UnitType[]).map((type) => {
               const def = UNIT_DEFINITIONS[type];
               const isSelected = selectedType === type;
               const isUnlocked = unlockedUnits.includes(type);
@@ -128,16 +128,6 @@ export default function BuildPanel({ isOpen, onClose }: BuildPanelProps) {
                     <div>Latency: {def.latencyMs}ms</div>
                     <div>Build: {def.buildTimeDays} days</div>
                   </div>
-                  {!isUnlocked && type === "geo_hub" && (
-                    <div className="text-xs text-accent-green mt-2 pt-2 border-t border-gray-700">
-                      Complete "Stabilize Abilene Edge" mission to unlock
-                    </div>
-                  )}
-                  {!isUnlocked && type === "server_farm" && (
-                    <div className="text-xs text-accent-green mt-2 pt-2 border-t border-gray-700">
-                      Complete "Surge Event" mission to unlock
-                    </div>
-                  )}
                 </button>
               );
             })}
