@@ -585,10 +585,12 @@ export function OrbitalDataSync() {
           
           // Map shell ID to ShellType
           let shellType: ShellType = "LEO";
-          if (shell.shell === "MEO" || shell.id === "MEO") {
+          if (shell.id === "MEO") {
             shellType = "MEO";
-          } else if (shell.shell === "GEO" || shell.id === "GEO") {
+          } else if (shell.id === "GEO") {
             shellType = "GEO";
+          } else if (shell.id === "SSO") {
+            shellType = "SSO";
           }
           
           // Generate satellite position using physically coherent positioning
@@ -617,9 +619,7 @@ export function OrbitalDataSync() {
               capacityMw: 0.1, // 100kW = 0.1MW
               nearestGatewayId: "test_gateway",
               latencyMs: 50,
-              // Store orbital state
-              orbitalState: orbitalState as any,
-              // Store satellite class
+              // Store satellite class (orbitalState not part of SimStore Satellite type)
               satelliteClass: satelliteClass as any,
             });
             

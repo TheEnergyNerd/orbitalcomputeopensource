@@ -7,7 +7,7 @@
 
 import { useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Vector3 } from "three";
+import { Vector3, Quaternion } from "three";
 import { Line } from "@react-three/drei";
 import { useOrbitSim } from "../state/orbitStore";
 import { createGeodesicArc } from "../lib/three/coordinateUtils";
@@ -61,7 +61,7 @@ export function TrafficFlowsV2() {
     
     // Remove pulses for routes that no longer exist
     const currentRouteIds = new Set(routes.map(r => r.id));
-    for (const [routeId] of pulsesRef.current) {
+    for (const [routeId] of Array.from(pulsesRef.current.entries())) {
       if (!currentRouteIds.has(routeId)) {
         pulsesRef.current.delete(routeId);
       }
@@ -81,7 +81,7 @@ export function TrafficFlowsV2() {
         const animationSpeed = Math.max(0.1, Math.min(2.0, 100 / latency));
         
         // Thickness based on route type (estimate load)
-        const loadMultiplier = route.type === "realtime" ? 1.5 : route.type === "interactive" ? 1.2 : 1.0;
+        const loadMultiplier = 1.0; // Default multiplier (route.type doesn't include "realtime" or "interactive")
         const thickness = 2 * loadMultiplier;
         
         // Color based on policy (blue = orbit, green = ground, purple = core)
@@ -111,7 +111,7 @@ export function TrafficFlowsV2() {
     const effectiveDelta = delta * simSpeed;
     
     // Update pulse progress
-    for (const pulse of pulsesRef.current.values()) {
+    for (const pulse of Array.from(pulsesRef.current.values())) {
       pulse.progress += pulse.speed * effectiveDelta * 0.1; // Scale speed
       if (pulse.progress > 1) {
         pulse.progress = 0; // Loop

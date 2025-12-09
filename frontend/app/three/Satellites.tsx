@@ -139,7 +139,7 @@ export function Satellites() {
     
     // Remove states for satellites that no longer exist
     const currentIds = new Set(visibleSatellites.map(s => s.id));
-    for (const [id] of orbitalStatesRef.current) {
+    for (const [id] of Array.from(orbitalStatesRef.current.entries())) {
       if (!currentIds.has(id)) {
         orbitalStatesRef.current.delete(id);
       }

@@ -20,7 +20,9 @@ import { Line } from "@react-three/drei";
 export function StaticOrbitalShells() {
   const { satellites } = useOrbitSim();
   const timeline = useSimulationStore((s) => s.timeline);
-  const currentYear = useSimulationStore((s) => s.currentYear || 2025);
+  const timeline = useSimulationStore((s) => s.timeline);
+  const selectedYearIndex = useSimulationStore((s) => s.selectedYearIndex);
+  const currentYear = timeline[selectedYearIndex]?.year || 2025;
 
   // Calculate deployment state for current year
   const deploymentData = useMemo(() => {
