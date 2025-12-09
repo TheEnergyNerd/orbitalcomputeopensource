@@ -103,12 +103,11 @@ export function maybeSpawnEvent(state: FactoryGameState): FactoryGameState {
   const ev: SupplyEvent = {
     id: `ev-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     stageId: stage,
-    type,
+    type: type as string, // SupplyEvent.type is string, not SupplyEventType
     severity,
-    createdAt: state.simTime,
-    expiresAt: state.simTime + duration,
+    spawnTime: state.simTime,
+    duration: duration,
     resolved: false,
-    description: describeEvent(stage, type, severity),
   };
 
   return {
