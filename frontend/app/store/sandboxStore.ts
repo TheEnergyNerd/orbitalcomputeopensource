@@ -493,7 +493,7 @@ export const useSandboxStore = create<SandboxStore>((set, get) => ({
   toggleLaunchProvider: (providerId) => {
     set((state) => {
       const provider = state.launchState.providers[providerId];
-      if (!provider) return;
+      if (!provider) return state;
       
       return {
         launchState: {
