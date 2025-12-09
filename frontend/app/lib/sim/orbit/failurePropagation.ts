@@ -4,6 +4,7 @@
  */
 
 import type { FailureEvent } from './failure';
+import { isFailureActive } from './failure';
 
 export interface ActiveRoute {
   id: string;
