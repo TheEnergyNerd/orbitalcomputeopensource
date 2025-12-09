@@ -105,11 +105,16 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
       } else if ((sat as any).orbitalState) {
         // Use orbital state to calculate position
         orbitalState = (sat as any).orbitalState;
-        [x, y, z] = calculateOrbitalPosition(
-          orbitalState.altitudeRadius,
-          orbitalState.inclination,
-          orbitalState.theta
-        );
+        if (orbitalState) {
+          [x, y, z] = calculateOrbitalPosition(
+            orbitalState.altitudeRadius,
+            orbitalState.inclination,
+            orbitalState.theta
+          );
+        } else {
+          // Fallback to lat/lon/alt if orbitalState is undefined
+          [x, y, z] = latLonAltToXYZ(sat.lat, sat.lon, sat.alt_km);
+        }
       } else {
         // Fallback to lat/lon/alt conversion
         [x, y, z] = latLonAltToXYZ(sat.lat, sat.lon, sat.alt_km);
