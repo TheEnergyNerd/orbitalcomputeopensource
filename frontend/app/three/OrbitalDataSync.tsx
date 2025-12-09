@@ -7,10 +7,7 @@ import { useSimulationStore } from "../store/simulationStore";
 import { useOrbitSim } from "../state/orbitStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import type { Satellite as SimSatellite } from "../store/simStore";
-import { 
-  getAltitudeForShell,
-  getDeploymentForYear 
-} from "../lib/orbitSim/deploymentSchedule";
+// deploymentSchedule.ts removed - getAltitudeForShell is available from satellitePositioning
 import { 
   generateOrbitalState,
   getRandomInclination,
