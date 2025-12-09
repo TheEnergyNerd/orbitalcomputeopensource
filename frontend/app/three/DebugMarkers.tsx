@@ -33,8 +33,8 @@ export function DebugMarkers() {
         
         // Find closest satellite to route's stored fromVec (same logic as TrafficFlows)
         let closestFromDist = Infinity;
-        let fromSat: typeof satellites[0] | null = null;
-        satellites.forEach(sat => {
+        let fromSat: Satellite | null = null;
+        for (const sat of satellites) {
           const dist = Math.sqrt(
             (sat.x - route.fromVec[0]) ** 2 +
             (sat.y - route.fromVec[1]) ** 2 +
@@ -44,12 +44,12 @@ export function DebugMarkers() {
             closestFromDist = dist;
             fromSat = sat;
           }
-        });
+        }
         
         // Find closest satellite to route's stored toVec
         let closestToDist = Infinity;
-        let toSat: typeof satellites[0] | null = null;
-        satellites.forEach(sat => {
+        let toSat: Satellite | null = null;
+        for (const sat of satellites) {
           const dist = Math.sqrt(
             (sat.x - route.toVec[0]) ** 2 +
             (sat.y - route.toVec[1]) ** 2 +
@@ -59,10 +59,10 @@ export function DebugMarkers() {
             closestToDist = dist;
             toSat = sat;
           }
-        });
+        }
         
         // Use matched satellite positions
-        if (!fromSat || !toSat) return null;
+        if (fromSat === null || toSat === null) return null;
         
         const fromVec = new Vector3(fromSat.x, fromSat.y, fromSat.z);
         const toVec = new Vector3(toSat.x, toSat.y, toSat.z);
