@@ -193,7 +193,7 @@ export function computeBottlenecks(factory: FactoryState): Bottleneck[] {
     rackLine: 'racks',
     podFactory: 'pods',
     fuelDepot: 'fuel',
-    launchComplex: 'launch',
+    launchComplex: 'orbitPods',
   };
 
   for (const [nodeId, resource] of Object.entries(nodeToResource)) {
