@@ -39,11 +39,11 @@ export const FACTORY_RECIPES: Record<RecipeFactoryNodeId, Recipe> = {
 } as const;
 
 export type FactoryState = {
-  lines: Record<FactoryNodeId, number>; // integer lines, min 0
+  lines: Record<RecipeFactoryNodeId, number>; // integer lines, min 0
   maxInfraPoints: number; // e.g. 40
   usedInfraPoints: number; // sum(lines)
   inventory: ResourceInventory;
-  utilization: Record<FactoryNodeId, number>; // 0-1, >1 = bottleneck
+  utilization: Record<RecipeFactoryNodeId, number>; // 0-1, >1 = bottleneck
   buffers: ResourceInventory; // current inventory levels
 };
 
@@ -87,7 +87,7 @@ export function createDefaultFactoryState(): FactoryState {
   };
 }
 
-export type FactoryNodeId = 'chipFab' | 'rackLine' | 'podFactory' | 'fuelDepot' | 'launchComplex';
+// FactoryNodeId renamed to RecipeFactoryNodeId above to avoid conflict with factoryLayout
 
 /**
  * Compute production for one tick (one month)
@@ -197,7 +197,7 @@ export function computeBottlenecks(factory: FactoryState): Bottleneck[] {
   };
 
   for (const [nodeId, resource] of Object.entries(nodeToResource)) {
-    const utilization = factory.utilization[nodeId as FactoryNodeId];
+    const utilization = factory.utilization[nodeId as RecipeFactoryNodeId];
     if (utilization > 0.95) {
       bottlenecks.push({
         resource: resource as ResourceId,
