@@ -58,14 +58,14 @@ export function ClickableMarkers() {
         let minDist = Infinity;
         const CLICK_THRESHOLD = 0.08; // Reduced threshold for more precise clicking
         
-        orbitSatellites.forEach((sat) => {
+        for (const sat of orbitSatellites) {
           const satPos = new Vector3(sat.x, sat.y, sat.z);
           // Calculate distance from click ray to satellite position
           const rayToSat = satPos.clone().sub(clickRay.origin);
           const projectionLength = rayToSat.dot(clickRay.direction);
           
           // Only check satellites in front of camera
-          if (projectionLength < 0) return;
+          if (projectionLength < 0) continue;
           
           const closestPoint = clickRay.origin.clone().add(clickRay.direction.clone().multiplyScalar(projectionLength));
           const dist = closestPoint.distanceTo(satPos);
@@ -74,9 +74,9 @@ export function ClickableMarkers() {
             minDist = dist;
             closestSat = sat;
           }
-        });
+        }
         
-        if (closestSat) {
+        if (closestSat !== null) {
           console.log(`[ClickableMarkers] ✅ Clicked on satellite: ${closestSat.id}, distance=${minDist.toFixed(3)}`);
           setSelectedEntity({ type: "satellite", id: closestSat.id });
           event.stopPropagation();
