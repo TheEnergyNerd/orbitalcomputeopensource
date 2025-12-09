@@ -31,7 +31,7 @@ export default function StrategyDeck() {
     factory,
     factoryBottlenecks,
     // updateFactoryFacility, // Removed - not in SandboxStore
-    upgradeFactoryFacility,
+    // upgradeFactoryFacility, // Removed - not in SandboxStore
   } = useSandboxStore();
 
   const { getDeployedUnits, getQueuedUnits } = useOrbitalUnitsStore();
@@ -527,7 +527,9 @@ export default function StrategyDeck() {
                     </span>
                     <button
                       onClick={() => {
-                        const success = upgradeFactoryFacility(fac.type);
+                        // upgradeFactoryFacility removed - not in SandboxStore
+                        const success = false;
+                        console.warn('upgradeFactoryFacility not available');
                         if (!success) {
                           // Show error flash
                           setRejectionFlash(prev => ({
