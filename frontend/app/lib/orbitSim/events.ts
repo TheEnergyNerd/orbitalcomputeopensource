@@ -7,7 +7,7 @@ import type { StageId, SupplyEvent, FactoryGameState } from './factoryModel';
 
 // SupplyEventType is not exported from factoryModel, define it here
 // Based on actual usage in this file
-export type SupplyEventType = 'capacity_drop' | 'supply_boost' | 'supply_drop' | 'demand_spike' | 'demand_drop';
+export type SupplyEventType = 'capacity_drop' | 'efficiency_hit' | 'outage' | 'launch_risk_spike' | 'supply_boost' | 'supply_drop' | 'demand_spike' | 'demand_drop';
 
 /**
  * Event descriptions by type and stage
@@ -89,7 +89,7 @@ function pickTypeForStage(stageId: StageId): SupplyEventType {
  */
 export function maybeSpawnEvent(state: FactoryGameState): FactoryGameState {
   // Check if there's already an active unresolved event
-  const active = state.events.find(ev => !ev.resolved && ev.expiresAt > state.simTime);
+  const active = state.events.find(ev => !ev.resolved && (ev.spawnTime + ev.duration) > state.simTime);
   if (active) return state;
 
   // 5% chance per check (adjust frequency as needed)
@@ -149,7 +149,7 @@ export function getActiveEventsForStage(
  * Get all active events
  */
 export function getActiveEvents(events: SupplyEvent[], simTime: number): SupplyEvent[] {
-  return events.filter(ev => !ev.resolved && ev.expiresAt > simTime);
+  return events.filter(ev => !ev.resolved && (ev.spawnTime + ev.duration) > simTime);
 }
 
 /**
@@ -166,10 +166,11 @@ export function resolveEvent(events: SupplyEvent[], eventId: string): SupplyEven
  */
 export function cleanupEvents(events: SupplyEvent[], simTime: number, maxAge: number = 1000): SupplyEvent[] {
   return events.filter(ev => {
+    const expiresAt = ev.spawnTime + ev.duration;
     // Keep active events
-    if (!ev.resolved && ev.expiresAt > simTime) return true;
+    if (!ev.resolved && expiresAt > simTime) return true;
     // Keep recently resolved events
-    if (ev.resolved && simTime - ev.expiresAt < maxAge) return true;
+    if (ev.resolved && simTime - expiresAt < maxAge) return true;
     // Remove old events
     return false;
   });
