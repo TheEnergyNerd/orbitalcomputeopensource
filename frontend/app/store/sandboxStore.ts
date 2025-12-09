@@ -7,9 +7,10 @@ import type { PodTierId } from "../lib/deployment/podTiers";
 import type { LaunchProviderId } from "../lib/deployment/launchProviders";
 import type {
   FactoryState,
-  FactoryNodeId,
+  RecipeFactoryNodeId,
   Bottleneck,
 } from "../lib/factory/factoryRecipes";
+import type { FactoryNodeId } from "../lib/factory/factoryLayout";
 import {
   createDefaultFactoryState,
   runFactoryTick as runFactoryTickEngine,
