@@ -1,275 +1,219 @@
-# Orbital Compute Simulator - Context Document
+# Orbital Compute Simulation - Context Document
 
 ## Project Overview
-A Factorio-style orbital compute simulator where players build factories to produce compute pods and launch them to orbit. The simulator compares ground vs. orbital compute across metrics like latency, energy cost, carbon emissions, and resilience.
+A 3D web-based simulation of orbital compute infrastructure deployment, visualizing satellite constellations, routing, and strategy-based growth over time. The application uses Three.js for 3D rendering and Next.js for the frontend framework.
 
-## Architecture
+## Tech Stack
+- **Frontend Framework**: Next.js 14 (React)
+- **3D Rendering**: Three.js + React Three Fiber
+- **State Management**: Zustand (multiple stores)
+- **Styling**: Tailwind CSS
+- **Deployment**: 
+  - Frontend: Vercel
+  - Backend: Railway (web-production-e6f81.up.railway.app)
 
-### Frontend (Next.js + React + TypeScript)
-- **Location**: `frontend/`
-- **Framework**: Next.js 14+ with App Router
-- **State Management**: Zustand stores (`sandboxStore`, `simStore`, `orbitalUnitsStore`)
-- **3D Globe**: CesiumJS for rendering Earth, satellites, and orbital paths
-- **Styling**: TailwindCSS
+## Key Features
 
-### Backend (FastAPI + Python)
-- **Location**: `backend/`
-- **Framework**: FastAPI
-- **Purpose**: Serves simulation state, fetches TLE data from CelesTrak, handles CORS
+### 1. Dual-Class Satellite System
+- **Class A (Starlink-compute)**: LEO shells, baseline compute satellites
+  - Power: 120 kW
+  - Compute: 10 PFLOPs (baseline, grows with tech curve)
+  - Lifetime: 6 years
+  - Mass: 1.2 tons
+- **Class B (Casey SSO slicer)**: Sun-synchronous orbit, inference-focused
+  - Power: 130 kW
+  - Compute: 200 PFLOPs (much higher density)
+  - Lifetime: 7 years
+  - Mass: 2.0 tons
+  - Available from 2030 onward
+  - Always sun-facing orientation
 
-## Key Components
+### 2. Strategy-Based Growth
+Four strategy modes affect deployment:
+- **COST**: Growth multiplier 1.30, favors mid-LEO, 50% Class B share
+- **LATENCY**: Growth multiplier 1.10, favors low LEO, 25% Class B share
+- **CARBON**: Growth multiplier 1.05, favors sun-sync, 70% Class B share
+- **BALANCED**: Growth multiplier 1.18, mixed allocation, 50% Class B share
 
-### UI Structure (Two-Mode System)
+Annual launch capacity: `L(t) = min(60 * t, 1200)` satellites/year
 
-#### 1. **SimpleView (Overview Tab)** - Default View
-- **File**: `frontend/app/components/SimpleView.tsx`
-- **Purpose**: Clean, minimal view for casual users
-- **Shows**:
-  - Top controls: Orbital Share, Pods/Year, Launches/Year
-  - Globe (center)
-  - Metrics panel (2x2 grid): Latency, Energy Cost, Carbon, Resilience
-  - Deployment summary sentence
-  - Link to "Deep dive: industrial / advanced view"
+### 3. Year-Stepped Simulation
+- Simulation progresses year by year
+- Strategy changes only affect future growth (no history rewriting)
+- Tech curves for compute and power improve over time
+- Satellite retirement based on lifetime
 
-#### 2. **AdvancedView (Advanced Tab)**
-- **File**: `frontend/app/components/AdvancedView.tsx`
-- **Purpose**: Full factory/industrial UI for power users
-- **Shows**:
-  - Left sidebar: Factory Systems Panel (power, cooling, workforce, resources, warnings)
-  - Center: Factory Flow diagram (FactoryStrip component)
-  - Right panel: Node detail panel (when building clicked)
-  - Factory Start Guide
-  - Pods Ready Indicator
+### 4. 3D Globe Visualization
+- Three.js-based globe with Earth texture
+- Satellite rendering:
+  - If total ≤ 4000: render all satellites
+  - If > 4000: density sprites (one sprite = 25-50 satellites)
+- Streaming spawn animation for new satellites
+- Class A: Small teal circles with subtle halo
+- Class B: Larger pill/diamond shapes, bright white/neon blue, strong sun-facing glow
 
-### Core Simulation Engine
+### 5. Routing System
+- Dynamic route generation based on satellite count
+- Mix of orbit-to-orbit and ground-to-orbit routes
+- Routes originate from American data centers
+- Visual encoding:
+  - Width: based on traffic load
+  - Color: green (low load), yellow (medium), red (high), purple (rerouted)
+  - Speed: varies with latency
+- Routes only show to rendered satellites
 
-#### Factory Production Chain
-**File**: `frontend/app/lib/sim/model.ts`
+### 6. UI Components
+- **SatelliteCounters**: Bottom-right panel showing total satellites, power, compute, routes
+- **DebugExportPanel**: Only visible on `/data` route, exports CSV/JSON
+- **KPI Cards**: Cost, Carbon, Latency metrics with crossover detection
+- **Strategy Deck**: Strategy selection and factory management
+- **Detail Panel**: Shows selected entity (satellite, launch site, data center) details
 
-**Resources** (in order):
-1. `silicon` - Source (infinite, 50/min)
-2. `steel` - Source (infinite, 50/min)
-3. `chips` - Produced by Chip Fab
-4. `computeUnits` - Produced by Compute Line
-5. `pods` - Produced by Pod Factory
-6. `launchOpsResource` - Source (infinite, 100/min)
-7. `launches` - Produced by Launch Ops → immediately goes to orbit
+## Key Files & Structure
 
-**Machines**:
-- `chipFab`: Silicon → Chips (200 chips/min per line, default: 1 line)
-- `computeLine`: Steel + Chips → Compute Units (10 units/min per line, default: 1 line)
-- `podFactory`: Chips + Compute Units → Pods (6 pods/min per line = 1 pod per 10 seconds, default: 1 line)
-- `launchOps`: Pods + Launch Ops Resource → Launches (0.5 launches/min per line, default: 0 lines)
+### State Management (Zustand Stores)
+- `frontend/app/store/simStore.ts`: Core simulation state (satellites, routes, metrics)
+- `frontend/app/store/simulationStore.ts`: Year-by-year timeline, strategy, deployment
+- `frontend/app/store/orbitalUnitsStore.ts`: Orbital unit deployment queue
+- `frontend/app/state/orbitStore.ts`: Three.js visualization state (satellites, routes)
 
-**Key Settings**:
-- Pods accumulate in buffer until `launchOps` consumes them
-- Launches immediately increment `podsInOrbit` (no buffer)
-- Pod degradation: 3% per year
-- Generational upgrades available (increases compute, reduces cost/mass)
+### 3D Rendering
+- `frontend/app/three/OrbitalScene.tsx`: Main Three.js scene setup
+- `frontend/app/three/SatellitesOptimized.tsx`: Satellite rendering with performance optimization
+- `frontend/app/three/RoutingArrows.tsx`: Animated routing arrows
+- `frontend/app/three/TrafficFlows.tsx`: Route visualization
+- `frontend/app/three/OrbitalDataSync.tsx`: Syncs simulation state to Three.js
 
-#### Simulation Engine
-**File**: `frontend/app/lib/sim/engine.ts`
+### Core Logic
+- `frontend/app/lib/orbitSim/satellitePositioning.ts`: Satellite position generation (physically coherent)
+- `frontend/app/lib/orbitSim/orbitalMechanics.ts`: Orbital state calculations
+- `frontend/app/lib/orbitSim/shellAssignment.ts`: Assigns satellites to orbital shells
+- `frontend/app/lib/orbitSim/strategyDeployment.ts`: Strategy-aware deployment calculations
+- `frontend/app/lib/orbitSim/orbitShells.ts`: Shell definitions (VLEO, MID-LEO, SSO, MEO, GEO)
 
-**Function**: `stepSim(state, dtMinutes)`
-- Processes all machines (consumes inputs, produces outputs)
-- Applies constraints (power, cooling, workforce, footprint)
-- Calculates utilization based on limiting factor
-- Handles source resources (auto-replenish)
-- Applies pod degradation and generational upgrades
-- Returns updated state
+### Components
+- `frontend/app/page.tsx`: Main application page
+- `frontend/app/components/SatelliteCounters.tsx`: Bottom-right metrics panel
+- `frontend/app/components/DebugExportPanel.tsx`: Data export (only on `/data` route)
+- `frontend/app/components/orbitSim/SimpleModeView.tsx`: Main overview view
+- `frontend/app/components/orbitSim/KpiCard.tsx`: Metric cards with charts
 
-**Key Logic**:
-- Machines consume inputs based on utilization
-- Utilization = min(1.0, constraint ratios, input availability)
-- Source resources maintain minimum buffer (1000 units)
-- Pods are rounded to integers when produced
-- Launches are floored to whole numbers before going to orbit
+## Recent Changes
 
-### State Management
+### Removed Dependencies
+- **Cesium**: Removed entirely (was causing build issues, not used)
+- **react-globe.gl**: Removed (not installed, not used)
 
-#### `sandboxStore` (`frontend/app/store/sandboxStore.ts`)
-- Main application state
-- Contains: `simState`, factory state, deployment state, mission state
-- Actions: `stepSimulation()`, `updateMachineLines()`, `performLaunch()`, etc.
+### Fixed Issues
+- All TypeScript errors resolved
+- Build compiles successfully on Vercel
+- Coordinate system fixed (markers align with Earth texture)
+- Satellite persistence fixed (no longer disappearing after deployment)
+- Routing only shows to rendered satellites
+- Map iteration issues fixed (using `Array.from()`)
 
-#### `simStore` (`frontend/app/store/simStore.ts`)
-- Backend state synchronization
-- Polls `/state` endpoint every 2 seconds
-- Manages loading/error states
+### UI Adjustments
+- SatelliteCounters moved to bottom-right
+- DebugExportPanel only shows on `/data` route
+- Satellite rendering optimized (2% sampling when > 4000 total)
+- Launch sites limited to American locations (Florida, California, Texas)
+- Data centers and launch sites are clickable
 
-### Key UI Components
+## Coordinate System
 
-#### Factory Components
-- **FactoryStrip** (`frontend/app/components/factory/FactoryStrip.tsx`): Horizontal factory flow visualization
-- **FactorySystemsPanelV2** (`frontend/app/components/FactorySystemsPanelV2.tsx`): Left sidebar with systems, resources, warnings
-- **FactoryNodeDetailPanel** (`frontend/app/components/FactoryNodeDetailPanel.tsx`): Right panel showing selected building details
-- **FactoryStartGuide** (`frontend/app/components/FactoryStartGuide.tsx`): Tutorial overlay when no machines running
-- **PodsReadyIndicator** (`frontend/app/components/PodsReadyIndicator.tsx`): Banner when pods are ready to launch
+### For Static Markers (Launch Sites, Data Centers)
+Uses texture-aligned conversion in `coordinateUtils.ts`:
+- Aligns with `webgl-earth` texture
+- Markers appear in correct geographic locations
 
-#### Globe Components
-- **SandboxGlobe** (`frontend/app/components/SandboxGlobe.tsx`): Main Cesium globe renderer
-- **useCesiumViewer** (`frontend/app/hooks/useCesiumViewer.ts`): Hook managing single Cesium viewer instance
-
-#### Metrics Components
-- **OrbitalAdvantagePanelV2** (`frontend/app/components/OrbitalAdvantagePanelV2.tsx`): 2x2 metrics grid (Latency, Energy Cost, Carbon, Resilience)
-- **KpiBar** (`frontend/app/components/KpiBar.tsx`): Compact metrics strip (removed from Overview, still used elsewhere)
-
-### Navigation
-- **ModeTabs** (`frontend/app/components/ModeTabs.tsx`): Top-level tabs (Overview, Advanced, Deployment, Orbit, Missions)
-- Supports `switchMode` custom event for programmatic tab switching
-
-## Recent Changes & Fixes
-
-### UI Restructure (Latest)
-- Split into SimpleView (Overview) and AdvancedView (Advanced)
-- Overview shows only: controls, globe, metrics, deployment summary
-- Advanced shows full factory UI (flow diagram, sidebars, machine details)
-- Fixed pointer events so globe is interactive (overlays use `pointer-events-none`, UI elements use `pointer-events-auto`)
-
-### Factory Production Fixes
-- Changed `launchOps` default lines from 1 to 0 (was consuming pods faster than production)
-- Increased `podFactory` output from 0.125 pods/min to 6 pods/min (1 pod per 10 seconds)
-- Fixed `switchMode` event listener type in ModeTabs
-
-### Globe Disappearing Fix
-- Added ResizeObserver and MutationObserver to detect container collapse
-- Added `!important` CSS rules to prevent style overrides
-- Added viewport size validation (uses screen dimensions if viewport < 400px)
-
-## Key Files Reference
-
-### Core Simulation
-- `frontend/app/lib/sim/model.ts` - Data models, machine definitions, initial state
-- `frontend/app/lib/sim/engine.ts` - Simulation step logic
-- `frontend/app/lib/sim/orbitConfig.ts` - Orbital/ground compute specs and annualized calculations
-- `frontend/app/lib/sim/constraints.ts` - Factory constraints (power, cooling, workforce, footprint)
-
-### State Management
-- `frontend/app/store/sandboxStore.ts` - Main application state (Zustand)
-- `frontend/app/store/simStore.ts` - Backend state sync (Zustand)
-- `frontend/app/store/orbitalUnitsStore.ts` - Deployed units state (Zustand)
-
-### Main App
-- `frontend/app/page.tsx` - Root component, orchestrates all views
-- `frontend/app/components/ModeTabs.tsx` - Top-level navigation
-- `frontend/app/components/SimpleView.tsx` - Overview mode
-- `frontend/app/components/AdvancedView.tsx` - Advanced/factory mode
-
-### Utilities
-- `frontend/app/lib/utils/formatNumber.ts` - Number formatting (sig figs, M/B/T suffixes)
-- `frontend/app/hooks/useSimPolling.ts` - Continuous simulation stepping (100ms interval)
-
-## Running the Project
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Runs on `http://localhost:3000`
-
-### Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-pip install -r requirements.txt
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-Runs on `http://localhost:8000`
-
-### Quick Start Script
-```bash
-./start-backend.sh  # Starts backend
-# Then in another terminal:
-cd frontend && npm run dev
-```
-
-## Environment Variables
-
-### Frontend
-- `NEXT_PUBLIC_API_BASE` - Backend API URL (default: `http://localhost:8000`)
-- `NEXT_PUBLIC_CESIUM_ION_TOKEN` - Cesium Ion access token (for imagery)
-
-### Backend
-- CORS origins configured in `backend/main.py`
+### For Satellites
+Uses physically coherent positioning in `satellitePositioning.ts`:
+- Proper orbital mechanics
+- Latitude distribution: `asin(uniform(-sin(maxInc), sin(maxInc)))` to avoid pole clustering
+- Longitude: uniform -180° to 180°
+- Altitude-based shell assignment
 
 ## Deployment
 
-### Railway (Backend)
-- Uses Dockerfile in `backend/`
-- Environment: Python 3.11
-- Port: 8000
-
-### Vercel (Frontend)
+### Frontend (Vercel)
 - Root directory: `frontend`
-- Build command: `npm run build`
-- Output directory: `.next`
-- Environment: `NEXT_PUBLIC_API_BASE` must be set to Railway URL
+- Build command: `npm ci && npm run build`
+- Install command: `npm ci`
+- Environment variables: (check `vercel.json` or Vercel dashboard)
+
+### Backend (Railway)
+- URL: `web-production-e6f81.up.railway.app`
+- CORS configured for frontend
+
+## Important Constants
+
+### Satellite Specifications
+```typescript
+// Class A
+SAT_A_POWER_KW = 120
+SAT_A_COMPUTE_PFLOPS_0 = 10
+SAT_A_LIFETIME_Y = 6
+SAT_A_MASS_T = 1.2
+
+// Class B
+SAT_B_POWER_KW_0 = 130
+SAT_B_COMPUTE_PFLOPS_0 = 200
+SAT_B_LIFETIME_Y = 7
+SAT_B_MASS_T = 2.0
+SAT_B_AVAILABLE_FROM = 2030
+```
+
+### Tech Curves
+```typescript
+// Class A
+computePerA(t) = 10 * (1 + 0.18 * dtA)
+powerPerA(t) = 120 * (1 + 0.04 * dtA)
+
+// Class B
+computePerB(t) = 200 * (1 + 0.14 * dtB)
+powerPerB(t) = 130 * (1 + 0.03 * dtB)
+```
+
+### Launch Capacity
+```typescript
+L(t) = min(60 * t, 1200) // satellites/year
+```
 
 ## Known Issues / TODOs
 
-1. **Factory Production Balance**: May need tuning of input/output rates as gameplay evolves
-2. **Mobile UI**: Some components may need responsive adjustments
-3. **Tutorial**: OnboardingTutorial shows every time (user requested), may want to add dismiss option
-4. **Performance**: Large numbers of satellites may impact Cesium rendering (safe mode available)
+1. **Class B Visualization**: SSO ring visualization could be enhanced
+2. **Strategy Phase Diagram**: Not yet implemented (from user spec)
+3. **Power → Compute Frontier Chart**: Not yet implemented (from user spec)
+4. **Dual-Class Stack Chart**: Not yet implemented (from user spec)
+5. **Global KPI Strip**: Not yet implemented (from user spec)
 
-## Key Design Decisions
+## File Locations for Common Tasks
 
-1. **Two-Mode UI**: Separates casual users (Overview) from power users (Advanced)
-2. **Single Source of Truth**: All state in Zustand stores, no duplication
-3. **Annualized Metrics**: Removed real-time sun-position logic, uses averages
-4. **Factorio-Style**: Production chains, bottlenecks, constraints, build queues
-5. **Pointer Events**: Overlays don't block globe interaction, only UI elements are clickable
+- **Change satellite appearance**: `frontend/app/three/SatellitesOptimized.tsx`
+- **Modify routing logic**: `frontend/app/three/RoutingArrows.tsx`, `frontend/app/three/TrafficFlows.tsx`
+- **Update strategy effects**: `frontend/app/lib/orbitSim/strategyDeployment.ts`
+- **Change satellite positioning**: `frontend/app/lib/orbitSim/satellitePositioning.ts`
+- **Modify UI layout**: `frontend/app/page.tsx`, `frontend/app/components/orbitSim/SimpleModeView.tsx`
+- **Export data format**: `frontend/app/components/DebugExportPanel.tsx`
 
-## Testing Checklist
+## Environment Variables
 
-When making changes, verify:
-- [ ] Globe is interactive (can pan/zoom/click)
-- [ ] Factory produces pods (check buffer in sidebar)
-- [ ] Pods accumulate when launchOps has 0 lines
-- [ ] Launches increment podsInOrbit
-- [ ] Metrics update correctly (orbital share, latency, cost, carbon)
-- [ ] Mode switching works (Overview ↔ Advanced)
-- [ ] No console errors
-- [ ] Mobile responsive (if UI changes)
+Check Vercel dashboard and Railway dashboard for:
+- Backend API URL
+- Any API keys
+- CORS settings
 
-## Common Commands
+## Git Status
+- Main branch: `main`
+- Recent commits: All TypeScript errors fixed, build passing
+- Last major change: Removed Cesium, fixed all build errors, moved UI components
 
-```bash
-# Check for lint errors
-cd frontend && npm run lint
+## Next Steps (From User Spec)
 
-# Build for production
-cd frontend && npm run build
+The user requested these features but they're not yet implemented:
+1. Dual-Class Satellite Stack Chart (stacked area chart)
+2. Power → Compute Frontier (animated scatter)
+3. Strategy Phase Diagram (timeline with micro-graphs)
+4. Global KPI Strip (top HUD with 5 metrics)
 
-# Check backend logs
-cd backend && python -m uvicorn main:app --reload
-
-# Git workflow
-git add -A
-git commit -m "Description"
-git push
-```
-
-## File Structure
-```
-frontend/app/
-├── components/          # React components
-│   ├── factory/        # Factory-specific components
-│   ├── deployment/     # Deployment tab components
-│   └── ...
-├── lib/
-│   ├── sim/           # Simulation engine
-│   ├── utils/         # Utilities
-│   └── ...
-├── store/              # Zustand stores
-├── hooks/              # React hooks
-└── page.tsx            # Root component
-
-backend/
-├── main.py            # FastAPI app
-├── requirements.txt   # Python dependencies
-└── Dockerfile         # Railway deployment
-```
+These should be added to the overview/deployment views.
