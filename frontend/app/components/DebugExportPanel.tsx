@@ -51,17 +51,20 @@ export default function DebugExportPanel() {
     const utilizationMultiplier = 0.82; // Cost strategy default
     const effectiveComputeAfterUtilization = totalOrbitalComputePFLOPs * utilizationMultiplier;
 
-    // Ground compute from simulation state
-    const totalGroundComputePFLOPs = simState?.groundCompute || 0;
+    // Ground compute from timeline (convert TWh to PFLOPs)
+    const lastStep = timeline.length > 0 ? timeline[timeline.length - 1] : null;
+    const totalGroundComputePFLOPs = lastStep?.netGroundComputeTwh 
+      ? lastStep.netGroundComputeTwh * 1e3 // Convert TWh to PFLOPs (1 TWh = 1000 PFLOPs)
+      : 0;
 
-    // Costs from simulation state or calculate from cost per TFLOP
+    // Costs from timeline or calculate from cost per TFLOP
     const orbitCostPerTFLOP = getOrbitalCostPerTFLOP(currentYear);
     const orbitTotalCost = totalOrbitalComputePFLOPs * orbitCostPerTFLOP * 1e3; // Convert PFLOPs to TFLOPs
-    const groundTotalCost = simState?.groundCost || 0;
+    const groundTotalCost = lastStep?.opexGround || 0;
 
     // Carbon (amortized launch carbon per satellite)
     const carbonOrbit = satellites.length * 1.19; // tons/year per satellite (amortized launch)
-    const carbonGround = simState?.groundCarbon || 0;
+    const carbonGround = lastStep?.carbonGround || 0;
 
     // Latency (calculate average from satellites or use default)
     const avgOrbitLatency = satellites.length > 0 
