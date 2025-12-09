@@ -30,7 +30,7 @@ export default function StrategyDeck() {
     activeMissionId,
     factory,
     factoryBottlenecks,
-    updateFactoryFacility,
+    // updateFactoryFacility, // Removed - not in SandboxStore
     upgradeFactoryFacility,
   } = useSandboxStore();
 
@@ -608,9 +608,8 @@ export default function StrategyDeck() {
                         }
                       }
                       
-                      updateFactoryFacility(fac.type as FacilityType, {
-                        desiredLines: requestedValue,
-                      } as any);
+                      // updateFactoryFacility removed - not in SandboxStore
+                      console.warn('updateFactoryFacility not available - factory facility updates disabled');
                     }}
                     className={`w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent-blue transition-all ${
                       rejectionFlash[fac.type] ? "ring-2 ring-red-500 animate-pulse" : ""
