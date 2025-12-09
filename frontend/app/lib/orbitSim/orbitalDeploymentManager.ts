@@ -32,8 +32,9 @@ const LAUNCH_SITES = [
  * Generate deployment events for a year
  */
 export function generateDeploymentForYear(year: number): DeploymentEvent[] {
-  const deployment = getDeploymentForYear(year);
-  if (!deployment) return [];
+  // deploymentSchedule.ts was removed - return empty array for now
+  // This function needs to be reimplemented using simulation config if needed
+  return [];
   
   const events: DeploymentEvent[] = [];
   let satIndex = 0;
@@ -90,17 +91,8 @@ export function generateDeploymentForYear(year: number): DeploymentEvent[] {
  * Get all satellites up to a given year
  */
 export function getAllSatellitesUpToYear(year: number): Satellite[] {
-  const allSats: Satellite[] = [];
-  
-  for (const deployment of DEPLOYMENT_SCHEDULE) {
-    if (deployment.year <= year) {
-      const events = generateDeploymentForYear(deployment.year);
-      events.forEach(event => {
-        allSats.push(...event.satellites);
-      });
-    }
-  }
-  
-  return allSats;
+  // deploymentSchedule.ts was removed - return empty array for now
+  // This function needs to be reimplemented using simulation config if needed
+  return [];
 }
 

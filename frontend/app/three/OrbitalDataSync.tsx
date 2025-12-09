@@ -551,11 +551,8 @@ export function OrbitalDataSync() {
         { lat: 34.7420, lon: -120.5724 }, // Vandenberg LC-576E
       ];
       
-      // Get current year for deployment schedule
-      const currentYear = new Date().getFullYear();
-      const deployment = getDeploymentForYear(currentYear);
-      
       // Calculate current congestion and satellite counts per shell for shell assignment
+      // Note: deploymentSchedule.ts was removed - using direct shell assignment instead
       const currentCongestion: Record<string, number> = {
         "VLEO": 0.3,
         "MID-LEO": 0.4,
