@@ -4,7 +4,7 @@ import { useRef, useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import { Raycaster, Vector2, Vector3, Matrix4 } from "three";
 import { useSimStore } from "../store/simStore";
-import { useOrbitSim } from "../state/orbitStore";
+import { useOrbitSim, type Satellite } from "../state/orbitStore";
 import { latLonAltToXYZ } from "../lib/three/coordinateUtils";
 
 /**
@@ -197,7 +197,7 @@ export function ClickableMarkers() {
             
             if (isOrbital) {
               // Try orbitStore first (has xyz directly)
-              let closestSat: typeof orbitSatellites[0] | null = null;
+              let closestSat: Satellite | null = null;
               let minDist = Infinity;
               
               orbitSatellites.forEach((sat) => {
