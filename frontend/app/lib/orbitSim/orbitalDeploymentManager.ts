@@ -5,7 +5,7 @@
 
 // deploymentSchedule.ts removed - using strategyDeployment instead
 import { assignSatelliteToShell } from "./shellAssignment";
-import { getAltitudeForShell } from "./satellitePositioning";
+// getAltitudeForShell removed - not available in satellitePositioning
 import { 
   generateOrbitalState,
   getRandomInclination,
