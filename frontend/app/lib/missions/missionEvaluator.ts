@@ -56,8 +56,9 @@ function resolveMetric(metricKey: string, region?: string): number {
       // Coverage based on number of deployed LEO pods (each pod = ~50 satellites)
       // Each pod provides ~2% coverage, scaling with orbit mode
       const leoPods = deployedUnits.filter(u => u.type === "leo_pod").length;
-      const geoHubs = deployedUnits.filter(u => u.type === "geo_hub").length;
-      const serverFarms = deployedUnits.filter(u => u.type === "server_farm").length;
+      // geo_hub and server_farm removed - only leo_pod is supported now
+      const geoHubs = 0;
+      const serverFarms = 0;
       
       // LEO pods: ~2% coverage per pod (50 sats each)
       // GEO hubs: ~10% coverage per hub (global coverage)
@@ -73,8 +74,9 @@ function resolveMetric(metricKey: string, region?: string): number {
     if (parts[1] === "lowIncomeRegionsPct") {
       // Similar calculation but slightly lower for low-income regions
       const leoPods = deployedUnits.filter(u => u.type === "leo_pod").length;
-      const geoHubs = deployedUnits.filter(u => u.type === "geo_hub").length;
-      const serverFarms = deployedUnits.filter(u => u.type === "server_farm").length;
+      // geo_hub and server_farm removed - only leo_pod is supported now
+      const geoHubs = 0;
+      const serverFarms = 0;
       
       const leoCoverage = leoPods * 1.6; // 80% of normal
       const geoCoverage = geoHubs * 8; // 80% of normal
