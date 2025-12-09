@@ -274,7 +274,7 @@ export default function StrategyDeckNew() {
                       value={lines}
                       onChange={(e) => {
                         const newLines = Number(e.target.value);
-                        const success = updateFactoryLines(nodeId, newLines);
+                        const success = updateFactoryLines(nodeId as FactoryNodeId, newLines);
                         if (!success) {
                           // Flash error - infra cap reached
                           alert("Infrastructure cap reached");
