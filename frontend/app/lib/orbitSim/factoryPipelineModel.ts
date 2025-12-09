@@ -38,7 +38,7 @@ export function selectPipelineStages(stages: Record<StageId, StageState>): Pipel
     return {
       id: id as PipelineStageId,
       label: config.label,
-      throughput: stage.throughput,
+      throughput: stage.throughput ?? 0, // Provide default if undefined
       capacity: stage.capacity,
       utilization: Math.min(1, stage.utilization || 0),
       efficiency: stage.efficiency || 0.7,
