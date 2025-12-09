@@ -10,20 +10,36 @@ import { useFrame } from "@react-three/fiber";
 import { Vector3, CatmullRomCurve3, CubicBezierCurve3 } from "three";
 import { Line } from "@react-three/drei";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
-import { useOrbitSim } from "../state/orbitStore";
+import { useOrbitSim, type Satellite } from "../state/orbitStore";
 import { latLonAltToXYZ } from "../lib/three/coordinateUtils";
 import { LAUNCH_SITES } from "./LaunchSites";
-import { 
-  assignSatelliteToShell, 
-  getAltitudeForShell,
-  type ShellDistribution 
-} from "../lib/orbitSim/deploymentSchedule";
 import { 
   generateOrbitalState,
   getRandomInclination,
   calculateOrbitalPosition
 } from "../lib/orbitSim/orbitalMechanics";
-import { useOrbitSim, type Satellite } from "../state/orbitStore";
+
+// Shell distribution types (deploymentSchedule was removed)
+type ShellDistribution = {
+  shell: "LEO-1" | "LEO-2" | "LEO-3";
+  altitude: number;
+};
+
+function assignSatelliteToShell(index: number, total: number): ShellDistribution {
+  // Simple distribution: 40% LEO-1, 35% LEO-2, 25% LEO-3
+  const ratio = index / total;
+  if (ratio < 0.4) {
+    return { shell: "LEO-1", altitude: 400 };
+  } else if (ratio < 0.75) {
+    return { shell: "LEO-2", altitude: 600 };
+  } else {
+    return { shell: "LEO-3", altitude: 800 };
+  }
+}
+
+function getAltitudeForShell(shell: ShellDistribution): number {
+  return shell.altitude;
+}
 
 interface LaunchArc {
   id: string;
