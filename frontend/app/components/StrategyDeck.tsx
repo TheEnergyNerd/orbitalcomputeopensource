@@ -496,7 +496,7 @@ export default function StrategyDeck() {
             const nodeName = nodeId === 'chipFab' ? 'Chip Fab' :
                            nodeId === 'rackLine' ? 'Rack Line' :
                            nodeId === 'podFactory' ? 'Pod Factory' :
-                            nodeId === 'fuelPlant' ? 'Fuel Plant' :
+                            nodeId === 'fuelDepot' ? 'Fuel Depot' :
                            nodeId === 'launchComplex' ? 'Launch Complex' : nodeId;
             
             return (
