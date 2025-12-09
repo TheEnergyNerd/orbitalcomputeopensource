@@ -154,7 +154,8 @@ export function checkMissionProgress(
 
     if (condition.operator === 'lte') {
       // For "less than or equal", we want value <= threshold
-      conditionMet = (value ?? 0) <= condition.threshold;
+      const safeValue = value ?? 0;
+      conditionMet = safeValue <= condition.threshold;
       
       // Calculate progress: how close are we to the threshold?
       if (condition.threshold < 0) {
@@ -163,7 +164,7 @@ export function checkMissionProgress(
         // If value is -40 and threshold is -40, we're at 100%
         // If value is -20 and threshold is -40, we're at 50%
         const targetReduction = Math.abs(condition.threshold);
-        const currentReduction = value < 0 ? Math.abs(value) : 0;
+        const currentReduction = safeValue < 0 ? Math.abs(safeValue) : 0;
         progress[condition.metric] = Math.min(100, Math.max(0, (currentReduction / targetReduction) * 100));
       } else {
         // Threshold is positive (we want to stay below)
