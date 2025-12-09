@@ -139,7 +139,7 @@ export function LaunchAnimationV2() {
     
     const effectiveDelta = delta * simSpeed;
     
-    for (const [launchId, launch] of launchesRef.current.entries()) {
+    for (const [launchId, launch] of Array.from(launchesRef.current.entries())) {
       // Update progress
       const elapsed = simTime - launch.startTime;
       launch.progress = Math.min(1, elapsed / launch.duration);
