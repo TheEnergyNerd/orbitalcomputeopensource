@@ -476,8 +476,9 @@ export function runFactoryTick(
   // withBuilds.activeEvents = [...updatedEvents, ...newEvents];
   withBuilds.activeEvents = withBuilds.activeEvents || [];
   
-  // Apply event effects to facilities
-  const withEvents = applyEventEffects(withBuilds, withBuilds.activeEvents);
+  // Apply event effects to facilities (disabled - applyEventEffects not implemented)
+  // const withEvents = applyEventEffects(withBuilds, withBuilds.activeEvents);
+  const withEvents = withBuilds; // Use withBuilds directly since events are disabled
 
   const bottlenecks = getBottlenecksSummary(withEvents, requiredThroughput);
 
