@@ -239,7 +239,7 @@ export default function StrategyDeckNew() {
             </div>
 
             <div className="space-y-3">
-              {(Object.keys(FACTORY_RECIPES) as FactoryNodeId[]).map((nodeId) => {
+              {(Object.keys(FACTORY_RECIPES) as RecipeFactoryNodeId[]).map((nodeId) => {
                 const lines = factory.lines[nodeId] ?? 0;
                 const utilization = factory.utilization[nodeId] ?? 0;
                 const recipe = FACTORY_RECIPES[nodeId];
