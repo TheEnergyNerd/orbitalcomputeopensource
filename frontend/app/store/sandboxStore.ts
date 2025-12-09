@@ -117,6 +117,7 @@ interface SandboxStore {
   setGroundEnergyPrice: (price: number) => void;
   setLaunchCapacity: (capacity: number) => void;
   setTimeScale: (scale: 1 | 10 | 100) => void;
+  stepSimulation: (dtMinutes: number) => void;
 }
 
 export const useSandboxStore = create<SandboxStore>((set, get) => ({
