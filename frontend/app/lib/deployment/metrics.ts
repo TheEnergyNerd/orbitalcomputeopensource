@@ -3,7 +3,8 @@
  * Based on orbital share and economic formulas
  */
 
-import type { SimState, OrbitalPodSpec, GroundDcSpec } from "../sim/model";
+import type { SimState } from "../sim/model";
+import type { OrbitalPodSpec, GroundDcSpec } from "../sim/orbitConfig";
 import { getOrbitalComputeKw } from "../sim/orbitConfig";
 
 // Constants for calculations
