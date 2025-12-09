@@ -516,7 +516,7 @@ export function runFactoryTick(
     launchSlotsCreatedThisTick,
     bottlenecks,
     activeEvents: withEvents.activeEvents,
-    newEvents,
+    newEvents: [], // spawnRandomEvents not implemented
   };
 }
 
