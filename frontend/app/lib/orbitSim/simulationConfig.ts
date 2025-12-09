@@ -174,6 +174,6 @@ export function createDefaultConfig(): SimulationConfig {
     routerWeights: { cost: 1, latency: 1, carbon: 1 },
     aiControlPercent: 0.5,
     // Constellation defaults
-    constellation: aiDesignConstellation("balanced"),
+    constellation: aiDesignConstellation("resilience"), // "balanced" not a valid ConstellationMode, use "resilience" instead
   };
 }
