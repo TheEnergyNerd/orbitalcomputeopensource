@@ -31,7 +31,6 @@ import OrbitalScene from "./three/OrbitalScene";
 import DebugHud from "./components/DebugHud";
 import YearCounter from "./components/YearCounter";
 import TutorialSystem from "./components/TutorialSystem";
-import IntegrityHud from "./components/IntegrityHud";
 import DebugExportPanel from "./components/DebugExportPanel";
 import { SatelliteCounters } from "./components/SatelliteCounters";
 import { PerformanceWarning } from "./components/PerformanceWarning";
@@ -140,7 +139,6 @@ export default function Home() {
         <DebugHud activeSurface={activeSurface} />
         
         {/* Integrity HUD - always visible */}
-        <IntegrityHud />
         
         {/* Debug Export Panel - always visible */}
         <DebugExportPanel />

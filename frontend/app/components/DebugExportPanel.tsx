@@ -123,15 +123,17 @@ export default function DebugExportPanel() {
 
     timeline.forEach((step) => {
       years.push(step.year);
-      orbitalCompute.push(step.orbitCompute || 0);
-      groundCompute.push(step.groundCompute || 0);
+      // Convert TWh to PFLOPs (1 TWh = 1000 PFLOPs)
+      orbitalCompute.push((step.orbitalComputeTwh || 0) * 1e3);
+      groundCompute.push((step.netGroundComputeTwh || 0) * 1e3);
       orbitalPower.push((step.podsTotal || 0) * 0.1); // 0.1 MW per pod
-      orbitCost.push(step.orbitCost || 0);
-      groundCost.push(step.groundCost || 0);
-      orbitLatency.push(65); // Default
-      groundLatency.push(5); // Default
-      orbitCarbon.push((step.podsTotal || 0) * 1.19);
-      groundCarbon.push(step.groundCarbon || 0);
+      // Use OPEX as cost proxy
+      orbitCost.push((step.opexMix || 0) - (step.opexGround || 0)); // Orbital cost = mix - ground
+      groundCost.push(step.opexGround || 0);
+      orbitLatency.push(step.latencyMixMs || 65); // Use mix latency as proxy
+      groundLatency.push(step.latencyGroundMs || 5);
+      orbitCarbon.push((step.podsTotal || 0) * 1.19); // Amortized launch carbon
+      groundCarbon.push(step.carbonGround || 0);
       satelliteCounts.push(step.podsTotal || 0);
     });
 
