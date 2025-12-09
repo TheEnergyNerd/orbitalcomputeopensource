@@ -230,42 +230,12 @@ export default function SandboxControls() {
               setPreset("hybrid_2035");
               
               // Hybrid: Target ~10% orbit share (4.67 GW orbital + 42 GW ground)
-              // For performance, use fewer units but same total capacity
-              // Mix: 50 server farms (5 MW) = 250 MW, 100 GEO hubs (1 MW) = 100 MW, 28,000 LEO pods (0.15 MW) = 4,200 MW
-              // Total: 4,550 MW = 4.55 GW (~10% of 42 GW baseline)
-              // BUT for tutorial performance, reduce LEO pods significantly and use more server farms/GEO hubs
-              // Tutorial-optimized: 200 server farms (1 GW), 200 GEO hubs (0.2 GW), 500 LEO pods (0.075 GW) = 1.275 GW (~3%)
+              // Using LEO pods only (server_farm and geo_hub removed)
+              // Target: ~1.275 GW (~3% of 42 GW baseline) for tutorial performance
+              // 8,500 LEO pods (0.15 MW each) = 1.275 GW
               
-              const serverFarms = 200;
-              const geoHubs = 200;
-              const leoPods = 500; // Reduced from 7800 for performance (500 pods = 25,000 satellites instead of 390,000)
-              const totalMW = (serverFarms * 5.0) + (geoHubs * 1.0) + (leoPods * 0.15);
-              
-              // Deploy server farms (5 MW each)
-              for (let i = 0; i < serverFarms; i++) {
-                addToQueue({
-                  type: "server_farm",
-                  name: "In-Space Server Farm",
-                  cost: 500,
-                  powerOutputMw: 5.0,
-                  latencyMs: 8,
-                  lifetimeYears: 10,
-                  buildTimeDays: 730,
-                });
-              }
-              
-              // Deploy GEO hubs (1 MW each)
-              for (let i = 0; i < geoHubs; i++) {
-                addToQueue({
-                  type: "geo_hub",
-                  name: "GEO Compute Hub",
-                  cost: 200,
-                  powerOutputMw: 1.0,
-                  latencyMs: 120,
-                  lifetimeYears: 15,
-                  buildTimeDays: 365,
-                });
-              }
+              const leoPods = 8500; // 8,500 pods = 1.275 GW
+              const totalMW = leoPods * 0.15;
               
               // Deploy LEO pods (0.15 MW each)
               for (let i = 0; i < leoPods; i++) {
@@ -282,7 +252,7 @@ export default function SandboxControls() {
               
               // Show notification about deployment
               const deploymentInfo = `Hybrid: Deploying ${(totalMW / 1000).toFixed(2)} GW orbital capacity\n` +
-                `(${serverFarms} server farms + ${geoHubs} GEO hubs + ${leoPods} LEO pods)`;
+                `(${leoPods} LEO pods)`;
               console.log(deploymentInfo);
               
               // Show temporary notification
@@ -292,8 +262,6 @@ export default function SandboxControls() {
                 <div class="text-sm font-semibold text-accent-blue mb-2">Hybrid Deployment</div>
                 <div class="text-xs text-gray-300 mb-1">Deploying ${(totalMW / 1000).toFixed(2)} GW orbital capacity:</div>
                 <div class="text-xs text-gray-400 space-y-0.5">
-                  <div>• ${serverFarms} Server Farms (${(serverFarms * 5.0 / 1000).toFixed(2)} GW)</div>
-                  <div>• ${geoHubs} GEO Hubs (${(geoHubs * 1.0 / 1000).toFixed(2)} GW)</div>
                   <div>• ${leoPods} LEO Pods (${(leoPods * 0.15 / 1000).toFixed(2)} GW)</div>
                 </div>
               `;
