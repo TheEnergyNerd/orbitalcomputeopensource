@@ -141,6 +141,43 @@ export interface DebugStateEntry {
   cost_ground: number; // $ per compute unit
   cost_delta: number; // orbit - ground
   cost_crossover_triggered: boolean;
+  
+  // --- ECONOMICS (unified debug output) ---
+  cost_per_compute_ground: number; // $ per compute unit (ground)
+  cost_per_compute_orbit: number; // $ per compute unit (orbit)
+  cost_per_compute_mix: number; // $ per compute unit (mixed)
+  annual_opex_ground: number; // $ per year (ground)
+  annual_opex_orbit: number; // $ per year (orbit)
+  annual_opex_mix: number; // $ per year (mixed)
+  
+  // --- LATENCY (unified debug output) ---
+  latency_ground_ms: number; // ms (ground)
+  latency_orbit_ms: number; // ms (orbit)
+  latency_mix_ms: number; // ms (mixed)
+  
+  // --- COMPUTE (unified debug output) ---
+  // compute_raw_flops, compute_effective_flops, compute_exportable_flops, sustained_compute_flops already exist
+  // classA_compute_flops, classB_compute_flops already exist
+  
+  // --- POWER (unified debug output) ---
+  // power_total_kw, power_utilization_percent already exist
+  
+  // --- THERMAL (unified debug output) ---
+  // temp_core_C, temp_radiator_C, net_heat_flow_kw, radiator_utilization_percent, active_cooling_kw already exist
+  
+  // --- BACKHAUL (unified debug output) ---
+  backhaul_capacity_tbps: number; // TBps capacity
+  backhaul_used_tbps: number; // TBps used
+  // backhaul_utilization_percent already exists
+  
+  // --- MAINTENANCE (unified debug output) ---
+  // maintenance_capacity_pods, maintenance_utilization_percent, failures_unrecovered, survival_fraction already exist
+  maintenance_used_pods: number; // Pods currently in maintenance
+  
+  // --- SOLAR (unified debug output) ---
+  ground_full_power_uptime_percent: number; // % time at full power (ground solar)
+  solar_plus_storage_uptime_percent: number; // % time at full power (solar + storage)
+  space_solar_uptime_percent: number; // % time at full power (space-based solar)
 }
 
 export interface DebugState {

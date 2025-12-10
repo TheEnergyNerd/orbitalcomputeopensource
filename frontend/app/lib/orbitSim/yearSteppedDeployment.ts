@@ -389,6 +389,47 @@ export function calculateYearDeployment(
   const cost_delta = cost_orbit - cost_ground;
   const cost_crossover_triggered = cost_delta < 0;
   
+  // Calculate mix values (weighted average based on compute share)
+  // Compute share: orbit vs ground
+  const totalComputeDemand = totalComputePFLOPs * 1e15; // FLOPS
+  const orbitComputeShare = totalComputeDemand > 0 ? (finalEffectiveCompute * 1e15) / totalComputeDemand : 0;
+  const groundComputeShare = 1 - orbitComputeShare;
+  
+  // Cost per compute mix (weighted average)
+  const cost_per_compute_ground = cost_ground; // $ per TWh
+  const cost_per_compute_orbit = cost_orbit; // $ per TWh
+  const cost_per_compute_mix = groundComputeShare * cost_per_compute_ground + orbitComputeShare * cost_per_compute_orbit;
+  
+  // Annual OPEX (simplified - should be calculated from actual operations)
+  const annual_opex_ground = groundCostUSD; // From above
+  const annual_opex_orbit = totalOrbitalCostUSD; // From above
+  const annual_opex_mix = groundComputeShare * annual_opex_ground + orbitComputeShare * annual_opex_orbit;
+  
+  // Latency mix (weighted average)
+  const latency_ground_ms = 120; // Baseline ground latency
+  const latency_orbit_ms = 90; // Baseline orbit latency (can be enhanced with congestion)
+  const latency_mix_ms = groundComputeShare * latency_ground_ms + orbitComputeShare * latency_orbit_ms;
+  
+  // Carbon mix (weighted average)
+  const carbon_mix = groundComputeShare * carbon_ground + orbitComputeShare * carbon_orbit;
+  
+  // Solar uptime (simplified model - should be calculated from actual solar availability)
+  // Ground solar: 18-28% uptime (varies by location, weather, night)
+  const ground_full_power_uptime_percent = 20 + Math.sin(year * 0.1) * 5; // 18-28% with variation
+  // Solar + storage: 35-55% uptime (storage smooths but never catches up)
+  const solar_plus_storage_uptime_percent = 40 + Math.sin(year * 0.1) * 10; // 35-55% with variation
+  // Space-based solar: 92-99% uptime (nearly flat, no night/weather)
+  const space_solar_uptime_percent = S_B_new > 0 ? 95 + Math.random() * 4 : 0; // 92-99% when Class B exists
+  
+  // Backhaul metrics (from thermal state)
+  const backhaul_capacity_tbps = updatedThermalState.backhaul_tbps || 0;
+  const backhaul_used_tbps = finalEffectiveCompute > 0 
+    ? (finalEffectiveCompute * 1e15) / (1e12 * 8) // Convert FLOPS to TBps (rough: 8 bits per byte)
+    : 0;
+  
+  // Maintenance used (from thermal state)
+  const maintenance_used_pods = updatedThermalState.degraded_pods || 0;
+  
   const debugEntry: DebugStateEntry = {
     year,
     launchMassCeiling: effectiveComputeResult.ceilings.launchMass,
@@ -493,6 +534,38 @@ export function calculateYearDeployment(
     compute_exportable_flops: updatedThermalState.compute_exportable_flops,
     // --- Maintenance Debt ---
     global_efficiency: updatedThermalState.global_efficiency,
+    // --- ECONOMICS (unified debug output) ---
+    cost_per_compute_ground: cost_per_compute_ground,
+    cost_per_compute_orbit: cost_per_compute_orbit,
+    cost_per_compute_mix: cost_per_compute_mix,
+    annual_opex_ground: annual_opex_ground,
+    annual_opex_orbit: annual_opex_orbit,
+    annual_opex_mix: annual_opex_mix,
+    // --- LATENCY (unified debug output) ---
+    latency_ground_ms: latency_ground_ms,
+    latency_orbit_ms: latency_orbit_ms,
+    latency_mix_ms: latency_mix_ms,
+    // --- COMPUTE (unified debug output) ---
+    // compute_raw_flops, compute_effective_flops, compute_exportable_flops, sustained_compute_flops already exist
+    // classA_compute_flops, classB_compute_flops already exist (as classA_compute_raw, classB_compute_raw)
+    // --- POWER (unified debug output) ---
+    // power_total_kw, power_utilization_percent already exist
+    // --- THERMAL (unified debug output) ---
+    // temp_core_C, temp_radiator_C, net_heat_flow_kw, radiator_utilization_percent, active_cooling_kw already exist
+    // --- BACKHAUL (unified debug output) ---
+    backhaul_capacity_tbps: backhaul_capacity_tbps,
+    backhaul_used_tbps: backhaul_used_tbps,
+    // backhaul_utilization_percent already exists
+    // --- MAINTENANCE (unified debug output) ---
+    // maintenance_capacity_pods, maintenance_utilization_percent, failures_unrecovered, survival_fraction already exist
+    maintenance_used_pods: maintenance_used_pods,
+    // --- CARBON (unified debug output) ---
+    // carbon_ground, carbon_orbit, carbon_crossover_triggered already exist
+    carbon_mix: carbon_mix,
+    // --- SOLAR (unified debug output) ---
+    ground_full_power_uptime_percent: ground_full_power_uptime_percent,
+    solar_plus_storage_uptime_percent: solar_plus_storage_uptime_percent,
+    space_solar_uptime_percent: space_solar_uptime_percent,
   };
   
   addDebugStateEntry(debugEntry);

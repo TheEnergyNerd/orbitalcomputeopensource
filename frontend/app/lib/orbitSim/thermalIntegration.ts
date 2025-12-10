@@ -349,12 +349,23 @@ export function updateThermalState(
   // 9. Backhaul as hard competing bottleneck (NO STATIC CLAMP, NO HIDDEN CLAMPS)
   // compute_exportable = min(compute_effective, backhaul_bandwidth_total * flops_per_tbps)
   // backhaul_bandwidth_total is in TBps (already calculated in state.backhaul_tbps)
-  const backhaul_bandwidth_total = state.backhaul_tbps; // TBps
-  const backhaul_compute_capacity = backhaul_bandwidth_total * FLOPS_PER_TBPS;
-  const compute_exportable_flops = Math.min(
+  const backhaul_capacity_tbps = state.backhaul_tbps; // TBps
+  const backhaul_compute_capacity = backhaul_capacity_tbps * FLOPS_PER_TBPS;
+  
+  // Calculate backhaul used (based on compute_effective)
+  const backhaul_used_tbps = compute_effective_flops > 0
+    ? compute_effective_flops / FLOPS_PER_TBPS
+    : 0;
+  
+  // REAL COMPETITION: compute_exportable = min(compute_effective, backhaul_capacity)
+  let compute_exportable_flops = Math.min(
     compute_effective_flops,
     backhaul_compute_capacity
   );
+  
+  // SUSTAINED COMPUTE MUST GATE: compute_effective cannot exceed sustained_compute
+  // (sustained_compute calculated below, but we need to gate here)
+  // This will be applied after sustained_compute is calculated
   
   // 10. Maintenance debt loop (MUST dominate survival) - Calculate FIRST before using in utilization metrics
   const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
@@ -381,26 +392,35 @@ export function updateThermalState(
     new_global_efficiency *= efficiency_decay;
   }
   
-  // 12. Calculate utilization metrics (MUST BE DYNAMIC)
+  // 12. Calculate utilization metrics (MUST BE DYNAMIC, MUST STAY PHYSICAL)
   // Power utilization = min of all limit factors
   const thermal_limit_factor = radiator_utilization_ratio > 0 ? Math.min(1.0, radiator_utilization_ratio) : 0;
   const maintenance_limit_factor = state.maintenance_capacity_pods > 0 
     ? Math.min(1.0, (state.maintenance_capacity_pods - new_degraded_pods) / state.maintenance_capacity_pods)
     : 1.0;
-  const backhaul_limit_factor = state.backhaul_tbps > 0
+  const backhaul_limit_factor = compute_effective_flops > 0
     ? Math.min(1.0, compute_exportable_flops / compute_effective_flops)
-    : 1.0;
+    : 0;
   const autonomy_limit_factor = new_global_efficiency; // From maintenance debt (now calculated above)
   
   // Power utilization is the minimum of all constraints
-  const power_utilization_factor = Math.min(
+  // MUST CLAMP: power_utilization_percent ∈ [0, 100]
+  let power_utilization_factor = Math.min(
     thermal_limit_factor,
     maintenance_limit_factor,
     backhaul_limit_factor,
     autonomy_limit_factor,
-    1.0 - lost_fraction // Lost fraction reduces power utilization
+    1.0 - lost_fraction, // Lost fraction reduces power utilization
+    1.0 // Never exceed 100%
   );
   
+  // If sustained_compute == 0, power_utilization MUST be 0
+  if (sustained_compute_flops <= 0) {
+    power_utilization_factor = 0;
+  }
+  
+  // Clamp to [0, 1] (NO negative, NO >100%)
+  power_utilization_factor = Math.max(0, Math.min(1.0, power_utilization_factor));
   const power_utilization_percent = power_utilization_factor * 100;
   
   const thermal_drift_C_per_hr = temp_change_C / dt_hours;
@@ -410,8 +430,9 @@ export function updateThermalState(
     ? (heatReject_kw / heatGen_kw) * 100
     : 100;
   
-  const backhaul_utilization_percent = state.backhaul_tbps > 0
-    ? (compute_exportable_flops / (state.backhaul_tbps * FLOPS_PER_TBPS)) * 100
+  // Backhaul utilization: backhaul_used / backhaul_capacity
+  const backhaul_utilization_percent = backhaul_capacity_tbps > 0
+    ? (backhaul_used_tbps / backhaul_capacity_tbps) * 100
     : 0;
   
   const manufacturing_utilization_percent = state.manufacturing_rate_pods_per_year > 0
@@ -424,9 +445,21 @@ export function updateThermalState(
   
   const maintenance_debt = failures_unrecovered;
   
-  // 10. Calculate sustained compute (where net_heat_flow → 0 and failure_rate → maintenance_capacity)
+  // 13. Calculate sustained compute (where net_heat_flow → 0 and failure_rate → maintenance_capacity)
   // This is the theoretical maximum where system is in thermal equilibrium
-  const sustained_compute_flops = state.compute_raw_flops * new_global_efficiency;
+  let sustained_compute_flops = state.compute_raw_flops * new_global_efficiency;
+  
+  // SUSTAINED COMPUTE MUST GATE: If sustained_compute == 0, everything is 0
+  if (sustained_compute_flops <= 0) {
+    compute_effective_flops = 0;
+    compute_exportable_flops = 0;
+    // power_utilization will be set to 0 below
+  } else {
+    // Gate compute_effective by sustained_compute
+    compute_effective_flops = Math.min(compute_effective_flops, sustained_compute_flops);
+    // Recalculate compute_exportable with gated compute_effective
+    compute_exportable_flops = Math.min(compute_effective_flops, backhaul_compute_capacity);
+  }
   
   return {
     ...state,
