@@ -366,6 +366,3 @@ if (typeof window !== "undefined") {
   (window as any).getDebugState = getDebugState;
 }
 
-// Export validateStateAcrossYears for use in yearSteppedDeployment
-export { validateStateAcrossYears };
-
