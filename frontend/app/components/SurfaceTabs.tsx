@@ -2,7 +2,7 @@
 
 import { useTutorialStore } from "../store/tutorialStore";
 
-export type SurfaceType = "overview" | "deployment" | "futures";
+export type SurfaceType = "overview" | "deployment" | "futures" | "constraints";
 
 interface SurfaceTabsProps {
   activeSurface: SurfaceType;
@@ -53,6 +53,16 @@ export default function SurfaceTabs({ activeSurface, onSurfaceChange }: SurfaceT
         data-tutorial-futures-tab
       >
         FUTURES
+      </button>
+      <button
+        onClick={() => onSurfaceChange("constraints")}
+        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+          activeSurface === "constraints"
+            ? "bg-cyan-500 text-white"
+            : "text-gray-400 hover:text-white"
+        }`}
+      >
+        CONSTRAINTS & RISK
       </button>
     </div>
   );

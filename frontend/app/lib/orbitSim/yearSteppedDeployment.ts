@@ -27,7 +27,19 @@ import {
   calculateLaunchConstraints,
   calculateConstrainedEffectiveCompute,
   type EffectiveComputeResult,
+  calculateSatelliteMass,
+  calculateCostPerSatellite,
+  calculateMaxHeatRejection,
+  calculateHeatGeneration,
+  calculateAutonomyLevel,
+  calculateRepairCapacity,
+  calculateLaunchCostBudget,
 } from "./deploymentConstraints";
+import {
+  addDebugStateEntry,
+  validateState,
+  type DebugStateEntry,
+} from "./debugState";
 
 export interface YearDeploymentState {
   year: number;
@@ -189,7 +201,65 @@ export function calculateYearDeployment(
     newB
   );
   
-  // 9. Update deployment history
+  // 9. Collect debug state
+  const massA = calculateSatelliteMass("A", year, strategy);
+  const massB = calculateSatelliteMass("B", year, strategy);
+  const costA = calculateCostPerSatellite("A", year, strategy);
+  const costB = calculateCostPerSatellite("B", year, strategy);
+  const heatRejectA = calculateMaxHeatRejection("A", powerPerA, strategy, year);
+  const heatRejectB = calculateMaxHeatRejection("B", powerPerB, strategy, year);
+  const heatGenA = calculateHeatGeneration(powerPerA);
+  const heatGenB = calculateHeatGeneration(powerPerB);
+  const autonomyLevel = calculateAutonomyLevel(year, strategy);
+  const repairCapacity = calculateRepairCapacity(S_A_new + S_B_new, year, strategy);
+  
+  const debugEntry: DebugStateEntry = {
+    year,
+    launchMassCeiling: effectiveComputeResult.ceilings.launchMass,
+    launchCostCeiling: effectiveComputeResult.ceilings.launchCost,
+    heatCeiling: effectiveComputeResult.ceilings.heat,
+    backhaulCeiling: effectiveComputeResult.ceilings.backhaul,
+    autonomyCeiling: effectiveComputeResult.ceilings.autonomy,
+    satellitesAdded: newA + newB,
+    satellitesTotal: S_A_new + S_B_new,
+    satellitesFailed: effectiveComputeResult.constraints.maintenance.failuresThisYear,
+    satellitesRecovered: effectiveComputeResult.constraints.maintenance.recoverable,
+    satellitesRetired: retiredA + retiredB,
+    utilization_heat: effectiveComputeResult.heatUtilization,
+    utilization_backhaul: effectiveComputeResult.backhaulUtilization,
+    utilization_autonomy: effectiveComputeResult.survivalFraction,
+    utilization_overall: Math.min(
+      effectiveComputeResult.heatUtilization,
+      effectiveComputeResult.backhaulUtilization,
+      effectiveComputeResult.survivalFraction
+    ),
+    power_total_kw: (S_A_new * powerPerA + S_B_new * powerPerB),
+    compute_raw_flops: totalComputePFLOPs * 1e15, // Convert PFLOPs to FLOPS
+    compute_effective_flops: effectiveComputeResult.effectiveCompute * 1e15,
+    dominantConstraint: effectiveComputeResult.dominantConstraint,
+    strategyActive: strategy,
+    strategyHistory: [strategy], // Simplified - could track history
+    radiatorArea: (S_A_new * 5.0 + S_B_new * 12.0), // Simplified average
+    heatGen: (S_A_new * heatGenA + S_B_new * heatGenB),
+    heatReject: (S_A_new * heatRejectA + S_B_new * heatRejectB),
+    launchBudget: calculateLaunchCostBudget(year, strategy, totalLaunches),
+    costPerSatellite: (costA + costB) / 2,
+    massPerSatellite: (massA + massB) / 2,
+    autonomyLevel,
+    failureRate: effectiveComputeResult.constraints.maintenance.failureRate,
+    repairCapacity,
+    shellOccupancy: {
+      LOW: S_A_lowLEO_new,
+      MID: S_A_midLEO_new,
+      HIGH: 0, // Not tracked separately
+      SSO: S_A_sunSync_new + S_B_sunSync_new,
+    },
+  };
+  
+  addDebugStateEntry(debugEntry);
+  validateState(year);
+  
+  // 10. Update deployment history
   const newDeployedByYear_A = new Map(deployedByYear_A);
   const newDeployedByYear_B = new Map(deployedByYear_B);
   newDeployedByYear_A.set(year, newA);

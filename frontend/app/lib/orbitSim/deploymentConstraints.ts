@@ -361,6 +361,15 @@ export interface EffectiveComputeResult {
     heat: HeatConstraints;
     maintenance: MaintenanceConstraints;
   };
+  // Debug data for ceiling calculations
+  ceilings: {
+    launchMass: number;         // Maximum satellites allowed by mass
+    launchCost: number;         // Maximum satellites allowed by cost
+    heat: number;               // Maximum compute allowed by heat rejection
+    backhaul: number;           // Maximum compute allowed by backhaul (for now = rawCompute)
+    autonomy: number;           // Maximum satellites sustainable by autonomy
+  };
+  dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "NONE";
 }
 
 /**
@@ -416,6 +425,59 @@ export function calculateConstrainedEffectiveCompute(
     backhaulUtilization *
     maintenanceConstraints.survivalFraction;
   
+  // 6. Calculate ceiling values (for debug and visualization)
+  const massBudgetT = calculateLaunchMassBudget(launchesPerYear);
+  const massA = calculateSatelliteMass("A", year, strategy);
+  const massB = calculateSatelliteMass("B", year, strategy);
+  const avgMass = (massA + massB) / 2;
+  const launchMassCeiling = Math.floor(massBudgetT / avgMass);
+  
+  const costBudgetM = calculateLaunchCostBudget(year, strategy, launchesPerYear);
+  const costA = calculateCostPerSatellite("A", year, strategy);
+  const costB = calculateCostPerSatellite("B", year, strategy);
+  const avgCost = (costA + costB) / 2;
+  const launchCostCeiling = Math.floor(costBudgetM / avgCost);
+  
+  // Heat ceiling: maximum compute allowed by heat rejection
+  // This is the compute that would be available if all satellites were at max heat utilization
+  const heatCeiling = rawComputePFLOPs * heatUtilization;
+  
+  // Backhaul ceiling: for now, assume unlimited (will be enhanced later)
+  const backhaulCeiling = rawComputePFLOPs;
+  
+  // Autonomy ceiling: maximum satellites sustainable by repair capacity
+  const autonomyCeiling = Math.floor(
+    maintenanceConstraints.recoverable / (maintenanceConstraints.failureRate || 0.001)
+  );
+  
+  // Determine dominant constraint
+  // The dominant constraint is the one that limits growth the most
+  const constraintLimits = {
+    LAUNCH: Math.min(launchMassCeiling, launchCostCeiling),
+    HEAT: heatCeiling / (rawComputePFLOPs / (satelliteCountA + satelliteCountB || 1)), // Convert to satellite count
+    BACKHAUL: backhaulCeiling / (rawComputePFLOPs / (satelliteCountA + satelliteCountB || 1)),
+    AUTONOMY: autonomyCeiling,
+  };
+  
+  // Find the minimum (most limiting) constraint
+  const minConstraint = Math.min(
+    constraintLimits.LAUNCH,
+    constraintLimits.HEAT,
+    constraintLimits.BACKHAUL,
+    constraintLimits.AUTONOMY
+  );
+  
+  let dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "NONE" = "NONE";
+  if (minConstraint === constraintLimits.LAUNCH) {
+    dominantConstraint = "LAUNCH";
+  } else if (minConstraint === constraintLimits.HEAT) {
+    dominantConstraint = "HEAT";
+  } else if (minConstraint === constraintLimits.BACKHAUL) {
+    dominantConstraint = "BACKHAUL";
+  } else if (minConstraint === constraintLimits.AUTONOMY) {
+    dominantConstraint = "AUTONOMY";
+  }
+  
   return {
     rawCompute: rawComputePFLOPs,
     heatUtilization,
@@ -430,6 +492,14 @@ export function calculateConstrainedEffectiveCompute(
       },
       maintenance: maintenanceConstraints,
     },
+    ceilings: {
+      launchMass: launchMassCeiling,
+      launchCost: launchCostCeiling,
+      heat: heatCeiling,
+      backhaul: backhaulCeiling,
+      autonomy: autonomyCeiling,
+    },
+    dominantConstraint,
   };
 }
 

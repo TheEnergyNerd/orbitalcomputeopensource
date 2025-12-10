@@ -22,6 +22,7 @@ import DetailPanel from "./components/DetailPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import Toast from "./components/Toast";
 import FuturesMarketView from "./components/futures/FuturesMarketView";
+import ConstraintsRiskView from "./components/constraints/ConstraintsRiskView";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import ErrorPanel from "./components/ErrorPanel";
@@ -118,6 +119,10 @@ export default function Home() {
         
         {activeSurface === "futures" && (
           <FuturesMarketView />
+        )}
+        
+        {activeSurface === "constraints" && (
+          <ConstraintsRiskView />
         )}
         
         {/* Entity Detail Panel - shows when entity is selected (only in deployment section) */}
