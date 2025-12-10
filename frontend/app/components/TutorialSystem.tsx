@@ -489,27 +489,14 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
 
       {/* Tutorial tooltip */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[152] pointer-events-auto max-w-2xl w-full px-4">
-        <div className="bg-gray-900 border-2 border-cyan-500 rounded-lg p-6 shadow-2xl">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
+        <div className="bg-gray-900 border-2 border-cyan-500 rounded-lg shadow-2xl max-h-[80vh] sm:max-h-none flex flex-col">
+          {/* Header with close button - always visible, sticky on mobile */}
+          <div className="flex items-start justify-between p-4 sm:p-6 pb-2 sm:pb-4 flex-shrink-0 sticky top-0 bg-gray-900 z-10 border-b border-cyan-500/30 sm:border-b-0">
+            <div className="flex-1 pr-2">
               <div className="text-xs text-cyan-400 mb-1">
                 Step {typeof currentStep === "number" ? currentStep : "Complete"} of 8
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">{stepConfig.title}</h3>
-              <p className="text-sm text-gray-300 mb-3">{stepConfig.description}</p>
-              {stepConfig.action && (
-                <div className="text-sm text-cyan-300 font-semibold">
-                  → {stepConfig.action}
-                </div>
-              )}
-              {currentStep === 6 && step6AiRouterOpened && (
-                <div className="mt-3 p-3 bg-cyan-900/30 border border-cyan-500/50 rounded-lg">
-                  <div className="text-xs text-green-400 mb-2">✓ AI Router opened!</div>
-                  {stepConfig.panelInstructions && (
-                    <div className="text-xs text-gray-300">{stepConfig.panelInstructions}</div>
-                  )}
-                </div>
-              )}
+              <h3 className="text-lg sm:text-xl font-bold text-white">{stepConfig.title}</h3>
             </div>
             <button
               onClick={(e) => {
@@ -519,7 +506,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
                 tutorialWasClosed.current = true; // Mark as closed so it doesn't reopen
                 hasShownTutorialThisSession.current = true;
               }}
-              className="ml-4 text-gray-400 hover:text-white transition"
+              className="ml-2 text-gray-400 hover:text-white transition flex-shrink-0"
               aria-label="Close tutorial"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -527,8 +514,27 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
               </svg>
             </button>
           </div>
+          
+          {/* Scrollable content area */}
+          <div className="overflow-y-auto flex-1 px-4 sm:px-6 pb-4 sm:pb-6">
+            <p className="text-sm text-gray-300 mb-3">{stepConfig.description}</p>
+            {stepConfig.action && (
+              <div className="text-sm text-cyan-300 font-semibold mb-3">
+                → {stepConfig.action}
+              </div>
+            )}
+            {currentStep === 6 && step6AiRouterOpened && (
+              <div className="mt-3 p-3 bg-cyan-900/30 border border-cyan-500/50 rounded-lg">
+                <div className="text-xs text-green-400 mb-2">✓ AI Router opened!</div>
+                {stepConfig.panelInstructions && (
+                  <div className="text-xs text-gray-300">{stepConfig.panelInstructions}</div>
+                )}
+              </div>
+            )}
+          </div>
 
-          <div className="flex items-center justify-between">
+          {/* Footer with buttons - always visible, sticky on mobile */}
+          <div className="flex items-center justify-between p-4 sm:p-6 pt-2 sm:pt-4 flex-shrink-0 sticky bottom-0 bg-gray-900 border-t border-cyan-500/30 sm:border-t-0">
             <div className="flex gap-2">
               {typeof currentStep === "number" && currentStep > 1 && (
                 <button
