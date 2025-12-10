@@ -48,7 +48,7 @@ export default function ConstraintsRiskView() {
   const currentState = debugState[currentYear];
   
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 pt-20">
+    <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 pt-24 sm:pt-28">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -84,7 +84,10 @@ export default function ConstraintsRiskView() {
         {debugState.errors && debugState.errors.length > 0 && (
           <div className="bg-red-900/50 border border-red-500 rounded p-4">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-red-400 font-bold text-lg">⚠️ MODEL BROKEN</span>
+              <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span className="text-red-400 font-bold text-lg">MODEL BROKEN</span>
               <span className="text-red-300 text-sm">
                 {debugState.errors.length} error(s) detected
               </span>

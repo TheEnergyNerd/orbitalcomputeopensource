@@ -1,6 +1,7 @@
 "use client";
 
 import type { DominantConstraint } from "../../lib/orbitSim/debugState";
+import { LaunchIcon, HeatIcon, BackhaulIcon, AutonomyIcon, SteadyStateIcon } from "./ConstraintIcons";
 
 interface ConstraintTimelineEntry {
   year: number;
@@ -57,18 +58,18 @@ export default function RiskRegimeTimeline({ constraintTimeline }: RiskRegimeTim
     }
   };
   
-  const getRegimeIcon = (constraint: DominantConstraint): string => {
+  const getRegimeIcon = (constraint: DominantConstraint) => {
     switch (constraint) {
       case "LAUNCH":
-        return "🚀";
+        return <LaunchIcon className="text-white" size={24} />;
       case "HEAT":
-        return "🔥";
+        return <HeatIcon className="text-white" size={24} />;
       case "BACKHAUL":
-        return "📡";
+        return <BackhaulIcon className="text-white" size={24} />;
       case "AUTONOMY":
-        return "🤖";
+        return <AutonomyIcon className="text-white" size={24} />;
       default:
-        return "✅";
+        return <SteadyStateIcon className="text-white" size={24} />;
     }
   };
   
@@ -114,7 +115,7 @@ export default function RiskRegimeTimeline({ constraintTimeline }: RiskRegimeTim
             className={`${getRegimeColor(regime.constraint)} rounded-lg p-4 flex items-center justify-between`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{getRegimeIcon(regime.constraint)}</span>
+              <div className="flex-shrink-0">{getRegimeIcon(regime.constraint)}</div>
               <div>
                 <div className="font-semibold text-white">{getRegimeLabel(regime.constraint)}</div>
                 <div className="text-sm text-white/80">
