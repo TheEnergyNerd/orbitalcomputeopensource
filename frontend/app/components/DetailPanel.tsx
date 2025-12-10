@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Vector3 } from "three";
+import { latLonAltToXYZ } from "../lib/three/coordinateUtils";
 import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { useSimulationStore } from "../store/simulationStore";
@@ -371,8 +372,20 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
     
     // Estimate plane from satellite position (use longitude as proxy)
     if (!plane) {
+      // Calculate longitude from x, y, z coordinates
+      let lon = 0;
+      if (orbitStoreSat && (orbitStoreSat.x !== undefined || orbitStoreSat.y !== undefined || orbitStoreSat.z !== undefined)) {
+        const radius = Math.sqrt(orbitStoreSat.x ** 2 + orbitStoreSat.y ** 2 + orbitStoreSat.z ** 2);
+        if (radius > 0) {
+          // Calculate longitude from x, y, z
+          lon = Math.atan2(orbitStoreSat.y, orbitStoreSat.x) * (180 / Math.PI);
+        }
+      } else if (sat.alt_km !== undefined && sat.lat !== undefined && sat.lon !== undefined) {
+        // Use lat/lon from simSatellite if available
+        lon = sat.lon;
+      }
+      
       // Use longitude to estimate plane (each plane ~22.5 degrees apart)
-      const lon = orbitStoreSat?.lon ?? (sat as any).lon ?? 0;
       const estimatedPlane = Math.floor((lon + 180) / 22.5) + 1;
       plane = `Plane ${Math.min(estimatedPlane, 16)}`; // Max 16 planes
       console.log('[DetailPanel] ✅ Estimated plane from longitude:', lon, '→', plane);
@@ -473,8 +486,13 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
     ];
     
     // Get satellite position for matching routes without IDs
+    // orbitStoreSat has x, y, z, but sat (SimSatellite) has lat, lon, alt_km
     const satPos = orbitStoreSat ? new Vector3(orbitStoreSat.x || 0, orbitStoreSat.y || 0, orbitStoreSat.z || 0) : 
-      (sat.x !== undefined && sat.y !== undefined && sat.z !== undefined) ? new Vector3(sat.x, sat.y, sat.z) : null;
+      (sat.lat !== undefined && sat.lon !== undefined && sat.alt_km !== undefined) ? 
+        (() => {
+          const [x, y, z] = latLonAltToXYZ(sat.lat, sat.lon, sat.alt_km);
+          return new Vector3(x, y, z);
+        })() : null;
     const POSITION_TOLERANCE = 0.05; // Increased tolerance for better matching
     
     // Count routes that pass through this satellite (by ID or position)
@@ -563,8 +581,11 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
           const satClass = orbitStoreSat?.satelliteClass || (sat as any).satelliteClass || "A";
           const isClassB = satClass === "B";
           
-          // Get strategy to determine usage
-          const strategy = config?.strategy || "BALANCED";
+          // Get strategy to determine usage from timeline or default to BALANCED
+          const currentYear = timeline && timeline.length > 0 ? timeline[timeline.length - 1]?.year : 2025;
+          const currentStep = timeline?.find(s => s.year === currentYear);
+          // Try to get strategy from yearPlan or default to BALANCED
+          const strategy = "BALANCED"; // Default strategy
           const strategyUpper = strategy.toUpperCase();
           
           // Determine usage reason based on class and strategy

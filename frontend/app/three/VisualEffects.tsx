@@ -160,7 +160,8 @@ export function FailureBlink() {
  */
 export function SunFacingBreathing() {
   const satellites = useOrbitSim((s) => s.satellites);
-  const sunDirection = useOrbitSim((s) => s.sunDirection);
+  // sunDirection is not in OrbitSimState, use a default value
+  const sunDirection: [number, number, number] = [1, 0, 0]; // Default sun direction
   const breathingRef = useRef<Map<string, number>>(new Map());
 
   useFrame((state, delta) => {
@@ -352,7 +353,8 @@ export function ShellStability() {
  */
 export function StrategyMicroEffects() {
   const config = useSimulationStore((s) => s.config);
-  const strategy = config?.strategy || "BALANCED";
+  // Strategy is not in SimulationConfig, use default
+  const strategy = "BALANCED"; // Default strategy
 
   // Strategy-specific effects would be applied to:
   // - Shell contraction (COST)

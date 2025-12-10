@@ -138,7 +138,7 @@ export function TrafficFlowsV2() {
         let color = "#00ffff"; // Default cyan
         if (route.type === "orbit") color = "#00ffff"; // Cyan for orbit
         else if (route.type === "core") color = "#bd10e0"; // Purple for core
-        else if (route.type === "ground") color = "#00ff00"; // Green for ground
+        else if (route.type === "edge") color = "#00ff00"; // Green for edge
         // TODO: Get actual strategy from route metadata if available
         
         // Jitter based on actual congestion index - MORE VISIBLE
@@ -178,7 +178,7 @@ export function TrafficFlowsV2() {
     
     // Update jittered arcs for visible routes only (performance optimization)
     // Only update every 5th frame to reduce CPU load significantly
-    const frameSkip = state.frame % 5 === 0;
+    const frameSkip = Math.floor(state.clock.elapsedTime * 60) % 5 === 0; // Approximate frame skip
     if (!frameSkip) return;
     
     const MAX_ROUTES = 30; // Reduced from 50 for much better performance

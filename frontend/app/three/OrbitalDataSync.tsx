@@ -388,6 +388,7 @@ export function OrbitalDataSync() {
       // 3. The hash has changed (new data)
       // 4. We won't lose any satellites (critical check)
       // 5. We're not currently processing unit updates
+      const hasDeployedSats = currentOrbitSats.some(s => s.id.startsWith("deployed_"));
       if (satellites.length > currentOrbitSats.length && !hasDeployedSats && satellites.length >= currentOrbitSats.length && !isUpdatingRef.current) {
         lastSatellites = satHash;
         isUpdatingRef.current = true;
@@ -819,7 +820,8 @@ export function OrbitalDataSync() {
       const currentYear = useSimulationStore.getState().timeline.length > 0
         ? useSimulationStore.getState().timeline[useSimulationStore.getState().timeline.length - 1]?.year || 2025
         : 2025;
-      const currentStrategy = useSimulationStore.getState().config?.strategy || "BALANCED";
+      // Get strategy from current plan or default to BALANCED
+      const currentStrategy = "BALANCED"; // Default strategy
       
       // Calculate Class B share based on strategy (from satelliteClasses.ts)
       const getClassBShare = (strategy: string, year: number): number => {
@@ -912,7 +914,8 @@ export function OrbitalDataSync() {
               false // not retired
             );
             
-            newSats.push({
+            // Create SimSatellite object (without satelliteClass/orbitalState - those are added in updateSatellites)
+            const simSat: SimSatellite = {
               id: newSatelliteId, // Use the new naming schema
               lat: position.lat,
               lon: position.lon,
@@ -922,9 +925,11 @@ export function OrbitalDataSync() {
               capacityMw: 0.1, // 100kW = 0.1MW
               nearestGatewayId: "test_gateway",
               latencyMs: 50,
-              satelliteClass: satelliteClass as any, // Pass satellite class
-              orbitalState: orbitalState as any, // Pass orbital state
-            });
+            };
+            // Store satelliteClass and orbitalState as extra properties that will be used in updateSatellites
+            (simSat as any).satelliteClass = satelliteClass;
+            (simSat as any).orbitalState = orbitalState;
+            newSats.push(simSat);
             
             // Add to existing positions for next satellite
             existingPositions.push({
@@ -958,7 +963,7 @@ export function OrbitalDataSync() {
       const trulyNewSats = newSats.filter(s => !existingSatIds.has(s.id));
       
       if (trulyNewSats.length > 0) {
-        console.log(`[OrbitalDataSync] 🚀 Adding ${trulyNewSats.length} satellites (Class B: ${trulyNewSats.filter(s => s.satelliteClass === "B").length})`);
+        console.log(`[OrbitalDataSync] 🚀 Adding ${trulyNewSats.length} satellites (Class B: ${trulyNewSats.filter(s => (s as any).satelliteClass === "B").length})`);
         
         // CRITICAL: Get fresh state RIGHT BEFORE updating to ensure we have all satellites
         const freshOrbitState = useOrbitSim.getState();

@@ -267,7 +267,7 @@ function OrbitalShellRing({
   // Calculate congestion: number of satellites in this shell + routes passing through
   const shellCongestion = useMemo(() => {
     const shellSats = satellites.filter(sat => {
-      const satAlt = sat.orbitalState?.altitudeRadius || sat.alt_km || 550;
+      const satAlt = sat.orbitalState?.altitudeRadius || (sat as any).alt_km || 550;
       const altKm = (satAlt - 1) * 6371;
       // Check if satellite is in this shell's altitude range
       const altDiff = Math.abs(altKm - altitude);
@@ -294,19 +294,27 @@ function OrbitalShellRing({
       // Apply opacity pulse during expansion
       materialRef.current.opacity = opacity * (1.0 + (scaleRef.current - 1.0) * 5); // Scale opacity with expansion
     } else if (materialRef.current) {
-      // Apply congestion-based visual effects
+      // Apply congestion-based visual effects - ENHANCED FOR VISIBILITY
       const baseOpacity = opacity;
-      const congestionJitter = Math.sin(state.clock.elapsedTime * (5 + shellCongestion * 10)) * shellCongestion * 0.1;
-      materialRef.current.opacity = baseOpacity * (1.0 + congestionJitter);
-      
-      // High congestion: add noise to color
-      if (shellCongestion > 0.7) {
-        const noise = (Math.random() - 0.5) * shellCongestion * 0.2;
-        materialRef.current.color.setRGB(
-          parseFloat(color.slice(1, 3)) / 255 + noise,
-          parseFloat(color.slice(3, 5)) / 255 + noise,
-          parseFloat(color.slice(5, 7)) / 255 + noise
-        );
+      if (shellCongestion > 0.3) {
+        // More visible jitter for congested shells
+        const congestionJitter = Math.sin(state.clock.elapsedTime * (5 + shellCongestion * 10)) * shellCongestion * 0.3;
+        materialRef.current.opacity = baseOpacity * (1.0 + congestionJitter);
+        
+        // High congestion: add noise to color and brightness hotspots
+        if (shellCongestion > 0.7) {
+          const noise = (Math.random() - 0.5) * shellCongestion * 0.3;
+          const brightness = 1.0 + (shellCongestion * 0.5); // Brighter when congested
+          materialRef.current.color.setRGB(
+            (parseFloat(color.slice(1, 3)) / 255 + noise) * brightness,
+            (parseFloat(color.slice(3, 5)) / 255 + noise) * brightness,
+            (parseFloat(color.slice(5, 7)) / 255 + noise) * brightness
+          );
+        }
+      } else {
+        // Stable shell: smooth, even glow
+        materialRef.current.opacity = baseOpacity;
+        materialRef.current.color.set(color);
       }
     }
     

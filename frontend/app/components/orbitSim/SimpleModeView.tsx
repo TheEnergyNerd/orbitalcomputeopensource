@@ -7,10 +7,10 @@ import DeploymentTimelineChart from "./DeploymentTimelineChart";
 import DualClassStackChart from "./DualClassStackChart";
 import PowerComputeScatter from "./PowerComputeScatter";
 import StrategyPhaseDiagram from "./StrategyPhaseDiagram";
+import SolarAvailabilityChart from "./SolarAvailabilityChart";
 import GlobalKPIStrip from "./GlobalKPIStrip";
 import OrbitLayer from "./OrbitLayer";
 import AiRouterPanelV2 from "./AiRouterPanelV2";
-import ConstellationEditorV2 from "./ConstellationEditorV2";
 import YearCounter from "../YearCounter";
 import MobileMenu from "../MobileMenu";
 import type { SurfaceType } from "../SurfaceTabs";
@@ -258,7 +258,6 @@ export default function SimpleModeView() {
     setForecastBands,
   } = useSimulationStore();
   
-  const [constellationEditorOpen, setConstellationEditorOpen] = useState(false);
   const [aiRouterOpen, setAiRouterOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hasShownMobileMenuHint, setHasShownMobileMenuHint] = useState(false);
@@ -356,31 +355,21 @@ export default function SimpleModeView() {
   // Listen for tutorial button clicks from YearCounter
   useEffect(() => {
     const handleOpenAiRouter = () => {
-      setConstellationEditorOpen(false); // Close constellation if open
       setAiRouterOpen(true);
     };
-    const handleOpenConstellation = () => {
-      setAiRouterOpen(false); // Close AI Router if open
-      setConstellationEditorOpen(true);
-    };
     const handleCloseAiRouter = () => setAiRouterOpen(false);
-    const handleCloseConstellation = () => setConstellationEditorOpen(false);
 
     const handleCloseMobileMenu = () => {
       setMobileMenuOpen(false);
     };
 
     window.addEventListener('open-ai-router', handleOpenAiRouter);
-    window.addEventListener('open-constellation', handleOpenConstellation);
     window.addEventListener('close-ai-router', handleCloseAiRouter);
-    window.addEventListener('close-constellation', handleCloseConstellation);
     window.addEventListener('close-mobile-menu', handleCloseMobileMenu);
 
     return () => {
       window.removeEventListener('open-ai-router', handleOpenAiRouter);
-      window.removeEventListener('open-constellation', handleOpenConstellation);
       window.removeEventListener('close-ai-router', handleCloseAiRouter);
-      window.removeEventListener('close-constellation', handleCloseConstellation);
       window.removeEventListener('close-mobile-menu', handleCloseMobileMenu);
     };
   }, []);
@@ -465,14 +454,13 @@ export default function SimpleModeView() {
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className="pointer-events-auto relative z-[201]"
-                style={{ zIndex: 201 }}
                 className={cn(
-                  "flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all",
+                  "pointer-events-auto relative z-[201] flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all",
                   currentPlan.launchStrategy === opt.id
                     ? "border-emerald-400 bg-emerald-500/10"
                     : "border-slate-700 bg-slate-900/60"
                 )}
+                style={{ zIndex: 201 }}
               >
                 <div className="font-medium text-slate-100">{opt.label}</div>
                 <div className="text-[10px] text-slate-400">{opt.desc}</div>
@@ -481,46 +469,11 @@ export default function SimpleModeView() {
           </div>
         </div>
 
-        {/* AI Router and Constellation Buttons */}
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setConstellationEditorOpen(false);
-              setAiRouterOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition pointer-events-auto relative"
-            data-tutorial-ai-router-button
-            style={{ zIndex: 500, position: 'relative' }}
-          >
-            AI Router
-          </button>
-          <button
-            onClick={() => {
-              setAiRouterOpen(false);
-              setConstellationEditorOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            className="hidden lg:block w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition border border-slate-700"
-            data-tutorial-constellation-button
-          >
-            Constellation
-          </button>
-        </div>
       </MobileMenu>
 
       {/* AI Panels */}
       <AiRouterPanelV2 isOpen={aiRouterOpen} onClose={() => {
         setAiRouterOpen(false);
-      }} />
-      <ConstellationEditorV2 isOpen={constellationEditorOpen} onClose={() => {
-        setConstellationEditorOpen(false);
       }} />
 
       {/* Orbit Layer - Rocket launches (only animations, no 2D ring) */}
@@ -550,6 +503,7 @@ export default function SimpleModeView() {
           />
         </div>
       )}
+
 
       {/* Top: Strategy + Utilization Controls - only content blocks events, hidden on mobile */}
       <div className="fixed top-[104px] sm:top-[112px] left-0 right-0 z-30 pointer-events-none hidden lg:block">
@@ -596,6 +550,19 @@ export default function SimpleModeView() {
                     currentYear={currentYear}
                     strategyByYear={getStrategyByYear(timeline)}
                   />
+                </div>
+              </div>
+
+              {/* Solar Availability Dominance Chart */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
+                <div className="text-xs font-semibold text-slate-100 mb-1">
+                  Solar Availability Dominance
+                </div>
+                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+                  % Full-Power Uptime: Ground Solar (red), Solar+Storage (orange), Space-Based Solar (green)
+                </div>
+                <div className="h-[300px] sm:h-[360px]">
+                  <SolarAvailabilityChart timeline={timeline} />
                 </div>
               </div>
 

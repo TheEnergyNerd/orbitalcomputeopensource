@@ -19,6 +19,8 @@ import { TrafficFlows } from "./TrafficFlows";
 import { TrafficFlowsBatched } from "./TrafficFlowsBatched";
 import { RoutingArrows } from "./RoutingArrows";
 import { FailureShockwave } from "./FailureShockwave";
+import { EnergyDeliveryOverlay } from "./EnergyDeliveryOverlay";
+import { BlinkEffects } from "./BlinkEffects";
 import { FuturesCone } from "./FuturesCone";
 import { DebugMarkers } from "./DebugMarkers";
 import { SpecialMoments } from "./SpecialMoments";
@@ -113,6 +115,12 @@ export default function OrbitalScene() {
         
         {/* 5. Satellites (GPU-instanced, event-driven updates) */}
         <SatellitesGPUInstanced />
+        
+        {/* 5.5. Energy Delivery Overlay (SSO beams to surface) */}
+        <EnergyDeliveryOverlay />
+        
+        {/* 5.6. Blink Effects (Launch impacts, satellite failures) */}
+        <BlinkEffects />
         
         {/* 6. Traffic Flows (Batched GPU) */}
         <TrafficFlowsBatched />

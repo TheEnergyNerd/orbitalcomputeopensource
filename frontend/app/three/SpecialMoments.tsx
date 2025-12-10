@@ -45,8 +45,8 @@ export function SpecialMoments() {
       isInitialLoadRef.current = false;
       lastYearRef.current = currentYear;
       // Don't show any alerts on initial load, but still set moments for visual state
-      setMoments([]);
-      return; // Exit early on initial load
+      // BUT: Check if we're already past thresholds and show them
+      // (This handles the case where user loads at year 2035 and thresholds were already crossed)
     }
 
     // 1. Cost Crossover - only show if we JUST crossed over (current year equals crossover year) AND year actually changed
@@ -63,16 +63,16 @@ export function SpecialMoments() {
                                costCrossover.crossover_year <= 2050 &&
                                costCrossover.crossover_year >= timeline[0]?.year;
       
-      // Only show alert if:
+      // Show alert if:
       // 1. Crossover year exists and is valid
-      // 2. Current year equals crossover year
-      // 3. Year actually changed (not just a re-render)
-      // 4. Not initial load
-      // 5. Haven't shown this alert before
+      // 2. Current year >= crossover year (not just equals)
+      // 3. Haven't shown this alert before
+      // 4. Either year changed OR this is initial load and we're already past threshold
       if (isValidCrossover && 
-          currentYear === costCrossover.crossover_year && 
-          yearChanged && 
-          !isInitialLoad) {
+          costCrossover.crossover_year !== null &&
+          currentYear >= costCrossover.crossover_year && 
+          !detectedMomentsRef.current.has(`cost_crossover_${costCrossover.crossover_year}`) &&
+          (yearChanged || (isInitialLoad && currentYear > costCrossover.crossover_year))) {
         const momentId = `cost_crossover_${costCrossover.crossover_year}`;
         if (!detectedMomentsRef.current.has(momentId)) {
           detectedMomentsRef.current.add(momentId);
@@ -85,7 +85,7 @@ export function SpecialMoments() {
             active: true,
           });
         }
-      } else if (isValidCrossover && currentYear >= costCrossover.crossover_year) {
+      } else if (isValidCrossover && costCrossover.crossover_year !== null && currentYear >= costCrossover.crossover_year) {
         // Already crossed over, just add to moments without showing toast
         const momentId = `cost_crossover_${costCrossover.crossover_year}`;
         if (!detectedMomentsRef.current.has(momentId)) {
@@ -109,9 +109,9 @@ export function SpecialMoments() {
     const carbonCrossover = calculateCarbonCrossover(groundCarbon, orbitalCarbon);
     
     if (carbonCrossover.crossover_year && 
-        currentYear === carbonCrossover.crossover_year && 
-        yearChanged && 
-        !isInitialLoad) {
+        currentYear >= carbonCrossover.crossover_year && 
+        !detectedMomentsRef.current.has(`carbon_crossover_${carbonCrossover.crossover_year}`) &&
+        (yearChanged || (isInitialLoad && currentYear > carbonCrossover.crossover_year))) {
       const momentId = `carbon_crossover_${carbonCrossover.crossover_year}`;
       if (!detectedMomentsRef.current.has(momentId)) {
         detectedMomentsRef.current.add(momentId);

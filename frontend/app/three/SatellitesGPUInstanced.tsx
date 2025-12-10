@@ -190,7 +190,9 @@ export function SatellitesGPUInstanced() {
         dummy.current.updateMatrix();
         
         // Update instance matrix
-        meshRef.current.setMatrixAt(i, dummy.current.matrix);
+        if (meshRef.current) {
+          meshRef.current.setMatrixAt(i, dummy.current.matrix);
+        }
       });
       
       // Mark instance matrix as needing update
@@ -381,21 +383,25 @@ const ClassBWithBreathing = forwardRef<InstancedMesh, {
     
     const avgAlignment = count > 0 ? totalAlignment / count : 0.5;
     
-    // Breathing intensity proportional to sun alignment
+    // Breathing intensity proportional to sun alignment - ENHANCED FOR VISIBILITY
     const breathingIntensity = 0.5 + Math.sin(breathingPhase) * 0.5 * avgAlignment;
     const baseOpacity = 0.95;
-    const glowIntensity = 0.3 + (breathingIntensity * 0.4); // 0.3 to 0.7
+    const glowIntensity = 0.5 + (breathingIntensity * 0.5); // 0.5 to 1.0 (more visible)
     
     // Update material opacity and color for breathing effect
     // MeshBasicMaterial doesn't support emissive, so we use color intensity instead
     try {
       if (materialRef.current && materialRef.current.opacity !== undefined) {
-        materialRef.current.opacity = baseOpacity + (breathingIntensity * 0.1);
+        materialRef.current.opacity = baseOpacity + (breathingIntensity * 0.2); // More opacity variation
       }
-      // Adjust color brightness for breathing glow effect
+      // Adjust color brightness for breathing glow effect - MORE VISIBLE
       if (materialRef.current && materialRef.current.color) {
-        const brightness = 0.7 + (breathingIntensity * 0.3); // 0.7 to 1.0
-        materialRef.current.color.setRGB(brightness, brightness, brightness);
+        const brightness = 0.8 + (breathingIntensity * 0.4); // 0.8 to 1.2 (brighter, more visible)
+        materialRef.current.color.setRGB(
+          Math.min(1.0, brightness),
+          Math.min(1.0, brightness),
+          Math.min(1.0, brightness)
+        );
       }
     } catch (e) {
       // Material might be disposed, ignore error

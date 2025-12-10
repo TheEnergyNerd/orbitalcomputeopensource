@@ -87,13 +87,26 @@ export function TrafficFlowsBatched() {
       const arcPoints = createGeodesicArc(fromLat, fromLon, fromAlt, toLat, toLon, toAlt, POINTS_PER_ROUTE, exactStartXYZ, exactEndXYZ);
       const points = arcPoints.map(([x, y, z]) => new Vector3(x, y, z));
       
-      // Determine color based on route type
+      // Determine color based on route type AND strategy
       let color = new THREE.Color(0x00ffff); // Cyan default
-      if (route.type === 'ground') {
-        color = new THREE.Color(0x00ff00); // Green
+      if (route.type === 'edge') {
+        color = new THREE.Color(0x00ff00); // Green for edge routes
       } else if (route.type === 'core') {
-        color = new THREE.Color(0xff00ff); // Purple
+        color = new THREE.Color(0xff00ff); // Purple for core routes
       }
+      
+      // Strategy micro-animation: Tint routes based on active strategy
+      if (activeStrategy === "cost") {
+        // Yellow/green tint for COST strategy
+        color.lerp(new THREE.Color(0xffff00), 0.3); // 30% yellow tint
+      } else if (activeStrategy === "latency") {
+        // Blue/white tint for LATENCY strategy
+        color.lerp(new THREE.Color(0x00ffff), 0.3); // 30% cyan/white tint
+      } else if (activeStrategy === "carbon") {
+        // Emerald tint for CARBON strategy
+        color.lerp(new THREE.Color(0x00ff88), 0.3); // 30% emerald tint
+      }
+      // BALANCED: no tint (default colors)
       
       // Calculate thickness from traffic - MUCH MORE VISIBLE VARIATION
       const trafficMbps = route.trafficMbps || 100;
@@ -327,8 +340,8 @@ export function TrafficFlowsBatched() {
           routeData.color.b * congestionFade
         );
         
-        // Particle size based on traffic (larger for high traffic)
-        const size = 0.03 + (thicknessNormalized * 0.05); // 0.03 to 0.08
+        // Particle size based on traffic (larger for high traffic) - INCREASED FOR VISIBILITY
+        const size = 0.08 + (thicknessNormalized * 0.12); // 0.08 to 0.20 (much more visible)
         pulseSizes.push(size);
       }
       
@@ -408,11 +421,14 @@ export function TrafficFlowsBatched() {
       const baseSpeed = 1 / (latencyMs / 1000);
       
       // Strategy micro-animation: LATENCY strategy = faster routing motion
+      // ENHANCED: More visible speed differences
       let strategySpeedMultiplier = 0.1; // Default: 10x slower
       if (activeStrategy === "latency") {
-        strategySpeedMultiplier = 0.25; // 4x slower (faster than default)
+        strategySpeedMultiplier = 0.4; // 2.5x slower (much faster than default - MORE VISIBLE)
       } else if (activeStrategy === "cost" || activeStrategy === "carbon") {
-        strategySpeedMultiplier = 0.08; // 12.5x slower (slower than default)
+        strategySpeedMultiplier = 0.05; // 20x slower (much slower than default - MORE VISIBLE)
+      } else if (activeStrategy === "balanced") {
+        strategySpeedMultiplier = 0.1; // Default speed
       }
       
       const speed = baseSpeed * strategySpeedMultiplier;
@@ -492,11 +508,11 @@ export function TrafficFlowsBatched() {
       {/* Batched pulse geometry - animated particles with variable sizes */}
       <points geometry={pulseGeometryRef.current}>
         <pointsMaterial
-          size={0.08}
+          size={0.15}
           sizeAttenuation={true}
           vertexColors={true}
           transparent={true}
-          opacity={0.95}
+          opacity={1.0}
           depthTest={true}
           depthWrite={false}
         />

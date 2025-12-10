@@ -663,7 +663,8 @@ export function SatellitesOptimized() {
 function ClassBMaterialWithBreathing() {
   const materialRef = useRef<any>(null);
   const frameSkipRef = useRef(0);
-  const sunDirection = useOrbitSim((s) => s.sunDirection);
+  // sunDirection is not in OrbitSimState, use a default value
+  const sunDirection: [number, number, number] = [1, 0, 0]; // Default sun direction
   useFrame((state) => {
     if (!materialRef.current) return;
     
