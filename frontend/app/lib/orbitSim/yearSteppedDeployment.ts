@@ -113,6 +113,9 @@ export interface YearDeploymentResult {
     heat: { utilizationMax: number; heatLimited: boolean };
     maintenance: { failureRate: number; failuresThisYear: number; recoverable: number; permanentLoss: number; survivalFraction: number };
   };
+  
+  // Thermal state (for persistence across years)
+  thermalState?: ThermalState;
 }
 
 const START_YEAR = 2025;
@@ -512,6 +515,7 @@ export function calculateYearDeployment(
     computePerB,
     powerPerB,
     constraints: effectiveComputeResult.constraints,
+    thermalState: updatedThermalState, // Return thermal state for next year
   };
 }
 
@@ -561,7 +565,7 @@ export function runMultiYearDeployment(
     const result = calculateYearDeployment(state, strategy);
     results.push(result);
     
-    // Update state for next year
+    // Update state for next year (get thermalState from result)
     state = {
       year: year + 1,
       strategy,
@@ -574,6 +578,7 @@ export function runMultiYearDeployment(
       deployedByYear_B: new Map(state.deployedByYear_B),
       totalComputePFLOPs: result.totalComputePFLOPs,
       totalPowerMW: result.totalPowerMW,
+      thermalState: result.thermalState, // Get thermal state from result
     };
     
     // Update deployment history
