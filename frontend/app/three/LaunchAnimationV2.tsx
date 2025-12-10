@@ -77,15 +77,23 @@ export function LaunchAnimationV2() {
       if (newDeployments.length > 0) {
         newDeployments.forEach((unit) => {
           if (unit.type === "leo_pod") {
-            // Pick launch site
-            const launchSiteIndex = unit.id.charCodeAt(0) % LAUNCH_SITES_LIST.length;
-            const launchSite = LAUNCH_SITES_LIST[launchSiteIndex];
-            
             // Assign to shell based on deployment schedule
             const shell = assignSatelliteToShell(
               launchesRef.current.size,
               deployedUnits.length
             );
+            
+            // Pick launch site: Orange arcs (LEO-2) should come from Texas (Boca Chica)
+            let launchSite;
+            if (shell.shell === "LEO-2") {
+              // Orange arcs come from Texas (Boca Chica, index 1)
+              launchSite = LAUNCH_SITES_LIST[1]; // Boca Chica, Texas
+            } else {
+              // Other shells use random selection
+              const launchSiteIndex = unit.id.charCodeAt(0) % LAUNCH_SITES_LIST.length;
+              launchSite = LAUNCH_SITES_LIST[launchSiteIndex];
+            }
+            
             const altitude = getAltitudeForShell(shell);
             
             // Target insertion point (random position in shell)

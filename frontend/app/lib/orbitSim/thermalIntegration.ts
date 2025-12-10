@@ -356,7 +356,13 @@ export function updateThermalState(
     backhaul_compute_capacity
   );
   
-  // 10. Calculate utilization metrics (MUST BE DYNAMIC)
+  // 10. Maintenance debt loop (MUST dominate survival) - Calculate FIRST before using in utilization metrics
+  const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
+  const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
+  const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
+  const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
+  
+  // 11. Calculate utilization metrics (MUST BE DYNAMIC)
   // Power utilization = min of all limit factors
   const thermal_limit_factor = radiator_utilization_ratio > 0 ? Math.min(1.0, radiator_utilization_ratio) : 0;
   const maintenance_limit_factor = state.maintenance_capacity_pods > 0 
@@ -365,7 +371,7 @@ export function updateThermalState(
   const backhaul_limit_factor = state.backhaul_tbps > 0
     ? Math.min(1.0, compute_exportable_flops / compute_effective_flops)
     : 1.0;
-  const autonomy_limit_factor = new_global_efficiency; // From maintenance debt
+  const autonomy_limit_factor = new_global_efficiency; // From maintenance debt (calculated below)
   
   // Power utilization is the minimum of all constraints
   const power_utilization_factor = Math.min(
@@ -392,12 +398,6 @@ export function updateThermalState(
   const manufacturing_utilization_percent = state.manufacturing_rate_pods_per_year > 0
     ? 100 // Assume always at capacity for now
     : 0;
-  
-  // 11. Maintenance debt loop (MUST dominate survival) - Calculate BEFORE using in maintenance_utilization_percent
-  const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
-  const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
-  const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
-  const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
   
   const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
     ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
