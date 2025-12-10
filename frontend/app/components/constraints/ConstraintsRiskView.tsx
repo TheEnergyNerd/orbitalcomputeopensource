@@ -162,13 +162,18 @@ export default function ConstraintsRiskView() {
         
         {/* Graph Overlay */}
         {showGraphOverlay && (
-          <div className="fixed inset-0 bg-black/90 z-50 p-8 overflow-auto">
+          <div className="fixed inset-0 bg-black/90 z-[100] p-8 overflow-auto pointer-events-auto">
             <div className="max-w-6xl mx-auto">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">Real-time Constraint Graph</h2>
                 <button
-                  onClick={() => setShowGraphOverlay(false)}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowGraphOverlay(false);
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded cursor-pointer z-[101] relative"
+                  type="button"
                 >
                   Close (G)
                 </button>
