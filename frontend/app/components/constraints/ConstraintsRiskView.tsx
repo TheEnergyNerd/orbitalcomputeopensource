@@ -9,6 +9,10 @@ import LaunchEconomicsSlider from "./LaunchEconomicsSlider";
 import AutonomyMaturityCurve from "./AutonomyMaturityCurve";
 import RiskRegimeTimeline from "./RiskRegimeTimeline";
 import DebugPanel from "./DebugPanel";
+import EnergyReturnOnLaunch from "./EnergyReturnOnLaunch";
+import PowerStrandedChart from "./PowerStrandedChart";
+import ThermalRejectionMargin from "./ThermalRejectionMargin";
+import RadiatorScalingChart from "./RadiatorScalingChart";
 
 export default function ConstraintsRiskView() {
   const [debugState, setDebugState] = useState(getDebugState());
@@ -152,6 +156,26 @@ export default function ConstraintsRiskView() {
           {/* Risk Regime Timeline */}
           <div className="lg:col-span-2">
             <RiskRegimeTimeline constraintTimeline={constraintTimeline} />
+          </div>
+          
+          {/* Energy Return on Launch */}
+          <div className="lg:col-span-2">
+            <EnergyReturnOnLaunch debugState={debugState} />
+          </div>
+          
+          {/* Power Stranded vs Power Used */}
+          <div className="lg:col-span-2">
+            <PowerStrandedChart debugState={debugState} />
+          </div>
+          
+          {/* Thermal Rejection Margin */}
+          <div className="lg:col-span-2">
+            <ThermalRejectionMargin debugState={debugState} />
+          </div>
+          
+          {/* Radiator Scaling vs Compute Density */}
+          <div className="lg:col-span-2">
+            <RadiatorScalingChart debugState={debugState} />
           </div>
         </div>
         
