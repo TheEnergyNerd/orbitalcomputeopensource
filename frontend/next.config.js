@@ -21,6 +21,29 @@ const nextConfig = {
   experimental: {
     optimizeCss: false,
   },
+  // Add headers to prevent browser caching of chunks in dev mode
+  async headers() {
+    return [
+      {
+        source: '/_next/static/chunks/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+        ],
+      },
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
