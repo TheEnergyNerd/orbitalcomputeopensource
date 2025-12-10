@@ -66,12 +66,18 @@ export interface ThermalState {
   cumulative_radiation_dose: number; // Arbitrary units, accumulates over time
   cumulative_thermal_excursions: number; // Count of times temp exceeded max
   thermal_oscillation_amplitude: number; // Temperature oscillation during eclipse
+  
+  // Auto-design safety state
+  auto_design_mode: boolean;
+  risk_mode: RiskMode;
+  lost_fraction: number; // Fraction of fleet lost to thermal death (0-1)
+  radiator_burnout_factor: number; // Cumulative radiator degradation (1.0 = pristine)
 }
 
 // Constants
 const STEFAN_BOLTZMANN = 5.67e-8; // W/(m²·K⁴)
 const SPACE_TEMP_K = 2.7; // Cosmic microwave background temperature (Kelvin)
-const MAX_OPERATING_TEMP_C = 85; // Maximum safe operating temperature
+const MAX_OPERATING_TEMP_C = 85; // Maximum safe operating temperature (legacy, kept for compatibility)
 const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps (approximate)
 const HEAT_GEN_EFFICIENCY = 0.95; // 95% of power becomes heat
 const ACTIVE_COOLING_EFFICIENCY = 0.25; // 25% of net heat can be actively cooled
@@ -80,6 +86,19 @@ const MAX_ACTIVE_COOLING_FRACTION = 0.15; // Max 15% of power for active cooling
 // Fixed thermal mass per satellite class (J/°C) - MUST NOT scale with power
 const THERMAL_MASS_CLASS_A = 2e6; // 2 MJ/°C per Class A satellite
 const THERMAL_MASS_CLASS_B = 5e6; // 5 MJ/°C per Class B satellite
+
+// Auto-design safety constants
+export const TARGET_CORE_TEMP_C = 70;
+export const MAX_CORE_TEMP_SOFT_C = 90;
+export const MAX_CORE_TEMP_HARD_C = 450;
+export const THERMAL_SAFETY_MARGIN_SAFE = 0.7;
+export const THERMAL_SAFETY_MARGIN_AGGRESSIVE = 0.95;
+export const BACKHAUL_SAFETY_MARGIN_SAFE = 0.9;
+export const BACKHAUL_SAFETY_MARGIN_AGGRESSIVE = 1.0;
+export const MAINT_SAFETY_MARGIN_SAFE = 0.9;
+export const MAINT_SAFETY_MARGIN_AGGRESSIVE = 1.0;
+
+export type RiskMode = "SAFE" | "AGGRESSIVE" | "YOLO";
 
 /**
  * Calculate heat generation from power
@@ -224,12 +243,30 @@ export function updateThermalState(
   let temp_change_C = (effective_net_heat * 3600 * dt_hours) / state.thermal_mass_J_per_C;
   
   // 6a. If radiator utilization > 1, temperature must rise SUPER-LINEARLY
+  // Also apply radiator overdrive penalty
+  let radiator_burnout_factor = state.radiator_burnout_factor || 1.0;
   if (radiator_utilization_ratio < 1.0) {
     // Heat rejection insufficient - super-linear temperature rise
     const deficit = 1.0 - radiator_utilization_ratio;
     // Super-linear scaling: temp rise ∝ (deficit)^2.5
     const superlinear_multiplier = Math.pow(deficit, 2.5) * 3.0; // Amplify by 3x
     temp_change_C *= (1.0 + superlinear_multiplier);
+    
+    // Radiator overdrive penalty: if utilization > 1.0, temp rises faster
+    if (radiator_utilization_ratio < 1.0) {
+      const overdrive_factor = 1.0 + (1.0 - radiator_utilization_ratio) * 2.0; // Up to 3x faster
+      temp_change_C *= overdrive_factor;
+    }
+    
+    // If radiator utilization > 1.1, radiator burns out
+    if (radiator_utilization_ratio < 0.9) { // Less than 90% = over 110% utilization
+      // Radiator burnout: area and emissivity degrade
+      radiator_burnout_factor *= 0.98; // 2% degradation per year
+      const emissivity_degradation = 0.99; // 1% emissivity loss per year
+      state.emissivity *= emissivity_degradation;
+      // Micrometeoroid risk increases
+      // (handled in applyFailureModes)
+    }
   }
   
   // 6b. Eclipse-induced thermal oscillation
@@ -243,11 +280,28 @@ export function updateThermalState(
   
   const new_temp_core_C = state.temp_core_C + temp_change_C;
   
+  // 6c. HARD PHYSICAL DEATH (UNCONDITIONAL)
+  let lost_fraction = state.lost_fraction || 0;
+  let thermal_overstress_term = 0;
+  
+  if (new_temp_core_C > MAX_CORE_TEMP_HARD_C) {
+    // Hard death: satellite/fleet segment is LOST
+    const death_fraction = Math.min(1.0, (new_temp_core_C - MAX_CORE_TEMP_HARD_C) / 100); // Gradual death above hard limit
+    lost_fraction = Math.max(lost_fraction, death_fraction);
+    
+    // Remove lost fraction from system
+    // (This will be applied to reduce power_total_kw, compute_raw_flops, etc. in the return)
+  } else if (new_temp_core_C > MAX_CORE_TEMP_SOFT_C && new_temp_core_C <= MAX_CORE_TEMP_HARD_C) {
+    // Soft limit exceeded: severe throttling and overstress
+    const overstress_ratio = (new_temp_core_C - MAX_CORE_TEMP_SOFT_C) / (MAX_CORE_TEMP_HARD_C - MAX_CORE_TEMP_SOFT_C);
+    thermal_overstress_term = overstress_ratio * 0.1; // Up to 10% failure rate increase
+  }
+  
   // 7. Update cumulative failure drivers
   let cumulative_radiation_dose = (state.cumulative_radiation_dose || 0) + (dt_hours / 8760) * 0.1; // Accumulates over time
   let cumulative_thermal_excursions = state.cumulative_thermal_excursions || 0;
-  if (new_temp_core_C > MAX_OPERATING_TEMP_C) {
-    cumulative_thermal_excursions += 1; // Count thermal excursions
+  if (new_temp_core_C > MAX_CORE_TEMP_SOFT_C) {
+    cumulative_thermal_excursions += 1; // Count thermal excursions (using soft limit)
   }
   
   // 8. Thermal throttling and failure rate (MUST spike if radiator utilization > 1)
@@ -262,14 +316,23 @@ export function updateThermalState(
   
   new_failure_rate = base_failure_rate + radiation_penalty + thermal_excursion_penalty + maintenance_debt_penalty;
   
-  if (new_temp_core_C > MAX_OPERATING_TEMP_C) {
-    // Throttle compute based on temperature
-    const throttle_factor = MAX_OPERATING_TEMP_C / new_temp_core_C;
+  // Add thermal overstress term
+  new_failure_rate += thermal_overstress_term;
+  
+  if (new_temp_core_C > MAX_CORE_TEMP_SOFT_C) {
+    // Throttle compute based on temperature (using soft limit)
+    const throttle_factor = MAX_CORE_TEMP_SOFT_C / new_temp_core_C;
     compute_effective_flops = state.compute_raw_flops * throttle_factor;
     
     // Increase failure rate when overheated (additional penalty)
     const hours_overheated = dt_hours;
     new_failure_rate += 0.005 * hours_overheated;
+  }
+  
+  // Apply lost fraction: reduce compute and power for lost satellites
+  if (lost_fraction > 0) {
+    compute_effective_flops *= (1.0 - lost_fraction);
+    // Power reduction will be applied in the return statement
   }
   
   // 8a. If radiator utilization > 1, FAILURE RATE MUST SPIKE and compute MUST THROTTLE HARD
@@ -293,10 +356,27 @@ export function updateThermalState(
     backhaul_compute_capacity
   );
   
-  // 10. Calculate utilization metrics
-  const power_utilization_percent = state.power_total_kw > 0 
-    ? ((state.power_total_kw - active_cooling_kw_clamped) / state.power_total_kw) * 100
-    : 0;
+  // 10. Calculate utilization metrics (MUST BE DYNAMIC)
+  // Power utilization = min of all limit factors
+  const thermal_limit_factor = radiator_utilization_ratio > 0 ? Math.min(1.0, radiator_utilization_ratio) : 0;
+  const maintenance_limit_factor = state.maintenance_capacity_pods > 0 
+    ? Math.min(1.0, (state.maintenance_capacity_pods - new_degraded_pods) / state.maintenance_capacity_pods)
+    : 1.0;
+  const backhaul_limit_factor = state.backhaul_tbps > 0
+    ? Math.min(1.0, compute_exportable_flops / compute_effective_flops)
+    : 1.0;
+  const autonomy_limit_factor = new_global_efficiency; // From maintenance debt
+  
+  // Power utilization is the minimum of all constraints
+  const power_utilization_factor = Math.min(
+    thermal_limit_factor,
+    maintenance_limit_factor,
+    backhaul_limit_factor,
+    autonomy_limit_factor,
+    1.0 - lost_fraction // Lost fraction reduces power utilization
+  );
+  
+  const power_utilization_percent = power_utilization_factor * 100;
   
   const thermal_drift_C_per_hr = temp_change_C / dt_hours;
   
@@ -376,6 +456,15 @@ export function updateThermalState(
     cumulative_radiation_dose,
     cumulative_thermal_excursions,
     thermal_oscillation_amplitude: Math.abs(thermal_oscillation),
+    // Auto-design safety state
+    auto_design_mode: state.auto_design_mode ?? true,
+    risk_mode: state.risk_mode ?? "SAFE",
+    lost_fraction,
+    radiator_burnout_factor,
+    // Apply lost fraction to power and compute
+    power_total_kw: state.power_total_kw * (1.0 - lost_fraction),
+    compute_raw_flops: state.compute_raw_flops * (1.0 - lost_fraction),
+    radiatorArea_m2: state.radiatorArea_m2 * radiator_burnout_factor * (1.0 - lost_fraction),
   };
 }
 
@@ -464,6 +553,11 @@ export function initializeThermalState(
     cumulative_radiation_dose: 0,
     cumulative_thermal_excursions: 0,
     thermal_oscillation_amplitude: 0,
+    // Auto-design safety state (initialized)
+    auto_design_mode: true,
+    risk_mode: "SAFE",
+    lost_fraction: 0,
+    radiator_burnout_factor: 1.0,
   };
   
   // Run one thermal update to initialize computed values
