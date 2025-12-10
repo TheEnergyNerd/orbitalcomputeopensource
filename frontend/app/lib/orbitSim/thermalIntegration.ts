@@ -460,22 +460,6 @@ export function updateThermalState(
   
   const maintenance_debt = failures_unrecovered;
   
-  // 12.5. Calculate sustained compute EARLY (needed for power utilization check)
-  // This is the theoretical maximum where system is in thermal equilibrium
-  let sustained_compute_flops = state.compute_raw_flops * new_global_efficiency;
-  
-  // SUSTAINED COMPUTE MUST GATE: If sustained_compute == 0, everything is 0
-  if (sustained_compute_flops <= 0) {
-    compute_effective_flops = 0;
-    compute_exportable_flops = 0;
-    // power_utilization will be set to 0 below
-  } else {
-    // Gate compute_effective by sustained_compute
-    compute_effective_flops = Math.min(compute_effective_flops, sustained_compute_flops);
-    // Recalculate compute_exportable with gated compute_effective
-    compute_exportable_flops = Math.min(compute_effective_flops, backhaul_compute_capacity);
-  }
-  
   return {
     ...state,
     heatGen_kw,
