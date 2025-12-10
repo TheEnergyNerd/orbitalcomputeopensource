@@ -50,6 +50,16 @@ export function SimProvider({ children }: { children: ReactNode }) {
         }
       } catch (error: any) {
         // Silently handle all backend errors - new OrbitSim doesn't need backend
+        // Suppress CORS and network errors in console
+        const isCorsError = error?.message?.includes('CORS') || 
+                           error?.code === 'ERR_NETWORK' ||
+                           error?.message?.includes('Network Error');
+        
+        if (!isCorsError && retryCount === 0) {
+          // Only log non-CORS errors on first retry
+          console.debug('[SimContext] Backend connection failed (optional):', error?.message);
+        }
+        
         retryCount++;
         if (retryCount >= MAX_RETRIES) {
           // Stop polling after max retries
@@ -59,7 +69,7 @@ export function SimProvider({ children }: { children: ReactNode }) {
             interval = null;
           }
         }
-        // Don't log errors - backend is optional
+        // Don't log CORS errors - backend is optional
       }
     };
 

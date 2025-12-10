@@ -166,10 +166,12 @@ export function validateState(year: number): boolean {
     isValid = false;
   }
   
-  // Check dominant constraint is defined
-  if (!entry.dominantConstraint || entry.dominantConstraint === "NONE") {
-    addDebugError(year, "No dominant constraint", { dominantConstraint: entry.dominantConstraint });
-    // This is a warning, not a fatal error
+  // Check dominant constraint is defined (only warn if we have satellites but no constraint)
+  if ((!entry.dominantConstraint || entry.dominantConstraint === "NONE") && entry.satellitesTotal > 0) {
+    // Only warn if we have satellites but no constraint identified
+    // This can happen in early years before constraints become meaningful
+    // Don't add as error, just log as warning
+    console.warn(`[DebugState] Year ${year}: No dominant constraint identified (${entry.satellitesTotal} satellites)`);
   }
   
   return isValid;

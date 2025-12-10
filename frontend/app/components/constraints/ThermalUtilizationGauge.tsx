@@ -16,7 +16,7 @@ export default function ThermalUtilizationGauge({ currentState }: ThermalUtiliza
     );
   }
   
-  const utilization = currentState.utilization_overall;
+  const utilization = currentState?.utilization_overall ?? 0;
   const size = 200;
   const strokeWidth = 20;
   const radius = (size - strokeWidth) / 2;
@@ -35,8 +35,10 @@ export default function ThermalUtilizationGauge({ currentState }: ThermalUtiliza
     return "Wasting Power / Melting Silicon";
   };
   
-  const offset = circumference * (1 - utilization);
-  const color = getColor(utilization);
+  // Ensure utilization is a valid number between 0 and 1
+  const validUtilization = Math.max(0, Math.min(1, utilization || 0));
+  const offset = circumference * (1 - validUtilization);
+  const color = getColor(validUtilization);
   
   return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
@@ -108,10 +110,10 @@ export default function ThermalUtilizationGauge({ currentState }: ThermalUtiliza
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="text-4xl font-bold" style={{ color }}>
-                {(utilization * 100).toFixed(1)}%
+                {(validUtilization * 100).toFixed(1)}%
               </div>
               <div className="text-sm text-gray-400 mt-1">
-                {getSegment(utilization)}
+                {getSegment(validUtilization)}
               </div>
             </div>
           </div>
@@ -121,15 +123,15 @@ export default function ThermalUtilizationGauge({ currentState }: ThermalUtiliza
         <div className="mt-6 w-full space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Heat Utilization:</span>
-            <span className="font-semibold">{(currentState.utilization_heat * 100).toFixed(1)}%</span>
+            <span className="font-semibold">{((currentState?.utilization_heat ?? 0) * 100).toFixed(1)}%</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Backhaul Utilization:</span>
-            <span className="font-semibold">{(currentState.utilization_backhaul * 100).toFixed(1)}%</span>
+            <span className="font-semibold">{((currentState?.utilization_backhaul ?? 0) * 100).toFixed(1)}%</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Autonomy Utilization:</span>
-            <span className="font-semibold">{(currentState.utilization_autonomy * 100).toFixed(1)}%</span>
+            <span className="font-semibold">{((currentState?.utilization_autonomy ?? 0) * 100).toFixed(1)}%</span>
           </div>
         </div>
       </div>
