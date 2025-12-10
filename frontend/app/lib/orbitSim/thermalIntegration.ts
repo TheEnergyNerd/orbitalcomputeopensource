@@ -61,6 +61,11 @@ export interface ThermalState {
   pump_failure_active: boolean; // Active cooling pump failure
   coolant_frozen: boolean; // Coolant frozen during eclipse
   coolant_freeze_ticks_remaining: number; // Ticks until coolant unfreezes
+  
+  // Cumulative failure drivers
+  cumulative_radiation_dose: number; // Arbitrary units, accumulates over time
+  cumulative_thermal_excursions: number; // Count of times temp exceeded max
+  thermal_oscillation_amplitude: number; // Temperature oscillation during eclipse
 }
 
 // Constants
@@ -71,6 +76,10 @@ const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps (approximate)
 const HEAT_GEN_EFFICIENCY = 0.95; // 95% of power becomes heat
 const ACTIVE_COOLING_EFFICIENCY = 0.25; // 25% of net heat can be actively cooled
 const MAX_ACTIVE_COOLING_FRACTION = 0.15; // Max 15% of power for active cooling
+
+// Fixed thermal mass per satellite class (J/°C) - MUST NOT scale with power
+const THERMAL_MASS_CLASS_A = 2e6; // 2 MJ/°C per Class A satellite
+const THERMAL_MASS_CLASS_B = 5e6; // 5 MJ/°C per Class B satellite
 
 /**
  * Calculate heat generation from power
@@ -196,43 +205,94 @@ export function updateThermalState(
   }
   const active_cooling_kw_clamped = Math.max(0, active_cooling_kw);
   
-  // 5. Update temperature based on net heat flow
+  // 5. Calculate radiator utilization (BEFORE temperature update)
+  const radiator_utilization_ratio = heatGen_kw > 0 ? heatReject_kw / heatGen_kw : 1.0;
+  
+  // 6. Update temperature based on net heat flow
   const effective_net_heat = net_heat_flow_kw - active_cooling_kw_clamped;
-  const temp_change_C = (effective_net_heat * 3600 * dt_hours) / state.thermal_mass_J_per_C;
+  let temp_change_C = (effective_net_heat * 3600 * dt_hours) / state.thermal_mass_J_per_C;
+  
+  // 6a. If radiator utilization > 1, temperature must rise SUPER-LINEARLY
+  if (radiator_utilization_ratio < 1.0) {
+    // Heat rejection insufficient - super-linear temperature rise
+    const deficit = 1.0 - radiator_utilization_ratio;
+    // Super-linear scaling: temp rise ∝ (deficit)^2.5
+    const superlinear_multiplier = Math.pow(deficit, 2.5) * 3.0; // Amplify by 3x
+    temp_change_C *= (1.0 + superlinear_multiplier);
+  }
+  
+  // 6b. Eclipse-induced thermal oscillation
+  let thermal_oscillation = 0;
+  if (state.eclipse_fraction > 0.1) {
+    // Temperature oscillates during eclipse (heating/cooling cycles)
+    const oscillation_amplitude = state.eclipse_fraction * 5.0; // Up to 5°C oscillation
+    thermal_oscillation = Math.sin(year * 0.5) * oscillation_amplitude; // Oscillates with year
+    temp_change_C += thermal_oscillation * (dt_hours / 8760); // Scale by time fraction
+  }
+  
   const new_temp_core_C = state.temp_core_C + temp_change_C;
   
-  // 6. Thermal throttling
+  // 7. Update cumulative failure drivers
+  let cumulative_radiation_dose = (state.cumulative_radiation_dose || 0) + (dt_hours / 8760) * 0.1; // Accumulates over time
+  let cumulative_thermal_excursions = state.cumulative_thermal_excursions || 0;
+  if (new_temp_core_C > MAX_OPERATING_TEMP_C) {
+    cumulative_thermal_excursions += 1; // Count thermal excursions
+  }
+  
+  // 8. Thermal throttling and failure rate (MUST spike if radiator utilization > 1)
   let compute_effective_flops = state.compute_raw_flops;
   let new_failure_rate = state.failure_rate;
+  
+  // Base failure rate from cumulative drivers
+  const base_failure_rate = 0.03; // 3% base
+  const radiation_penalty = cumulative_radiation_dose * 0.01; // 1% per unit radiation
+  const thermal_excursion_penalty = cumulative_thermal_excursions * 0.005; // 0.5% per excursion
+  const maintenance_debt_penalty = (state.maintenance_debt || 0) > 0 ? (state.maintenance_debt / 100) * 0.01 : 0;
+  
+  new_failure_rate = base_failure_rate + radiation_penalty + thermal_excursion_penalty + maintenance_debt_penalty;
   
   if (new_temp_core_C > MAX_OPERATING_TEMP_C) {
     // Throttle compute based on temperature
     const throttle_factor = MAX_OPERATING_TEMP_C / new_temp_core_C;
     compute_effective_flops = state.compute_raw_flops * throttle_factor;
     
-    // Increase failure rate when overheated
+    // Increase failure rate when overheated (additional penalty)
     const hours_overheated = dt_hours;
     new_failure_rate += 0.005 * hours_overheated;
   }
   
-  // 7. Backhaul as hard competing bottleneck (NO STATIC CLAMP)
-  // compute_exportable = min(compute_effective, backhaul_capacity)
-  const backhaul_compute_capacity = state.backhaul_tbps * FLOPS_PER_TBPS;
+  // 8a. If radiator utilization > 1, FAILURE RATE MUST SPIKE and compute MUST THROTTLE HARD
+  if (radiator_utilization_ratio < 1.0) {
+    const deficit = 1.0 - radiator_utilization_ratio;
+    // Failure rate spike: exponential with deficit
+    new_failure_rate *= (1.0 + Math.pow(deficit, 2) * 5.0); // Up to 5x multiplier
+    
+    // Hard compute throttle: compute scales with (radiator_utilization)^2
+    const throttle_factor = Math.pow(radiator_utilization_ratio, 2);
+    compute_effective_flops = state.compute_raw_flops * throttle_factor;
+  }
+  
+  // 9. Backhaul as hard competing bottleneck (NO STATIC CLAMP, NO HIDDEN CLAMPS)
+  // compute_exportable = min(compute_effective, backhaul_bandwidth_total * flops_per_tbps)
+  // backhaul_bandwidth_total is in TBps (already calculated in state.backhaul_tbps)
+  const backhaul_bandwidth_total = state.backhaul_tbps; // TBps
+  const backhaul_compute_capacity = backhaul_bandwidth_total * FLOPS_PER_TBPS;
   const compute_exportable_flops = Math.min(
     compute_effective_flops,
     backhaul_compute_capacity
   );
   
-  // 8. Calculate utilization metrics
+  // 10. Calculate utilization metrics
   const power_utilization_percent = state.power_total_kw > 0 
     ? ((state.power_total_kw - active_cooling_kw_clamped) / state.power_total_kw) * 100
     : 0;
   
   const thermal_drift_C_per_hr = temp_change_C / dt_hours;
   
-  const radiator_utilization_percent = heatReject_kw > 0 && heatGen_kw > 0
+  // Radiator utilization: heat rejection / heat generation (can exceed 100%)
+  const radiator_utilization_percent = heatGen_kw > 0
     ? (heatReject_kw / heatGen_kw) * 100
-    : 0;
+    : 100;
   
   const backhaul_utilization_percent = state.backhaul_tbps > 0
     ? (compute_exportable_flops / (state.backhaul_tbps * FLOPS_PER_TBPS)) * 100
@@ -243,19 +303,34 @@ export function updateThermalState(
     : 0;
   
   const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
-    ? (state.degraded_pods / state.maintenance_capacity_pods) * 100
+    ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
     : 0;
   
-  // 9. Maintenance debt loop
+  // 11. Maintenance debt loop (MUST dominate survival)
   const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
-  const new_degraded_pods = Math.max(0, state.degraded_pods + (new_failure_rate * state.power_total_kw / 10) - pods_repaired);
+  const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
+  const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
+  const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
+  
+  const maintenance_utilization_ratio = state.maintenance_capacity_pods > 0
+    ? new_degraded_pods / state.maintenance_capacity_pods
+    : 0;
   
   let new_global_efficiency = state.global_efficiency || 1.0;
-  if (new_degraded_pods > state.maintenance_capacity_pods) {
-    new_global_efficiency *= 0.97; // 3% efficiency loss per year when maintenance overwhelmed
+  let failures_unrecovered = new_degraded_pods - pods_repaired;
+  let survival_fraction = totalPods > 0 ? (totalPods - new_degraded_pods) / totalPods : 1.0;
+  
+  // If maintenance_utilization > 1, failures_unrecovered MUST grow, survival_fraction MUST fall, global_efficiency MUST decay
+  if (maintenance_utilization_ratio > 1.0) {
+    // Failures exceed recovery capacity
+    failures_unrecovered = Math.max(failures_unrecovered, (maintenance_utilization_ratio - 1.0) * state.maintenance_capacity_pods);
+    survival_fraction = Math.max(0.5, survival_fraction - (maintenance_utilization_ratio - 1.0) * 0.1); // Decay by 10% per unit over capacity
+    // Global efficiency decays exponentially with maintenance overload
+    const efficiency_decay = Math.pow(0.95, maintenance_utilization_ratio - 1.0); // 5% decay per unit over capacity
+    new_global_efficiency *= efficiency_decay;
   }
   
-  const maintenance_debt = new_degraded_pods;
+  const maintenance_debt = failures_unrecovered;
   
   // 10. Calculate sustained compute (where net_heat_flow → 0 and failure_rate → maintenance_capacity)
   // This is the theoretical maximum where system is in thermal equilibrium
@@ -286,6 +361,10 @@ export function updateThermalState(
     pump_failure_active: failureModes.pump_failure_active ?? state.pump_failure_active ?? false,
     coolant_frozen: failureModes.coolant_frozen ?? state.coolant_frozen ?? false,
     coolant_freeze_ticks_remaining: failureModes.coolant_freeze_ticks_remaining ?? state.coolant_freeze_ticks_remaining ?? 0,
+    // Cumulative failure drivers
+    cumulative_radiation_dose,
+    cumulative_thermal_excursions,
+    thermal_oscillation_amplitude: Math.abs(thermal_oscillation),
   };
 }
 
@@ -307,8 +386,8 @@ export function initializeThermalState(
   const totalCompute_flops = ((satelliteCountA * computePerA_PFLOPs) + (satelliteCountB * computePerB_PFLOPs)) * 1e15;
   const totalRadiatorArea_m2 = (satelliteCountA * radiatorAreaPerA_m2) + (satelliteCountB * radiatorAreaPerB_m2);
   
-  // Estimate thermal mass (J/°C) - roughly 1 MJ per kW of power
-  const thermal_mass_J_per_C = totalPower_kw * 1e6;
+  // FIXED thermal mass per satellite class (MUST NOT scale with power)
+  const thermal_mass_J_per_C = (satelliteCountA * THERMAL_MASS_CLASS_A) + (satelliteCountB * THERMAL_MASS_CLASS_B);
   
   // Initial temperatures (ambient + some operating margin)
   const temp_core_C = 25; // Start at room temperature
@@ -370,6 +449,10 @@ export function initializeThermalState(
     pump_failure_active: false,
     coolant_frozen: false,
     coolant_freeze_ticks_remaining: 0,
+    // Cumulative failure drivers (initialized)
+    cumulative_radiation_dose: 0,
+    cumulative_thermal_excursions: 0,
+    thermal_oscillation_amplitude: 0,
   };
   
   // Run one thermal update to initialize computed values

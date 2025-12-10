@@ -339,19 +339,52 @@ export function calculateYearDeployment(
   };
   const strategy_radiator_mass_bias = strategy_radiator_mass_biases[strategy];
   
-  // Carbon & Cost crossover (simplified - would need integration with simulationRunner)
-  // For now, calculate from available data
-  const groundCarbonPerTwh = 400; // kg CO2 per TWh (simplified)
-  const orbitalCarbonPerTwh = 100; // kg CO2 per TWh (simplified, includes launch amortization)
-  const carbon_orbit = orbitalCarbonPerTwh;
+  // Carbon & Cost crossover (MUST depend on launch mass, replacement cadence, radiator mass)
+  // NOT static constants
+  
+  // Calculate launch mass per year
+  const totalLaunchMassT = launches_per_year * payload_per_launch_tons;
+  const totalLaunchMassKg = totalLaunchMassT * 1000;
+  
+  // Calculate replacement cadence (satellites replaced per year)
+  const replacementCadence = retiredA + retiredB + effectiveComputeResult.constraints.maintenance.permanentLoss;
+  const replacementRate = (S_A_new + S_B_new) > 0 ? replacementCadence / (S_A_new + S_B_new) : 0;
+  
+  // Calculate total radiator mass (from thermal state)
+  const avgRadiatorMassPerSat = (massA * 0.2 + massB * 0.4) / 2; // Radiator is ~20% of Class A mass, ~40% of Class B
+  const totalRadiatorMassKg = (S_A_new * massA * 0.2 + S_B_new * massB * 0.4) * 1000; // Convert tons to kg
+  
+  // Carbon calculation: depends on launch mass and replacement cadence
+  // Launch carbon: ~300 kg CO2 per kg to LEO (includes manufacturing)
+  const launchCarbonKg = totalLaunchMassKg * 300;
+  // Replacement carbon: higher replacement cadence = more carbon
+  const replacementCarbonKg = replacementCadence * avgRadiatorMassPerSat * 1000 * 300; // Carbon per replacement
+  const totalOrbitalCarbonKg = launchCarbonKg + replacementCarbonKg;
+  
+  // Ground carbon: ~400 kg CO2 per TWh (constant)
+  const groundCarbonPerTwh = 400;
+  const totalPowerTwh = (S_A_new * powerPerA + S_B_new * powerPerB) / 1000000; // Convert kW to TW, then to TWh
+  const groundCarbonKg = totalPowerTwh * groundCarbonPerTwh;
+  
+  const carbon_orbit = totalOrbitalCarbonKg > 0 && totalPowerTwh > 0 ? totalOrbitalCarbonKg / totalPowerTwh : 1000;
   const carbon_ground = groundCarbonPerTwh;
   const carbon_delta = carbon_orbit - carbon_ground;
-  // Check if crossover has occurred (orbit becomes cleaner)
   const carbon_crossover_triggered = carbon_delta < 0;
   
-  const groundCostPerTwh = 340; // $ per TWh (from simulationRunner)
-  const orbitalCostPerTwh = 300 - (year - 2025) * 2; // Decreasing over time
-  const cost_orbit = orbitalCostPerTwh;
+  // Cost calculation: depends on launch mass, replacement cadence, radiator mass
+  // Launch cost: cost per kg to LEO * total mass
+  const launchCostUSD = totalLaunchMassKg * cost_per_kg_to_leo;
+  // Replacement cost: higher replacement cadence = more cost
+  const replacementCostUSD = replacementCadence * (costA + costB) / 2;
+  // Radiator cost: scales with radiator mass (more radiator = higher cost)
+  const radiatorCostMultiplier = 1.0 + (totalRadiatorMassKg / 1000000); // 1% cost increase per 1000 kg radiator
+  const totalOrbitalCostUSD = (launchCostUSD + replacementCostUSD) * radiatorCostMultiplier;
+  
+  // Ground cost: ~$340 per TWh (constant)
+  const groundCostPerTwh = 340;
+  const groundCostUSD = totalPowerTwh * groundCostPerTwh;
+  
+  const cost_orbit = totalOrbitalCostUSD > 0 && totalPowerTwh > 0 ? totalOrbitalCostUSD / totalPowerTwh : 1000;
   const cost_ground = groundCostPerTwh;
   const cost_delta = cost_orbit - cost_ground;
   const cost_crossover_triggered = cost_delta < 0;
