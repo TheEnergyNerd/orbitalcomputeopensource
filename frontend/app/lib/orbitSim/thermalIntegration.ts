@@ -392,7 +392,22 @@ export function updateThermalState(
     new_global_efficiency *= efficiency_decay;
   }
   
-  // 12. Calculate utilization metrics (MUST BE DYNAMIC, MUST STAY PHYSICAL)
+  // 12. Calculate sustained compute EARLY (needed for power utilization check)
+  // This is the theoretical maximum where system is in thermal equilibrium
+  let sustained_compute_flops = state.compute_raw_flops * new_global_efficiency;
+  
+  // SUSTAINED COMPUTE MUST GATE: If sustained_compute == 0, everything is 0
+  if (sustained_compute_flops <= 0) {
+    compute_effective_flops = 0;
+    compute_exportable_flops = 0;
+  } else {
+    // Gate compute_effective by sustained_compute
+    compute_effective_flops = Math.min(compute_effective_flops, sustained_compute_flops);
+    // Recalculate compute_exportable with gated compute_effective
+    compute_exportable_flops = Math.min(compute_effective_flops, backhaul_compute_capacity);
+  }
+  
+  // 13. Calculate utilization metrics (MUST BE DYNAMIC, MUST STAY PHYSICAL)
   // Power utilization = min of all limit factors
   const thermal_limit_factor = radiator_utilization_ratio > 0 ? Math.min(1.0, radiator_utilization_ratio) : 0;
   const maintenance_limit_factor = state.maintenance_capacity_pods > 0 
@@ -445,7 +460,7 @@ export function updateThermalState(
   
   const maintenance_debt = failures_unrecovered;
   
-  // 13. Calculate sustained compute (where net_heat_flow → 0 and failure_rate → maintenance_capacity)
+  // 12.5. Calculate sustained compute EARLY (needed for power utilization check)
   // This is the theoretical maximum where system is in thermal equilibrium
   let sustained_compute_flops = state.compute_raw_flops * new_global_efficiency;
   

@@ -25,55 +25,54 @@ interface TutorialStepConfig {
 
 const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   1: {
-    title: "Welcome to Orbital Compute Simulator",
-    description: "This simulator lets you explore the economics and logistics of orbital computing. You'll make strategic decisions about deployment, routing, and infrastructure. Use the tabs above (Overview, World View, Futures) to navigate different views.",
+    title: "Welcome",
+    description: "Explore orbital computing economics. Use the tabs above to navigate.",
     // No highlight for step 1
   },
   2: {
-    title: "Understanding the Year System",
-    description: "The year counter shows your current simulation year. Click 'Deploy 1 year' to advance time and see rocket launches on the globe as satellites are deployed. On mobile, open the menu (☰) in the top-left to access all controls.",
+    title: "Deploy Time",
+    description: "Click 'Deploy 1 year' to advance time and see rocket launches.",
     highlight: "[data-tutorial-deploy-button]",
-    action: "Click 'Deploy 1 year' to see launches",
+    action: "Click 'Deploy 1 year'",
   },
   3: {
-    title: "Strategy Selection",
-    description: "Choose your compute strategy (Latency-first, Cost-first, Carbon-first, or Balanced) and launch strategy (Heavy lift, Reusable, or Light & cheap). These choices affect costs, latency, and carbon emissions. On mobile, open the menu (☰) in the top-left to access the strategy card.",
+    title: "Choose Strategy",
+    description: "Select a strategy (Latency, Cost, Carbon, or Balanced) to affect outcomes.",
     highlight: "[data-tutorial-mobile-menu-button]",
-    action: "Open the menu to access strategy (on mobile) or select a strategy (on desktop)",
+    action: "Open menu to select strategy",
   },
   4: {
-    title: "Viewing Metrics",
-    description: "The metrics panel at the bottom shows cost per compute, latency, carbon emissions, and orbit share. Expand it to see detailed charts.",
+    title: "View Metrics",
+    description: "The metrics panel shows cost, latency, carbon, and orbit share.",
     highlight: "[data-tutorial-metrics-panel]",
-    action: "Expand the metrics panel",
+    action: "Expand metrics panel",
   },
   5: {
-    title: "Globe Interaction",
-    description: "Switch to the World View tab to explore the 3D globe. The globe shows satellites (teal circles = Class A, white diamonds = Class B), data centers (orange), and launch sites. Click on any element to see details. Traffic arrows show data flow between locations. Try clicking on data centers, satellites, and constellations to see their information cards.",
+    title: "Explore Globe",
+    description: "Switch to World View. Click satellites and data centers to see details.",
     highlight: "[data-tutorial-deployment-tab]",
-    requiresDeploymentTab: true, // Flag to switch to deployment tab (now World View)
-    interactionTime: 5000, // Give users 5 seconds to explore
-    allowGlobeClicks: true, // Allow clicks on globe elements during this step
+    requiresDeploymentTab: true,
+    interactionTime: 5000,
+    allowGlobeClicks: true,
   },
   6: {
     title: "AI Router",
-    description: "Switch back to the Overview tab. The AI Router optimizes job routing based on your strategy. It decides how to route realtime, interactive, batch, and cold jobs between ground and orbit. On mobile, first open the menu, then click AI Router.",
+    description: "The AI Router optimizes job routing. Adjust weights for cost, latency, and carbon.",
     highlight: "[data-tutorial-ai-router-button]",
-    action: "Switch to Overview and open the AI Router panel (on mobile: open menu first)",
-    requiresOverviewTab: true, // Flag to switch back to overview tab
-    panelInstructions: "In the AI Router panel, you can adjust routing weights for cost, latency, and carbon. Try changing the presets (Latency-first, Cost-first, Carbon-first, or Balanced) or manually adjusting the sliders to see how it affects job routing.",
+    action: "Open AI Router panel",
+    requiresOverviewTab: true,
   },
   7: {
-    title: "Futures Tab",
-    description: "The Futures tab shows probabilistic forecasts of cost trends. It uses Monte Carlo simulation to predict how orbit vs ground costs will evolve. Watch for cost and carbon crossover alerts when orbital compute becomes cheaper or greener than ground.",
+    title: "Futures",
+    description: "The Futures tab shows cost forecasts. Watch for crossover alerts.",
     highlight: "[data-tutorial-futures-tab]",
-    action: "Switch to the Futures tab",
+    action: "Switch to Futures tab",
   },
   8: {
-    title: "Satellite Classes",
-    description: "There are two types of satellites: Class A (teal circles) for low-latency networking and Class B (white diamonds) for high-power compute. Class B satellites face the sun for maximum solar power. You'll see more Class B satellites in cost/carbon-first strategies after 2030.",
+    title: "Satellite Types",
+    description: "Class A (teal) = networking. Class B (white) = high-power compute. Class B faces the sun.",
     highlight: "[data-tutorial-deployment-tab]",
-    action: "Switch to World View to see the satellites",
+    action: "Switch to World View",
     requiresDeploymentTab: true,
   },
 };
