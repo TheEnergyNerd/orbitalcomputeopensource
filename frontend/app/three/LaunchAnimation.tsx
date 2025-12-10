@@ -45,9 +45,11 @@ export function LaunchAnimation() {
       if (newDeployments.length > 0) {
         newDeployments.forEach((unit) => {
         if (unit.type === "leo_pod") {
-          // Pick launch site (consistent based on unit ID to match satellite placement)
-          const launchSiteIndex = unit.id.charCodeAt(0) % LAUNCH_SITES.length;
-          const launchSite = LAUNCH_SITES[launchSiteIndex];
+          // Orange arcs should come from Texas (Boca Chica)
+          // Find Texas launch site (Boca Chica)
+          const texasSite = LAUNCH_SITES.find(site => site.id === "bocachica");
+          // Use Texas for all launches (orange arcs)
+          const launchSite = texasSite || LAUNCH_SITES[0]; // Fallback to first site if Texas not found
           const [fromX, fromY, fromZ] = latLonAltToXYZ(launchSite.lat, launchSite.lon, 0);
           const from = new Vector3(fromX, fromY, fromZ);
 
