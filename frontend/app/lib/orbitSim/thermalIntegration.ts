@@ -313,15 +313,15 @@ export function updateThermalState(
     ? 100 // Assume always at capacity for now
     : 0;
   
-  const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
-    ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
-    : 0;
-  
-  // 11. Maintenance debt loop (MUST dominate survival)
+  // 11. Maintenance debt loop (MUST dominate survival) - Calculate BEFORE using in maintenance_utilization_percent
   const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
   const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
   const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
   const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
+  
+  const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
+    ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
+    : 0;
   
   const maintenance_utilization_ratio = state.maintenance_capacity_pods > 0
     ? new_degraded_pods / state.maintenance_capacity_pods
