@@ -457,8 +457,9 @@ export function calculateConstrainedEffectiveCompute(
   const heatCeiling = rawComputePFLOPs * heatUtilization;
   
   // Backhaul ceiling: maximum compute allowed by backhaul bandwidth
-  const backhaulCeiling = backhaul_bandwidth_total > 0
-    ? (backhaul_bandwidth_total / backhaul_bw_per_PFLOP)
+  // Use the backhaul_compute_limit we calculated above
+  const backhaulCeiling = backhaul_compute_limit > 0
+    ? backhaul_compute_limit
     : rawComputePFLOPs; // Fallback to raw if no satellites
   
   // Autonomy ceiling: maximum satellites sustainable by repair capacity
