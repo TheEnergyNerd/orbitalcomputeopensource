@@ -136,6 +136,7 @@ export interface DebugStateEntry {
   carbon_ground: number; // kg CO2 per compute unit
   carbon_delta: number; // orbit - ground
   carbon_crossover_triggered: boolean;
+  carbon_mix: number; // Weighted average carbon (ground + orbit)
   
   cost_orbit: number; // $ per compute unit
   cost_ground: number; // $ per compute unit
