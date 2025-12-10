@@ -78,7 +78,7 @@ export interface ThermalState {
 const STEFAN_BOLTZMANN = 5.67e-8; // W/(m²·K⁴)
 const SPACE_TEMP_K = 2.7; // Cosmic microwave background temperature (Kelvin)
 const MAX_OPERATING_TEMP_C = 85; // Maximum safe operating temperature (legacy, kept for compatibility)
-const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps (approximate)
+export const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps (approximate)
 const HEAT_GEN_EFFICIENCY = 0.95; // 95% of power becomes heat
 const ACTIVE_COOLING_EFFICIENCY = 0.25; // 25% of net heat can be actively cooled
 const MAX_ACTIVE_COOLING_FRACTION = 0.15; // Max 15% of power for active cooling
