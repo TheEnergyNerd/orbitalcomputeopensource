@@ -421,24 +421,19 @@ export function calculateConstrainedEffectiveCompute(
     strategy
   );
   
-  // 4. Backhaul utilization (calculate based on bandwidth constraints)
-  // Each PFLOP requires ~10 Gbps backhaul bandwidth
-  const backhaul_bw_per_PFLOP = 10; // Gbps per PFLOP
-  const backhaul_bandwidth_used = rawComputePFLOPs * backhaul_bw_per_PFLOP; // Gbps
+  // 4. Backhaul as hard competing bottleneck (NO STATIC CLAMP)
+  // Calculate backhaul capacity dynamically
+  const backhaul_tbps = (satelliteCountA + satelliteCountB) * 0.5; // 0.5 TBps per satellite
+  const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps
+  const backhaul_compute_limit = backhaul_tbps * FLOPS_PER_TBPS;
   
-  // Backhaul capacity scales with satellite count and orbit diversity
-  // LEO-HIGH provides relay backbone, so capacity is limited without it
-  // For now, assume we have some relay capability if we have multiple orbit types
-  const hasRelayBackbone = satelliteCountA > 0 && (satelliteCountA + satelliteCountB) > 100; // Simplified check
-  const backhaul_capacity_factor = hasRelayBackbone ? 1.0 : 0.7; // Reduced if no relay backbone
-  const backhaul_bandwidth_total = (satelliteCountA + satelliteCountB) * 50 * backhaul_capacity_factor; // 50 Gbps per sat, scaled
-  
-  // Backhaul utilization: clamp to 1.0 if bandwidth is sufficient
-  const backhaulUtilization = backhaul_bandwidth_total > 0 
-    ? Math.min(1.0, backhaul_bandwidth_used / backhaul_bandwidth_total)
+  // Backhaul utilization is the ratio of compute to backhaul capacity
+  const backhaulUtilization = backhaul_tbps > 0
+    ? Math.min(1.0, rawComputePFLOPs / backhaul_compute_limit)
     : 1.0;
   
-  // 5. Calculate effective compute
+  // 5. Calculate effective compute (thermal throttling already applied in thermal integration)
+  // For now, use the old method but this will be replaced by thermal integration
   const effectiveCompute = rawComputePFLOPs *
     heatUtilization *
     backhaulUtilization *

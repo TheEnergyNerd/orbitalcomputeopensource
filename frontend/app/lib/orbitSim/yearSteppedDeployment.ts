@@ -36,6 +36,11 @@ import {
   calculateLaunchCostBudget,
 } from "./deploymentConstraints";
 import {
+  initializeThermalState,
+  updateThermalState,
+  type ThermalState,
+} from "./thermalIntegration";
+import {
   addDebugStateEntry,
   validateState,
   validateStateAcrossYears,
@@ -63,6 +68,9 @@ export interface YearDeploymentState {
   // Aggregate metrics
   totalComputePFLOPs: number;
   totalPowerMW: number;
+  
+  // Thermal state (persists across years)
+  thermalState?: import("./thermalIntegration").ThermalState;
 }
 
 export interface YearDeploymentResult {
@@ -189,7 +197,47 @@ export function calculateYearDeployment(
   const totalPowerMW = 
     (S_A_new * powerPerA + S_B_new * powerPerB) / 1000;
   
-  // 8.5. APPLY HEAT AND MAINTENANCE CONSTRAINTS
+  // 8.5. DYNAMIC THERMAL INTEGRATION (replaces static heat ceilings)
+  // Get radiator areas (varies by class and strategy)
+  const radiatorAreaPerA = strategy === "CARBON" ? 6.5 : strategy === "COST" ? 4.5 : 5.0;
+  const radiatorAreaPerB = strategy === "CARBON" ? 15.6 : strategy === "COST" ? 10.8 : 12.0;
+  
+  // Initialize or update thermal state from current satellite configuration
+  let thermalState: ThermalState;
+  if (state.thermalState && year > 2025) {
+    // Update existing thermal state with new satellite counts
+    thermalState = {
+      ...state.thermalState,
+      power_total_kw: (S_A_new * powerPerA + S_B_new * powerPerB),
+      compute_raw_flops: totalComputePFLOPs * 1e15,
+      radiatorArea_m2: (S_A_new * radiatorAreaPerA + S_B_new * radiatorAreaPerB),
+      backhaul_tbps: (S_A_new + S_B_new) * 0.5, // Update backhaul capacity
+      manufacturing_rate_pods_per_year: Math.max(100, (S_A_new + S_B_new) * 0.1),
+      maintenance_capacity_pods: Math.max(50, (S_A_new + S_B_new) * 0.05),
+    };
+  } else {
+    // Initialize new thermal state
+    thermalState = initializeThermalState(
+      S_A_new,
+      S_B_new,
+      powerPerA,
+      powerPerB,
+      computePerA,
+      computePerB,
+      radiatorAreaPerA,
+      radiatorAreaPerB,
+      year
+    );
+  }
+  
+  // Update thermal state for this year (8760 hours = 1 year)
+  const updatedThermalState = updateThermalState(thermalState, 8760);
+  
+  // Use thermal-integrated effective compute (already includes throttling)
+  const thermalEffectiveComputePFLOPs = updatedThermalState.compute_exportable_flops / 1e15;
+  
+  // 8.6. LEGACY CONSTRAINT CALCULATION (for backward compatibility with charts)
+  // This will be phased out but kept for now to maintain existing visualizations
   const effectiveComputeResult = calculateConstrainedEffectiveCompute(
     totalComputePFLOPs,
     S_A_new,
@@ -202,6 +250,9 @@ export function calculateYearDeployment(
     newA,
     newB
   );
+  
+  // Override effective compute with thermal-integrated value
+  const finalEffectiveCompute = thermalEffectiveComputePFLOPs;
   
   // 9. Collect debug state
   const massA = calculateSatelliteMass("A", year, strategy);
@@ -242,12 +293,13 @@ export function calculateYearDeployment(
   );
   const maintenance_debt = maintenance_debt_prev + failures_unrecovered;
   
-  // Thermal reality
+  // Thermal reality (from dynamic thermal integration)
   const electrical_efficiency = 0.85; // 85% efficiency (15% waste heat)
-  const avgRadiatorArea = (S_A_new * 5.0 + S_B_new * 12.0) / (S_A_new + S_B_new || 1);
-  const avgHeatReject = (S_A_new * heatRejectA + S_B_new * heatRejectB) / (S_A_new + S_B_new || 1);
-  const radiator_kw_per_m2 = avgRadiatorArea > 0 ? avgHeatReject / avgRadiatorArea : 0;
-  const utilization_heat_raw = effectiveComputeResult.heatUtilization; // Already calculated
+  const avgRadiatorArea = updatedThermalState.radiatorArea_m2 / (S_A_new + S_B_new || 1);
+  const radiator_kw_per_m2 = avgRadiatorArea > 0 ? updatedThermalState.heatReject_kw / updatedThermalState.radiatorArea_m2 : 0;
+  const utilization_heat_raw = updatedThermalState.heatGen_kw > 0
+    ? updatedThermalState.heatReject_kw / updatedThermalState.heatGen_kw
+    : 1.0;
   
   // Launch economics
   const payload_per_launch_tons = 100; // Starship capacity
@@ -323,7 +375,7 @@ export function calculateYearDeployment(
     ),
     power_total_kw: (S_A_new * powerPerA + S_B_new * powerPerB),
     compute_raw_flops: totalComputePFLOPs * 1e15, // Convert PFLOPs to FLOPS
-    compute_effective_flops: effectiveComputeResult.effectiveCompute * 1e15,
+    compute_effective_flops: finalEffectiveCompute * 1e15, // Use thermal-integrated compute
     dominantConstraint: effectiveComputeResult.dominantConstraint,
     strategyActive: strategy,
     strategyHistory: [strategy], // Simplified - could track history
@@ -383,6 +435,28 @@ export function calculateYearDeployment(
     cost_ground: cost_ground,
     cost_delta: cost_delta,
     cost_crossover_triggered: cost_crossover_triggered,
+    // --- Dynamic Thermal Integration ---
+    temp_core_C: updatedThermalState.temp_core_C,
+    temp_radiator_C: updatedThermalState.temp_radiator_C,
+    thermal_mass_J_per_C: updatedThermalState.thermal_mass_J_per_C,
+    heatGen_kw: updatedThermalState.heatGen_kw,
+    heatReject_kw: updatedThermalState.heatReject_kw,
+    net_heat_flow_kw: updatedThermalState.net_heat_flow_kw,
+    active_cooling_kw: updatedThermalState.active_cooling_kw,
+    thermal_drift_C_per_hr: updatedThermalState.thermal_drift_C_per_hr,
+    eclipse_fraction: updatedThermalState.eclipse_fraction,
+    shadowing_loss: updatedThermalState.shadowing_loss,
+    // --- Utilization Metrics ---
+    power_utilization_percent: updatedThermalState.power_utilization_percent,
+    radiator_utilization_percent: updatedThermalState.radiator_utilization_percent,
+    backhaul_utilization_percent: updatedThermalState.backhaul_utilization_percent,
+    manufacturing_utilization_percent: updatedThermalState.manufacturing_utilization_percent,
+    maintenance_utilization_percent: updatedThermalState.maintenance_utilization_percent,
+    // --- Sustained Compute ---
+    sustained_compute_flops: updatedThermalState.sustained_compute_flops,
+    compute_exportable_flops: updatedThermalState.compute_exportable_flops,
+    // --- Maintenance Debt ---
+    global_efficiency: updatedThermalState.global_efficiency,
   };
   
   addDebugStateEntry(debugEntry);
@@ -398,6 +472,22 @@ export function calculateYearDeployment(
   newDeployedByYear_A.set(year, newA);
   newDeployedByYear_B.set(year, newB);
   
+  // 11. Update state with thermal state for next year
+  const newState: YearDeploymentState = {
+    year: year + 1,
+    strategy,
+    S_A: S_A_new,
+    S_B: S_B_new,
+    S_A_lowLEO: S_A_lowLEO_new,
+    S_A_midLEO: S_A_midLEO_new,
+    S_A_sunSync: S_A_sunSync_new,
+    deployedByYear_A: newDeployedByYear_A,
+    deployedByYear_B: newDeployedByYear_B,
+    totalComputePFLOPs: finalEffectiveCompute,
+    totalPowerMW: (S_A_new * powerPerA + S_B_new * powerPerB) / 1000,
+    thermalState: updatedThermalState,
+  };
+  
   return {
     year,
     strategy,
@@ -412,9 +502,9 @@ export function calculateYearDeployment(
     S_A_midLEO: S_A_midLEO_new,
     S_A_sunSync: S_A_sunSync_new,
     S_B_sunSync: S_B_sunSync_new,
-    totalComputePFLOPs,
+    totalComputePFLOPs: finalEffectiveCompute,
     totalPowerMW,
-    effectiveComputePFLOPs: effectiveComputeResult.effectiveCompute,
+    effectiveComputePFLOPs: finalEffectiveCompute,
     heatUtilization: effectiveComputeResult.heatUtilization,
     survivalFraction: effectiveComputeResult.survivalFraction,
     computePerA,
@@ -429,6 +519,9 @@ export function calculateYearDeployment(
  * Get initial state (year 2025)
  */
 export function getInitialDeploymentState(strategy: StrategyMode = "BALANCED"): YearDeploymentState {
+  // Initialize thermal state for year 0 (no satellites yet)
+  const initialThermalState = initializeThermalState(0, 0, 0, 0, 0, 0, 5.0, 12.0, START_YEAR);
+  
   return {
     year: START_YEAR,
     strategy,
@@ -441,6 +534,7 @@ export function getInitialDeploymentState(strategy: StrategyMode = "BALANCED"): 
     deployedByYear_B: new Map(),
     totalComputePFLOPs: 0,
     totalPowerMW: 0,
+    thermalState: initialThermalState,
   };
 }
 

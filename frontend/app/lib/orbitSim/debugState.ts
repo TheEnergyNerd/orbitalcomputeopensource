@@ -90,6 +90,32 @@ export interface DebugStateEntry {
   radiator_kw_per_m2: number; // kW per square meter
   utilization_heat_raw: number; // before min()
   
+  // --- Dynamic Thermal Integration ---
+  temp_core_C: number; // Core temperature in Celsius
+  temp_radiator_C: number; // Radiator temperature in Celsius
+  thermal_mass_J_per_C: number; // Thermal mass
+  heatGen_kw: number; // Heat generation
+  heatReject_kw: number; // Heat rejection
+  net_heat_flow_kw: number; // Net heat flow
+  active_cooling_kw: number; // Active cooling power
+  thermal_drift_C_per_hr: number; // Temperature drift rate
+  eclipse_fraction: number; // Fraction of orbit in eclipse
+  shadowing_loss: number; // Shadowing loss
+  
+  // --- Utilization Metrics (per deployment card UI requirement) ---
+  power_utilization_percent: number;
+  radiator_utilization_percent: number;
+  backhaul_utilization_percent: number;
+  manufacturing_utilization_percent: number;
+  maintenance_utilization_percent: number;
+  
+  // --- Sustained Compute ---
+  sustained_compute_flops: number; // Sustained compute ceiling
+  compute_exportable_flops: number; // Exportable compute (min of effective and backhaul)
+  
+  // --- Maintenance Debt ---
+  global_efficiency: number; // Global efficiency multiplier
+  
   // --- Launch Economics ---
   payload_per_launch_tons: number;
   launches_per_year: number;
