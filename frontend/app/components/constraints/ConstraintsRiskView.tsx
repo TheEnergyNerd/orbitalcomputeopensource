@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getDebugState, getConstraintTimeline, exportDebugData } from "../../lib/orbitSim/debugState";
+import AutoDesignSafetyControls from "./AutoDesignSafetyControls";
+import type { RiskMode } from "../../lib/orbitSim/thermalIntegration";
 import CeilingStackChart from "./CeilingStackChart";
 import FailureReplacementChart from "./FailureReplacementChart";
 import ThermalUtilizationGauge from "./ThermalUtilizationGauge";
@@ -18,6 +20,8 @@ export default function ConstraintsRiskView() {
   const [debugState, setDebugState] = useState(getDebugState());
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [showGraphOverlay, setShowGraphOverlay] = useState(false);
+  const [autoDesignMode, setAutoDesignMode] = useState(true);
+  const [riskMode, setRiskMode] = useState<RiskMode>("SAFE");
   
   // Refresh debug state periodically
   useEffect(() => {
