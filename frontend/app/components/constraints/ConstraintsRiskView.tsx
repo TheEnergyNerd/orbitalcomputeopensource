@@ -58,22 +58,37 @@ export default function ConstraintsRiskView() {
               Structural limits on orbital compute growth
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 pointer-events-auto z-50 relative">
             <button
-              onClick={() => setShowDebugPanel(!showDebugPanel)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowDebugPanel(prev => !prev);
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold cursor-pointer z-50 relative"
+              type="button"
             >
               {showDebugPanel ? "Hide" : "Show"} Debug (D)
             </button>
             <button
-              onClick={exportDebugData}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                exportDebugData();
+              }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold cursor-pointer z-50 relative"
+              type="button"
             >
               Export Debug Data
             </button>
             <button
-              onClick={() => setShowGraphOverlay(!showGraphOverlay)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-semibold"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowGraphOverlay(prev => !prev);
+              }}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-semibold cursor-pointer z-50 relative"
+              type="button"
             >
               {showGraphOverlay ? "Hide" : "Show"} Graph (G)
             </button>

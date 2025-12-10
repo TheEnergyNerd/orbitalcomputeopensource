@@ -17,6 +17,10 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Ensure chunks are properly generated
+  experimental: {
+    optimizeCss: false,
+  },
 };
 
 module.exports = nextConfig;

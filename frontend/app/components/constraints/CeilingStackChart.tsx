@@ -64,9 +64,9 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
     );
   }
   
-  // Responsive dimensions
+  // Responsive dimensions - full width
   const width = typeof window !== 'undefined' 
-    ? Math.min(fullScreen ? 1200 : 800, window.innerWidth - 64) 
+    ? Math.min(fullScreen ? 1200 : window.innerWidth - 128, window.innerWidth - 64) 
     : fullScreen ? 1200 : 800;
   const height = typeof window !== 'undefined'
     ? Math.min(fullScreen ? 600 : 400, (window.innerHeight - 200) * 0.6)
@@ -158,7 +158,7 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
     ` L ${getX(firstYear)} ${getY((chartData[0]?.launchCeiling || 0) + (chartData[0]?.heatCeiling || 0) + (chartData[0]?.backhaulCeiling || 0))} Z`;
   
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 w-full">
       <h3 className="text-lg font-bold mb-4">Ceiling Stack Chart</h3>
       <p className="text-sm text-gray-400 mb-4">
         Stacked ceilings showing Launch Mass, Heat, Backhaul, and Autonomy limits.
