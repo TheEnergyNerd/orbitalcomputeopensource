@@ -65,6 +65,56 @@ export interface DebugStateEntry {
     HIGH: number;
     SSO: number;
   };
+  
+  // --- Class Breakdown ---
+  classA_satellites_alive: number;
+  classB_satellites_alive: number;
+  classA_compute_raw: number; // PFLOPs
+  classB_compute_raw: number; // PFLOPs
+  classA_power_kw: number;
+  classB_power_kw: number;
+  
+  // --- Backhaul Reality ---
+  backhaul_bandwidth_total: number; // Gbps
+  backhaul_bandwidth_used: number; // Gbps
+  backhaul_bw_per_PFLOP: number; // Gbps per PFLOP
+  utilization_backhaul_raw: number; // before clamping
+  
+  // --- Autonomy & Maintenance Reality ---
+  maintenance_debt: number; // cumulative unrecovered failures
+  failures_unrecovered: number; // this year's unrecovered failures
+  survival_fraction: number; // same as utilization_autonomy, for clarity
+  
+  // --- Thermal Reality ---
+  electrical_efficiency: number; // 0-1
+  radiator_kw_per_m2: number; // kW per square meter
+  utilization_heat_raw: number; // before min()
+  
+  // --- Launch Economics ---
+  payload_per_launch_tons: number;
+  launches_per_year: number;
+  cost_per_kg_to_leo: number; // $/kg
+  
+  // --- Retirement Physics ---
+  retirements_by_lifetime: number;
+  retirements_by_failure: number;
+  
+  // --- Strategy Effects ---
+  strategy_growth_target: number; // target satellites per year
+  strategy_launch_budget_multiplier: number;
+  strategy_RnD_autonomy_bias: number;
+  strategy_radiator_mass_bias: number;
+  
+  // --- Carbon & Cost Crossover ---
+  carbon_orbit: number; // kg CO2 per compute unit
+  carbon_ground: number; // kg CO2 per compute unit
+  carbon_delta: number; // orbit - ground
+  carbon_crossover_triggered: boolean;
+  
+  cost_orbit: number; // $ per compute unit
+  cost_ground: number; // $ per compute unit
+  cost_delta: number; // orbit - ground
+  cost_crossover_triggered: boolean;
 }
 
 export interface DebugState {
@@ -178,6 +228,78 @@ export function validateState(year: number): boolean {
 }
 
 /**
+ * Validate state across multiple years for degenerate patterns
+ */
+export function validateStateAcrossYears(): void {
+  const years = Object.keys(debugState)
+    .filter(key => key !== "errors")
+    .map(Number)
+    .sort((a, b) => a - b);
+  
+  if (years.length < 6) return; // Need at least 6 years to check patterns
+  
+  // Check 1: Maintenance never binds (failures always equal recoveries for >5 consecutive years)
+  let consecutiveMaintenanceNeverBinds = 0;
+  let maxConsecutiveMaintenanceNeverBinds = 0;
+  
+  for (const year of years) {
+    const entry = debugState[year];
+    if (!entry) continue;
+    
+    if (entry.satellitesFailed === entry.satellitesRecovered && entry.satellitesTotal > 0) {
+      consecutiveMaintenanceNeverBinds++;
+      maxConsecutiveMaintenanceNeverBinds = Math.max(
+        maxConsecutiveMaintenanceNeverBinds,
+        consecutiveMaintenanceNeverBinds
+      );
+    } else {
+      consecutiveMaintenanceNeverBinds = 0;
+    }
+  }
+  
+  if (maxConsecutiveMaintenanceNeverBinds > 5) {
+    addDebugError(
+      years[0],
+      `Maintenance never binds — model likely degenerate. Failures equal recoveries for ${maxConsecutiveMaintenanceNeverBinds} consecutive years.`,
+      { maxConsecutiveYears: maxConsecutiveMaintenanceNeverBinds }
+    );
+    console.warn(
+      `[DebugState] ⚠️ Maintenance never binds: failures equal recoveries for ${maxConsecutiveMaintenanceNeverBinds} consecutive years`
+    );
+  }
+  
+  // Check 2: Backhaul never binds (utilization always 1.0 for >10 years)
+  let consecutiveBackhaulNeverBinds = 0;
+  let maxConsecutiveBackhaulNeverBinds = 0;
+  
+  for (const year of years) {
+    const entry = debugState[year];
+    if (!entry) continue;
+    
+    if (Math.abs(entry.utilization_backhaul - 1.0) < 0.001 && entry.satellitesTotal > 0) {
+      consecutiveBackhaulNeverBinds++;
+      maxConsecutiveBackhaulNeverBinds = Math.max(
+        maxConsecutiveBackhaulNeverBinds,
+        consecutiveBackhaulNeverBinds
+      );
+    } else {
+      consecutiveBackhaulNeverBinds = 0;
+    }
+  }
+  
+  if (maxConsecutiveBackhaulNeverBinds > 10) {
+    addDebugError(
+      years[0],
+      `Backhaul never binds — routing model likely incomplete. Utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years.`,
+      { maxConsecutiveYears: maxConsecutiveBackhaulNeverBinds }
+    );
+    console.warn(
+      `[DebugState] ⚠️ Backhaul never binds: utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years`
+    );
+  }
+}
+
+/**
  * Export debug state as JSON
  */
 export function exportDebugData(): void {
@@ -243,4 +365,7 @@ if (typeof window !== "undefined") {
   (window as any).exportDebugData = exportDebugData;
   (window as any).getDebugState = getDebugState;
 }
+
+// Export validateStateAcrossYears for use in yearSteppedDeployment
+export { validateStateAcrossYears };
 

@@ -38,6 +38,8 @@ import {
 import {
   addDebugStateEntry,
   validateState,
+  validateStateAcrossYears,
+  getDebugState,
   type DebugStateEntry,
 } from "./debugState";
 
@@ -213,6 +215,92 @@ export function calculateYearDeployment(
   const autonomyLevel = calculateAutonomyLevel(year, strategy);
   const repairCapacity = calculateRepairCapacity(S_A_new + S_B_new, year, strategy);
   
+  // Calculate additional values for new debug fields
+  const classA_compute_raw = S_A_new * computePerA; // PFLOPs
+  const classB_compute_raw = S_B_new * computePerB; // PFLOPs
+  const classA_power_kw = S_A_new * powerPerA;
+  const classB_power_kw = S_B_new * powerPerB;
+  
+  // Backhaul calculations (simplified model - needs enhancement)
+  // Assume each PFLOP requires ~10 Gbps backhaul bandwidth
+  const backhaul_bw_per_PFLOP = 10; // Gbps per PFLOP
+  const backhaul_bandwidth_used = totalComputePFLOPs * backhaul_bw_per_PFLOP; // Gbps
+  // Backhaul capacity scales with satellite count and orbit diversity
+  // LEO-HIGH provides relay backbone, so capacity is limited without it
+  const backhaul_capacity_factor = S_A_lowLEO_new > 0 && S_A_midLEO_new > 0 ? 1.0 : 0.7; // Reduced if no relay backbone
+  const backhaul_bandwidth_total = (S_A_new + S_B_new) * 50 * backhaul_capacity_factor; // 50 Gbps per sat, scaled
+  const utilization_backhaul_raw = backhaul_bandwidth_total > 0 
+    ? Math.min(1.0, backhaul_bandwidth_used / backhaul_bandwidth_total)
+    : 1.0;
+  
+  // Maintenance debt (cumulative unrecovered failures)
+  const previousEntry = year > 2025 ? (getDebugState()[year - 1] as DebugStateEntry | undefined) : undefined;
+  const maintenance_debt_prev = previousEntry?.maintenance_debt || 0;
+  const failures_unrecovered = Math.max(0, 
+    effectiveComputeResult.constraints.maintenance.failuresThisYear - 
+    effectiveComputeResult.constraints.maintenance.recoverable
+  );
+  const maintenance_debt = maintenance_debt_prev + failures_unrecovered;
+  
+  // Thermal reality
+  const electrical_efficiency = 0.85; // 85% efficiency (15% waste heat)
+  const avgRadiatorArea = (S_A_new * 5.0 + S_B_new * 12.0) / (S_A_new + S_B_new || 1);
+  const avgHeatReject = (S_A_new * heatRejectA + S_B_new * heatRejectB) / (S_A_new + S_B_new || 1);
+  const radiator_kw_per_m2 = avgRadiatorArea > 0 ? avgHeatReject / avgRadiatorArea : 0;
+  const utilization_heat_raw = effectiveComputeResult.heatUtilization; // Already calculated
+  
+  // Launch economics
+  const payload_per_launch_tons = 100; // Starship capacity
+  const launches_per_year = totalLaunches;
+  const launchBudgetM = calculateLaunchCostBudget(year, strategy, totalLaunches);
+  const totalMassT = launches_per_year * payload_per_launch_tons;
+  const cost_per_kg_to_leo = totalMassT > 0 ? (launchBudgetM * 1e6) / (totalMassT * 1000) : 500; // $/kg
+  
+  // Retirement physics
+  const retirements_by_lifetime = retiredA + retiredB; // All retirements are by lifetime currently
+  const retirements_by_failure = 0; // Not currently tracked separately
+  
+  // Strategy effects
+  const strategy_growth_target = totalLaunches; // Target satellites per year
+  const strategy_launch_budget_multipliers: Record<StrategyMode, number> = {
+    COST: 1.5,
+    LATENCY: 1.1,
+    CARBON: 1.2,
+    BALANCED: 1.3,
+  };
+  const strategy_launch_budget_multiplier = strategy_launch_budget_multipliers[strategy];
+  const strategy_RnD_autonomy_rates: Record<StrategyMode, number> = {
+    COST: 0.05,
+    LATENCY: 0.08,
+    CARBON: 0.10,
+    BALANCED: 0.07,
+  };
+  const strategy_RnD_autonomy_bias = strategy_RnD_autonomy_rates[strategy];
+  const strategy_radiator_mass_biases: Record<StrategyMode, number> = {
+    COST: 0.9,
+    LATENCY: 0.8,
+    CARBON: 1.2,
+    BALANCED: 1.0,
+  };
+  const strategy_radiator_mass_bias = strategy_radiator_mass_biases[strategy];
+  
+  // Carbon & Cost crossover (simplified - would need integration with simulationRunner)
+  // For now, calculate from available data
+  const groundCarbonPerTwh = 400; // kg CO2 per TWh (simplified)
+  const orbitalCarbonPerTwh = 100; // kg CO2 per TWh (simplified, includes launch amortization)
+  const carbon_orbit = orbitalCarbonPerTwh;
+  const carbon_ground = groundCarbonPerTwh;
+  const carbon_delta = carbon_orbit - carbon_ground;
+  // Check if crossover has occurred (orbit becomes cleaner)
+  const carbon_crossover_triggered = carbon_delta < 0;
+  
+  const groundCostPerTwh = 340; // $ per TWh (from simulationRunner)
+  const orbitalCostPerTwh = 300 - (year - 2025) * 2; // Decreasing over time
+  const cost_orbit = orbitalCostPerTwh;
+  const cost_ground = groundCostPerTwh;
+  const cost_delta = cost_orbit - cost_ground;
+  const cost_crossover_triggered = cost_delta < 0;
+  
   const debugEntry: DebugStateEntry = {
     year,
     launchMassCeiling: effectiveComputeResult.ceilings.launchMass,
@@ -242,7 +330,7 @@ export function calculateYearDeployment(
     radiatorArea: (S_A_new * 5.0 + S_B_new * 12.0), // Simplified average
     heatGen: (S_A_new * heatGenA + S_B_new * heatGenB),
     heatReject: (S_A_new * heatRejectA + S_B_new * heatRejectB),
-    launchBudget: calculateLaunchCostBudget(year, strategy, totalLaunches),
+    launchBudget: launchBudgetM,
     costPerSatellite: (costA + costB) / 2,
     massPerSatellite: (massA + massB) / 2,
     autonomyLevel,
@@ -251,13 +339,58 @@ export function calculateYearDeployment(
     shellOccupancy: {
       LOW: S_A_lowLEO_new,
       MID: S_A_midLEO_new,
-      HIGH: 0, // Not tracked separately
+      HIGH: 0, // Not tracked separately - needs orbit allocation update
       SSO: S_A_sunSync_new + S_B_sunSync_new,
     },
+    // --- Class Breakdown ---
+    classA_satellites_alive: S_A_new,
+    classB_satellites_alive: S_B_new,
+    classA_compute_raw: classA_compute_raw,
+    classB_compute_raw: classB_compute_raw,
+    classA_power_kw: classA_power_kw,
+    classB_power_kw: classB_power_kw,
+    // --- Backhaul Reality ---
+    backhaul_bandwidth_total: backhaul_bandwidth_total,
+    backhaul_bandwidth_used: backhaul_bandwidth_used,
+    backhaul_bw_per_PFLOP: backhaul_bw_per_PFLOP,
+    utilization_backhaul_raw: utilization_backhaul_raw,
+    // --- Autonomy & Maintenance Reality ---
+    maintenance_debt: maintenance_debt,
+    failures_unrecovered: failures_unrecovered,
+    survival_fraction: effectiveComputeResult.survivalFraction,
+    // --- Thermal Reality ---
+    electrical_efficiency: electrical_efficiency,
+    radiator_kw_per_m2: radiator_kw_per_m2,
+    utilization_heat_raw: utilization_heat_raw,
+    // --- Launch Economics ---
+    payload_per_launch_tons: payload_per_launch_tons,
+    launches_per_year: launches_per_year,
+    cost_per_kg_to_leo: cost_per_kg_to_leo,
+    // --- Retirement Physics ---
+    retirements_by_lifetime: retirements_by_lifetime,
+    retirements_by_failure: retirements_by_failure,
+    // --- Strategy Effects ---
+    strategy_growth_target: strategy_growth_target,
+    strategy_launch_budget_multiplier: strategy_launch_budget_multiplier,
+    strategy_RnD_autonomy_bias: strategy_RnD_autonomy_bias,
+    strategy_radiator_mass_bias: strategy_radiator_mass_bias,
+    // --- Carbon & Cost Crossover ---
+    carbon_orbit: carbon_orbit,
+    carbon_ground: carbon_ground,
+    carbon_delta: carbon_delta,
+    carbon_crossover_triggered: carbon_crossover_triggered,
+    cost_orbit: cost_orbit,
+    cost_ground: cost_ground,
+    cost_delta: cost_delta,
+    cost_crossover_triggered: cost_crossover_triggered,
   };
   
   addDebugStateEntry(debugEntry);
   validateState(year);
+  // Run cross-year validation after adding entry
+  if (year % 5 === 0) { // Run every 5 years to avoid performance issues
+    validateStateAcrossYears();
+  }
   
   // 10. Update deployment history
   const newDeployedByYear_A = new Map(deployedByYear_A);

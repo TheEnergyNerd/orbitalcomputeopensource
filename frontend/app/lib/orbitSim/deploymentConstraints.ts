@@ -291,24 +291,29 @@ export function calculateAutonomyLevel(
 /**
  * Calculate repair capacity per year
  * Only a fraction of failed compute can be recovered per year
+ * Early years have very limited repair capacity to allow failures to exceed recoveries
  */
 export function calculateRepairCapacity(
   totalSatellites: number,
   year: number,
   strategy: StrategyMode
 ): number {
-  // Base repair capacity: 5% of fleet per year
-  const baseRepairRate = 0.05;
+  // Base repair capacity: starts very low (1% of fleet per year) and grows with autonomy
+  const baseRepairRate = 0.01; // 1% base rate (much lower than before)
   
-  // Autonomy improves repair capacity
+  // Autonomy improves repair capacity, but starts from a low base
   const autonomyLevel = calculateAutonomyLevel(year, strategy);
-  const repairRate = baseRepairRate * autonomyLevel;
+  // Repair rate grows with autonomy, but more slowly than before
+  const repairRate = baseRepairRate * Math.sqrt(autonomyLevel); // Square root growth (slower)
   
-  // Maximum repair capacity: 20% of fleet per year (hard limit)
-  const maxRepairRate = 0.20;
+  // Maximum repair capacity: 15% of fleet per year (hard limit, reduced from 20%)
+  const maxRepairRate = 0.15;
   const effectiveRepairRate = Math.min(repairRate, maxRepairRate);
   
-  return Math.floor(totalSatellites * effectiveRepairRate);
+  // Ensure minimum of 1 satellite can be repaired if we have satellites
+  const minRepairCapacity = totalSatellites > 0 ? 1 : 0;
+  
+  return Math.max(minRepairCapacity, Math.floor(totalSatellites * effectiveRepairRate));
 }
 
 /**
@@ -416,8 +421,22 @@ export function calculateConstrainedEffectiveCompute(
     strategy
   );
   
-  // 4. Backhaul utilization (assumed 1.0 for now, can be enhanced later)
-  const backhaulUtilization = 1.0;
+  // 4. Backhaul utilization (calculate based on bandwidth constraints)
+  // Each PFLOP requires ~10 Gbps backhaul bandwidth
+  const backhaul_bw_per_PFLOP = 10; // Gbps per PFLOP
+  const backhaul_bandwidth_used = rawComputePFLOPs * backhaul_bw_per_PFLOP; // Gbps
+  
+  // Backhaul capacity scales with satellite count and orbit diversity
+  // LEO-HIGH provides relay backbone, so capacity is limited without it
+  // For now, assume we have some relay capability if we have multiple orbit types
+  const hasRelayBackbone = satelliteCountA > 0 && (satelliteCountA + satelliteCountB) > 100; // Simplified check
+  const backhaul_capacity_factor = hasRelayBackbone ? 1.0 : 0.7; // Reduced if no relay backbone
+  const backhaul_bandwidth_total = (satelliteCountA + satelliteCountB) * 50 * backhaul_capacity_factor; // 50 Gbps per sat, scaled
+  
+  // Backhaul utilization: clamp to 1.0 if bandwidth is sufficient
+  const backhaulUtilization = backhaul_bandwidth_total > 0 
+    ? Math.min(1.0, backhaul_bandwidth_used / backhaul_bandwidth_total)
+    : 1.0;
   
   // 5. Calculate effective compute
   const effectiveCompute = rawComputePFLOPs *
@@ -442,8 +461,10 @@ export function calculateConstrainedEffectiveCompute(
   // This is the compute that would be available if all satellites were at max heat utilization
   const heatCeiling = rawComputePFLOPs * heatUtilization;
   
-  // Backhaul ceiling: for now, assume unlimited (will be enhanced later)
-  const backhaulCeiling = rawComputePFLOPs;
+  // Backhaul ceiling: maximum compute allowed by backhaul bandwidth
+  const backhaulCeiling = backhaul_bandwidth_total > 0
+    ? (backhaul_bandwidth_total / backhaul_bw_per_PFLOP)
+    : rawComputePFLOPs; // Fallback to raw if no satellites
   
   // Autonomy ceiling: maximum satellites sustainable by repair capacity
   const autonomyCeiling = Math.floor(
