@@ -143,14 +143,25 @@ function applyFailureModes(
     failureState.pump_failure_active = false;
   }
   
-  // 3. Coolant freeze during eclipse
-  // If in eclipse and temp drops below -20°C, coolant can freeze
-  if (state.eclipse_fraction > 0.1 && state.temp_radiator_C < -20 && !state.coolant_frozen) {
-    const freeze_probability = 0.01 * state.eclipse_fraction; // Higher probability in longer eclipses
-    if (Math.random() < freeze_probability) {
-      failureState.coolant_frozen = true;
-      failureState.coolant_freeze_ticks_remaining = Math.floor(2 + Math.random() * 4); // 2-6 hours
+  // 3. Eclipse-induced failures
+  // Cooling collapse risk during eclipse
+  if (state.eclipse_fraction > 0.1) {
+    // Coolant freeze risk (if temp drops below -20°C)
+    if (state.temp_radiator_C < -20 && !state.coolant_frozen) {
+      const freeze_probability = 0.01 * state.eclipse_fraction; // Higher probability in longer eclipses
+      if (Math.random() < freeze_probability) {
+        failureState.coolant_frozen = true;
+        failureState.coolant_freeze_ticks_remaining = Math.floor(2 + Math.random() * 4); // 2-6 hours
+      }
     }
+    
+    // Pump restart failure chance after eclipse
+    if (!state.coolant_frozen && state.pump_failure_active && Math.random() < 0.15 * state.eclipse_fraction) {
+      // Pump may fail to restart after eclipse (15% chance per eclipse fraction)
+      failureState.pump_failure_active = true;
+    }
+    
+    // Thermal oscillation during eclipse (handled in main update function)
   }
   
   // Unfreeze coolant after timer expires
