@@ -17,21 +17,53 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
   }, [debugState]);
   
   const chartData = useMemo(() => {
-    if (years.length === 0) return [];
+    if (years.length === 0) {
+      console.log('[CeilingStackChart] No years in debugState', { debugState });
+      return [];
+    }
     
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry) return null;
+      if (!entry) {
+        console.warn(`[CeilingStackChart] No entry for year ${year}`);
+        return null;
+      }
       
       // All ceilings should be in PFLOPs for comparison
+      // Note: heatCeiling and backhaulCeiling are already in PFLOPs from deploymentConstraints
       // Launch ceiling: convert satellite count to approximate compute
-      // Assuming ~10 PFLOPs per satellite average
-      const launchCeiling = Math.min(entry.launchMassCeiling, entry.launchCostCeiling) * 10;
-      const heatCeiling = entry.heatCeiling / 1e15; // Already in FLOPS, convert to PFLOPs
-      const backhaulCeiling = entry.backhaulCeiling / 1e15;
+      // Assuming ~10 PFLOPs per satellite average (rough estimate)
+      const computePerSat = entry.compute_raw_flops > 0 && entry.satellitesTotal > 0
+        ? (entry.compute_raw_flops / 1e15) / entry.satellitesTotal
+        : 10; // Fallback to 10 PFLOPs per satellite
+      
+      const launchCeiling = Math.min(entry.launchMassCeiling, entry.launchCostCeiling) * computePerSat;
+      const heatCeiling = entry.heatCeiling; // Already in PFLOPs
+      const backhaulCeiling = entry.backhaulCeiling; // Already in PFLOPs
       // Autonomy ceiling: convert satellite count to approximate compute
-      const autonomyCeiling = entry.autonomyCeiling * 10;
-      const actualCompute = entry.compute_effective_flops / 1e15;
+      const autonomyCeiling = entry.autonomyCeiling * computePerSat;
+      const actualCompute = entry.compute_effective_flops / 1e15; // Convert FLOPS to PFLOPs
+      
+      // Debug logging for first year
+      if (year === years[0]) {
+        console.log(`[CeilingStackChart] Year ${year} data:`, {
+          launchMassCeiling: entry.launchMassCeiling,
+          launchCostCeiling: entry.launchCostCeiling,
+          heatCeiling: entry.heatCeiling,
+          backhaulCeiling: entry.backhaulCeiling,
+          autonomyCeiling: entry.autonomyCeiling,
+          compute_effective_flops: entry.compute_effective_flops,
+          satellitesTotal: entry.satellitesTotal,
+          computed: {
+            launchCeiling,
+            heatCeiling,
+            backhaulCeiling,
+            autonomyCeiling,
+            actualCompute,
+            computePerSat,
+          },
+        });
+      }
       
       return {
         year,
