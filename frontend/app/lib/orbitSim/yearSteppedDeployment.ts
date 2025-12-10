@@ -234,7 +234,7 @@ export function calculateYearDeployment(
   }
   
   // Update thermal state for this year (8760 hours = 1 year)
-  const updatedThermalState = updateThermalState(thermalState, 8760);
+  const updatedThermalState = updateThermalState(thermalState, 8760, year);
   
   // Use thermal-integrated effective compute (already includes throttling)
   const thermalEffectiveComputePFLOPs = updatedThermalState.compute_exportable_flops / 1e15;

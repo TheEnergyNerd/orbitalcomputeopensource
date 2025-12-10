@@ -55,6 +55,12 @@ export interface ThermalState {
   // Maintenance debt
   maintenance_debt: number;
   global_efficiency: number;
+  
+  // Failure mode states
+  radiator_damage_fraction: number; // 0-1, fraction of radiator area lost to micrometeoroids
+  pump_failure_active: boolean; // Active cooling pump failure
+  coolant_frozen: boolean; // Coolant frozen during eclipse
+  coolant_freeze_ticks_remaining: number; // Ticks until coolant unfreezes
 }
 
 // Constants
@@ -94,18 +100,82 @@ export function calculateHeatRejection(
 }
 
 /**
+ * Probabilistic failure modes
+ */
+function applyFailureModes(
+  state: ThermalState,
+  dt_hours: number,
+  year: number
+): Partial<ThermalState> {
+  const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
+  const failureState: Partial<ThermalState> = {
+    radiator_damage_fraction: state.radiator_damage_fraction || 0,
+    pump_failure_active: state.pump_failure_active || false,
+    coolant_frozen: state.coolant_frozen || false,
+    coolant_freeze_ticks_remaining: state.coolant_freeze_ticks_remaining || 0,
+  };
+  
+  // 1. Micrometeoroid hits → radiator damage
+  // Probability: ~0.1% per pod per year
+  const micrometeoroid_probability = 0.001 * totalPods * (dt_hours / 8760);
+  if (Math.random() < micrometeoroid_probability) {
+    // Random loss of 0.1-2% of radiator area
+    const damage = 0.001 + Math.random() * 0.019;
+    failureState.radiator_damage_fraction = Math.min(0.5, (state.radiator_damage_fraction || 0) + damage);
+  }
+  
+  // 2. Pump failures → active cooling efficiency reduced
+  // Probability: ~0.05% per pod per year
+  const pump_failure_probability = 0.0005 * totalPods * (dt_hours / 8760);
+  if (Math.random() < pump_failure_probability) {
+    failureState.pump_failure_active = true;
+  } else if (state.pump_failure_active && Math.random() < 0.1) {
+    // 10% chance per tick to recover from pump failure
+    failureState.pump_failure_active = false;
+  }
+  
+  // 3. Coolant freeze during eclipse
+  // If in eclipse and temp drops below -20°C, coolant can freeze
+  if (state.eclipse_fraction > 0.1 && state.temp_radiator_C < -20 && !state.coolant_frozen) {
+    const freeze_probability = 0.01 * state.eclipse_fraction; // Higher probability in longer eclipses
+    if (Math.random() < freeze_probability) {
+      failureState.coolant_frozen = true;
+      failureState.coolant_freeze_ticks_remaining = Math.floor(2 + Math.random() * 4); // 2-6 hours
+    }
+  }
+  
+  // Unfreeze coolant after timer expires
+  if (state.coolant_frozen && state.coolant_freeze_ticks_remaining > 0) {
+    failureState.coolant_freeze_ticks_remaining = state.coolant_freeze_ticks_remaining - (dt_hours / 8760);
+    if (failureState.coolant_freeze_ticks_remaining <= 0) {
+      failureState.coolant_frozen = false;
+      failureState.coolant_freeze_ticks_remaining = 0;
+    }
+  }
+  
+  return failureState;
+}
+
+/**
  * Calculate net heat flow and update temperature
  */
 export function updateThermalState(
   state: ThermalState,
-  dt_hours: number = 8760 // 1 year in hours
+  dt_hours: number = 8760, // 1 year in hours
+  year: number = 2025
 ): ThermalState {
+  // 0. Apply probabilistic failure modes
+  const failureModes = applyFailureModes(state, dt_hours, year);
+  const effective_radiator_area = state.radiatorArea_m2 * (1 - (failureModes.radiator_damage_fraction || 0));
+  const pump_failure_multiplier = failureModes.pump_failure_active ? 1.3 : 1.0; // 30% more power needed
+  const coolant_frozen = failureModes.coolant_frozen || false;
+  
   // 1. Calculate heat generation
   const heatGen_kw = calculateHeatGeneration(state.power_total_kw);
   
-  // 2. Calculate heat rejection
+  // 2. Calculate heat rejection (with damaged radiator)
   const heatReject_kw = calculateHeatRejection(
-    state.radiatorArea_m2,
+    effective_radiator_area,
     state.emissivity,
     state.temp_radiator_C,
     state.eclipse_fraction,
@@ -116,10 +186,14 @@ export function updateThermalState(
   const net_heat_flow_kw = heatGen_kw - heatReject_kw;
   
   // 4. Calculate active cooling (power-cooling coupling)
-  const active_cooling_kw = Math.min(
-    net_heat_flow_kw * ACTIVE_COOLING_EFFICIENCY,
-    state.power_total_kw * MAX_ACTIVE_COOLING_FRACTION
-  );
+  // Active cooling disabled if coolant is frozen
+  let active_cooling_kw = 0;
+  if (!coolant_frozen) {
+    active_cooling_kw = Math.min(
+      net_heat_flow_kw * ACTIVE_COOLING_EFFICIENCY * pump_failure_multiplier,
+      state.power_total_kw * MAX_ACTIVE_COOLING_FRACTION
+    );
+  }
   const active_cooling_kw_clamped = Math.max(0, active_cooling_kw);
   
   // 5. Update temperature based on net heat flow
@@ -207,6 +281,11 @@ export function updateThermalState(
     maintenance_utilization_percent,
     maintenance_debt,
     global_efficiency: new_global_efficiency,
+    // Failure mode states
+    radiator_damage_fraction: failureModes.radiator_damage_fraction ?? state.radiator_damage_fraction ?? 0,
+    pump_failure_active: failureModes.pump_failure_active ?? state.pump_failure_active ?? false,
+    coolant_frozen: failureModes.coolant_frozen ?? state.coolant_frozen ?? false,
+    coolant_freeze_ticks_remaining: failureModes.coolant_freeze_ticks_remaining ?? state.coolant_freeze_ticks_remaining ?? 0,
   };
 }
 
@@ -286,9 +365,14 @@ export function initializeThermalState(
     maintenance_utilization_percent: 0,
     maintenance_debt: 0,
     global_efficiency: 1.0,
+    // Failure mode states (initialized)
+    radiator_damage_fraction: 0,
+    pump_failure_active: false,
+    coolant_frozen: false,
+    coolant_freeze_ticks_remaining: 0,
   };
   
   // Run one thermal update to initialize computed values
-  return updateThermalState(initialState, 0.1); // Small initial step
+  return updateThermalState(initialState, 0.1, year); // Small initial step
 }
 

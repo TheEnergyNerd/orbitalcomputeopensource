@@ -7,6 +7,7 @@ import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { useSimulationStore } from "../store/simulationStore";
 import { useOrbitSim } from "../state/orbitStore";
+import { getDebugState } from "../lib/orbitSim/debugState";
 import type { SurfaceType } from "./SurfaceTabs";
 import { computePodSpec, calculateTechLevel } from "../lib/orbitSim/podSpecs";
 import { computeFactoryMultipliers } from "../lib/orbitSim/factoryEngine";
@@ -14,11 +15,11 @@ import { getCostPerTFLOP } from "../lib/orbitSim/orbitalCostModel";
 
 const compareLevels = [0.25, 0.5, 0.75];
 
-function Metric({ label, value }: { label: string; value: string | React.ReactNode }) {
+function Metric({ label, value, color }: { label: string; value: string | React.ReactNode; color?: string }) {
   return (
     <div className="flex justify-between text-xs sm:text-sm py-1 gap-2">
       <span className="text-gray-400 flex-shrink-0">{label}</span>
-      <span className="text-white font-semibold text-right break-words">{value}</span>
+      <span className={`${color || "text-white"} font-semibold text-right break-words`}>{value}</span>
     </div>
   );
 }
@@ -727,6 +728,70 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
           <Metric label="Failure probability (yearly)" value={`${failureProbability.toFixed(2)}%`} />
           <Metric label="Replacement interval" value={`${replacementInterval} years`} />
         </Section>
+
+        {/* Utilization Metrics (from thermal integration) */}
+        {(() => {
+          const debugState = getDebugState();
+          const currentYear = timeline && timeline.length > 0 ? timeline[timeline.length - 1]?.year : 2025;
+          const debugEntry = debugState[currentYear];
+          
+          if (!debugEntry) return null;
+          
+          return (
+            <Section title="System Utilization">
+              <Metric 
+                label="Power Utilization" 
+                value={`${debugEntry.power_utilization_percent?.toFixed(1) || 0}%`}
+                color={debugEntry.power_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+              />
+              <Metric 
+                label="Thermal Drift" 
+                value={`${debugEntry.thermal_drift_C_per_hr?.toFixed(2) || 0}°C/hr`}
+                color={Math.abs(debugEntry.thermal_drift_C_per_hr || 0) > 1 ? "text-orange-400" : "text-white"}
+              />
+              <Metric 
+                label="Radiator Utilization" 
+                value={`${debugEntry.radiator_utilization_percent?.toFixed(1) || 0}%`}
+                color={debugEntry.radiator_utilization_percent > 95 ? "text-red-400" : debugEntry.radiator_utilization_percent > 80 ? "text-yellow-400" : "text-white"}
+              />
+              <Metric 
+                label="Backhaul Utilization" 
+                value={`${debugEntry.backhaul_utilization_percent?.toFixed(1) || 0}%`}
+                color={debugEntry.backhaul_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+              />
+              <Metric 
+                label="Manufacturing Utilization" 
+                value={`${debugEntry.manufacturing_utilization_percent?.toFixed(1) || 0}%`}
+                color={debugEntry.manufacturing_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+              />
+              <Metric 
+                label="Maintenance Utilization" 
+                value={`${debugEntry.maintenance_utilization_percent?.toFixed(1) || 0}%`}
+                color={debugEntry.maintenance_utilization_percent > 90 ? "text-red-400" : debugEntry.maintenance_utilization_percent > 70 ? "text-yellow-400" : "text-white"}
+              />
+              {debugEntry.temp_core_C !== undefined && (
+                <Metric 
+                  label="Core Temperature" 
+                  value={`${debugEntry.temp_core_C.toFixed(1)}°C`}
+                  color={debugEntry.temp_core_C > 80 ? "text-red-400" : debugEntry.temp_core_C > 60 ? "text-yellow-400" : "text-white"}
+                />
+              )}
+              {debugEntry.sustained_compute_flops !== undefined && debugEntry.compute_effective_flops !== undefined && (
+                <Metric 
+                  label="Sustained vs Effective" 
+                  value={`${(debugEntry.sustained_compute_flops / 1e15).toFixed(1)} / ${(debugEntry.compute_effective_flops / 1e15).toFixed(1)} PFLOPs`}
+                />
+              )}
+              {debugEntry.maintenance_debt !== undefined && debugEntry.maintenance_debt > 0 && (
+                <Metric 
+                  label="Maintenance Debt" 
+                  value={`${debugEntry.maintenance_debt.toFixed(0)} pods`}
+                  color="text-orange-400"
+                />
+              )}
+            </Section>
+          );
+        })()}
       </div>
     );
   }
