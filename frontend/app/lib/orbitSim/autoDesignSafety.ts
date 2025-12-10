@@ -18,8 +18,8 @@ import {
   MAINT_SAFETY_MARGIN_AGGRESSIVE,
   FLOPS_PER_TBPS,
   type RiskMode,
+  calculateHeatRejection,
 } from "./thermalIntegration";
-import { calculateHeatRejection } from "./thermalIntegration";
 
 export interface UserSliders {
   slider_compute_scale: number; // 0-1

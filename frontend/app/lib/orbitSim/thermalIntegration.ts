@@ -258,8 +258,8 @@ export function updateThermalState(
       temp_change_C *= overdrive_factor;
     }
     
-    // If radiator utilization > 1.1, radiator burns out
-    if (radiator_utilization_ratio < 0.9) { // Less than 90% = over 110% utilization
+    // If radiator utilization > 1.1 (ratio < 0.909), radiator burns out
+    if (radiator_utilization_ratio < 0.909) { // Less than 90.9% = over 110% utilization
       // Radiator burnout: area and emissivity degrade
       radiator_burnout_factor *= 0.98; // 2% degradation per year
       const emissivity_degradation = 0.99; // 1% emissivity loss per year
