@@ -362,7 +362,26 @@ export function updateThermalState(
   const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
   const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
   
-  // 11. Calculate utilization metrics (MUST BE DYNAMIC)
+  // 11. Calculate maintenance utilization ratio and global efficiency (needed for power utilization)
+  const maintenance_utilization_ratio = state.maintenance_capacity_pods > 0
+    ? new_degraded_pods / state.maintenance_capacity_pods
+    : 0;
+  
+  let new_global_efficiency = state.global_efficiency || 1.0;
+  let failures_unrecovered = new_degraded_pods - pods_repaired;
+  let survival_fraction = totalPods > 0 ? (totalPods - new_degraded_pods) / totalPods : 1.0;
+  
+  // If maintenance_utilization > 1, failures_unrecovered MUST grow, survival_fraction MUST fall, global_efficiency MUST decay
+  if (maintenance_utilization_ratio > 1.0) {
+    // Failures exceed recovery capacity
+    failures_unrecovered = Math.max(failures_unrecovered, (maintenance_utilization_ratio - 1.0) * state.maintenance_capacity_pods);
+    survival_fraction = Math.max(0.5, survival_fraction - (maintenance_utilization_ratio - 1.0) * 0.1); // Decay by 10% per unit over capacity
+    // Global efficiency decays exponentially with maintenance overload
+    const efficiency_decay = Math.pow(0.95, maintenance_utilization_ratio - 1.0); // 5% decay per unit over capacity
+    new_global_efficiency *= efficiency_decay;
+  }
+  
+  // 12. Calculate utilization metrics (MUST BE DYNAMIC)
   // Power utilization = min of all limit factors
   const thermal_limit_factor = radiator_utilization_ratio > 0 ? Math.min(1.0, radiator_utilization_ratio) : 0;
   const maintenance_limit_factor = state.maintenance_capacity_pods > 0 
@@ -371,7 +390,7 @@ export function updateThermalState(
   const backhaul_limit_factor = state.backhaul_tbps > 0
     ? Math.min(1.0, compute_exportable_flops / compute_effective_flops)
     : 1.0;
-  const autonomy_limit_factor = new_global_efficiency; // From maintenance debt (calculated below)
+  const autonomy_limit_factor = new_global_efficiency; // From maintenance debt (now calculated above)
   
   // Power utilization is the minimum of all constraints
   const power_utilization_factor = Math.min(
@@ -402,24 +421,6 @@ export function updateThermalState(
   const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
     ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
     : 0;
-  
-  const maintenance_utilization_ratio = state.maintenance_capacity_pods > 0
-    ? new_degraded_pods / state.maintenance_capacity_pods
-    : 0;
-  
-  let new_global_efficiency = state.global_efficiency || 1.0;
-  let failures_unrecovered = new_degraded_pods - pods_repaired;
-  let survival_fraction = totalPods > 0 ? (totalPods - new_degraded_pods) / totalPods : 1.0;
-  
-  // If maintenance_utilization > 1, failures_unrecovered MUST grow, survival_fraction MUST fall, global_efficiency MUST decay
-  if (maintenance_utilization_ratio > 1.0) {
-    // Failures exceed recovery capacity
-    failures_unrecovered = Math.max(failures_unrecovered, (maintenance_utilization_ratio - 1.0) * state.maintenance_capacity_pods);
-    survival_fraction = Math.max(0.5, survival_fraction - (maintenance_utilization_ratio - 1.0) * 0.1); // Decay by 10% per unit over capacity
-    // Global efficiency decays exponentially with maintenance overload
-    const efficiency_decay = Math.pow(0.95, maintenance_utilization_ratio - 1.0); // 5% decay per unit over capacity
-    new_global_efficiency *= efficiency_decay;
-  }
   
   const maintenance_debt = failures_unrecovered;
   
