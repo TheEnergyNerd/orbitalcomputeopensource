@@ -340,8 +340,10 @@ export function TrafficFlowsBatched() {
           routeData.color.b * congestionFade
         );
         
-        // Particle size based on traffic (larger for high traffic) - INCREASED FOR VISIBILITY
-        const size = 0.08 + (thicknessNormalized * 0.12); // 0.08 to 0.20 (much more visible)
+        // Particle size based on traffic (larger for high traffic) - 50% smaller on average
+        const baseSize = 0.04; // 50% of 0.08
+        const sizeVariation = 0.06; // 50% of 0.12
+        const size = baseSize + (thicknessNormalized * sizeVariation); // 0.04 to 0.10 (50% smaller)
         pulseSizes.push(size);
       }
       
@@ -356,7 +358,7 @@ export function TrafficFlowsBatched() {
         
         pulsePositions.push(reversePoint.x, reversePoint.y, reversePoint.z);
         pulseColors.push(routeData.color.r * 0.6, routeData.color.g * 0.6, routeData.color.b * 0.6);
-          pulseSizes.push(0.025);
+          pulseSizes.push(0.0125); // 50% smaller (0.025 * 0.5)
         }
       });
       
@@ -508,7 +510,7 @@ export function TrafficFlowsBatched() {
       {/* Batched pulse geometry - animated particles with variable sizes */}
       <points geometry={pulseGeometryRef.current}>
         <pointsMaterial
-          size={0.15}
+          size={0.075}
           sizeAttenuation={true}
           vertexColors={true}
           transparent={true}

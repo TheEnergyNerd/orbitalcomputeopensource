@@ -80,16 +80,16 @@ export function VisualGlossary() {
     {
       id: "route-particles",
       title: "Routing Particles",
-      description: "Luminous packets move along routes. Speed = inverse latency. Spacing = congestion. Bunch up when congested.",
+      description: "Luminous packets move along routes. Size = traffic load (larger = more traffic). Speed = inverse latency. Spacing = congestion. Bunch up when congested.",
       visual: (
         <div className="flex flex-col items-center gap-1">
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-center">
+            <div className="w-1 h-1 bg-cyan-400 rounded-full"></div>
+            <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full"></div>
             <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
+            <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full"></div>
           </div>
-          <span className="text-xs text-gray-400">Data packets flowing</span>
+          <span className="text-xs text-gray-400">Size = traffic load</span>
         </div>
       ),
     },

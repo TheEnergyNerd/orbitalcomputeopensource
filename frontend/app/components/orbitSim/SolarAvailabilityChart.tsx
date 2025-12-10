@@ -78,20 +78,9 @@ export default function SolarAvailabilityChart({ timeline }: SolarAvailabilityCh
     });
   }, [timeline, satellites]);
 
-  // NOW we can do conditional returns after all hooks are called
-  if (!timeline || timeline.length === 0) return null;
-
-  const firstYear = timeline[0].year;
-  const lastYear = timeline[timeline.length - 1].year;
-  const yearRange = lastYear - firstYear;
-  if (yearRange <= 0 || !isFinite(yearRange)) {
-    return null;
-  }
-
-  if (solarData.length === 0) return null;
-
-  // Check for regime entry (first time SBS > 92%)
+  // Check for regime entry (first time SBS > 92%) - MUST be called before any conditional returns
   useEffect(() => {
+    if (solarData.length === 0) return;
     const currentData = solarData[solarData.length - 1];
     if (currentData && currentData.sbsUptime >= 92 && !hasTriggeredPulse && currentData.hasSSOSats) {
       setHasTriggeredPulse(true);
@@ -113,6 +102,18 @@ export default function SolarAvailabilityChart({ timeline }: SolarAvailabilityCh
       }, 1000);
     }
   }, [solarData, hasTriggeredPulse]);
+
+  // NOW we can do conditional returns after all hooks are called
+  if (!timeline || timeline.length === 0) return null;
+
+  const firstYear = timeline[0].year;
+  const lastYear = timeline[timeline.length - 1].year;
+  const yearRange = lastYear - firstYear;
+  if (yearRange <= 0 || !isFinite(yearRange)) {
+    return null;
+  }
+
+  if (solarData.length === 0) return null;
 
   // Responsive dimensions
   const width = typeof window !== 'undefined' 
