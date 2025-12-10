@@ -38,7 +38,7 @@ export default function StrategyPhaseDiagram({
     : 800;
   const timelineHeight = 60;
   const chartHeight = 80;
-  const totalHeight = timelineHeight + chartHeight * 3 + 40;
+  const totalHeight = timelineHeight + chartHeight * 3 + 60; // Increased bottom padding
 
   const getX = (year: number) => {
     if (!isFinite(year) || !isFinite(firstYear) || !isFinite(yearRange) || yearRange === 0) {

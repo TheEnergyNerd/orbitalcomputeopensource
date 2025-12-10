@@ -6,6 +6,7 @@ import { OrbitControls, Stars } from "@react-three/drei";
 import { GlobeMesh } from "./GlobeMesh";
 import { Satellites } from "./Satellites";
 import { SatellitesOptimized } from "./SatellitesOptimized";
+import { SatellitesGPUInstanced } from "./SatellitesGPUInstanced";
 import { GroundSites } from "./GroundSites";
 import { OrbitalDataSync } from "./OrbitalDataSync";
 import { ClickableMarkers } from "./ClickableMarkers";
@@ -15,13 +16,13 @@ import { LaunchAnimationV2 } from "./LaunchAnimationV2";
 import { OrbitalShells } from "./OrbitalShells";
 import { StaticOrbitalShells } from "./StaticOrbitalShells";
 import { TrafficFlows } from "./TrafficFlows";
+import { TrafficFlowsBatched } from "./TrafficFlowsBatched";
 import { RoutingArrows } from "./RoutingArrows";
 import { FailureShockwave } from "./FailureShockwave";
 import { FuturesCone } from "./FuturesCone";
 import { DebugMarkers } from "./DebugMarkers";
 import { SpecialMoments } from "./SpecialMoments";
 import { ValidationMarkers } from "./ValidationMarkers";
-import { PoleMarkers } from "./PoleMarkers";
 import { useOrbitSim } from "../state/orbitStore";
 
 // Component to update simulation time - must be inside Canvas
@@ -60,6 +61,23 @@ export default function OrbitalScene() {
       <Canvas 
         camera={{ position: [0, 0, 4], fov: 45 }}
         style={{ pointerEvents: 'auto' }}
+        onCreated={({ gl }) => {
+          // Handle WebGL context loss
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[OrbitalScene] WebGL context lost - attempting recovery');
+          });
+          gl.domElement.addEventListener('webglcontextrestored', () => {
+            console.log('[OrbitalScene] WebGL context restored');
+          });
+        }}
+        gl={{ 
+          preserveDrawingBuffer: false,
+          powerPreference: "high-performance",
+          antialias: true,
+          stencil: false,
+          depth: true
+        }}
       >
         {/* Time updater - must be inside Canvas to use useFrame */}
         <TimeUpdater />
@@ -93,11 +111,11 @@ export default function OrbitalScene() {
         {/* 4. Static Orbital Shells (Class A LEO + Class B SSO ring) */}
         <StaticOrbitalShells />
         
-        {/* 5. Satellites (optimized, per-shell instanced) */}
-        <SatellitesOptimized />
+        {/* 5. Satellites (GPU-instanced, event-driven updates) */}
+        <SatellitesGPUInstanced />
         
-        {/* 6. Traffic Flows (GPU) */}
-        <TrafficFlows />
+        {/* 6. Traffic Flows (Batched GPU) */}
+        <TrafficFlowsBatched />
         
         {/* 7. Routing Arrows */}
         <RoutingArrows />
@@ -111,9 +129,6 @@ export default function OrbitalScene() {
         {/* Ground sites and launch sites - render early to ensure visibility */}
         <LaunchSites />
         <GroundSites />
-        
-        {/* Pole markers for coordinate verification */}
-        <PoleMarkers />
         
         {/* Validation markers - for coordinate system verification (NYC, London, Tokyo, Sydney) */}
         <ValidationMarkers />

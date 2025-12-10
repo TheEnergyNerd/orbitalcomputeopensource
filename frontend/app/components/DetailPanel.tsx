@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Vector3 } from "three";
 import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { useSimulationStore } from "../store/simulationStore";
+import { useOrbitSim } from "../state/orbitStore";
 import type { SurfaceType } from "./SurfaceTabs";
 import { computePodSpec, calculateTechLevel } from "../lib/orbitSim/podSpecs";
 import { computeFactoryMultipliers } from "../lib/orbitSim/factoryEngine";
@@ -209,7 +211,7 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
       
       return (
             <div 
-              className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-6 sm:right-auto w-full sm:w-80 md:w-96 lg:w-[420px] max-w-[100vw] sm:max-w-[90vw] panel-glass rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 max-h-[70vh] sm:max-h-[85vh] overflow-y-auto z-[120] shadow-2xl border border-white/10"
+              className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-6 sm:right-auto w-full sm:w-80 md:w-96 lg:w-[420px] max-w-[100vw] sm:max-w-[90vw] panel-glass rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 max-h-[85vh] sm:max-h-[85vh] overflow-y-auto z-[120] shadow-2xl border border-white/10"
               {...cardContainerProps}
             >
               {/* Close button */}
@@ -226,7 +228,7 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
           <div className="text-xs uppercase text-gray-400 tracking-[0.2em] mb-1">{getEntityTypeLabel(selectedEntity.type)}</div>
           <h2 className="text-xl font-semibold text-white mb-1 pr-8">{selectedEntity.id}</h2>
           <div className="text-xs text-gray-400 mb-3 sm:mb-4 break-words">
-            Shell {shell}, Plane {plane} • {defaultAltitude} km • Edge
+            {defaultAltitude} km • Edge
           </div>
 
           {/* Compute Specs */}
@@ -258,12 +260,6 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
             );
           })()}
 
-          {/* Constellation Role */}
-          <Section title="Constellation Role">
-            <Metric label="Assigned traffic share" value="Calculating..." />
-            <Metric label="Current load" value={`${(defaultUtilization * 100).toFixed(1)}%`} />
-            <Metric label="Routes passing through" value="~3" />
-          </Section>
 
           {/* Reliability */}
           <Section title="Reliability">
@@ -279,63 +275,117 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
       );
     }
 
-    // Extract shell/plane from ID if available
+    // Extract shell/plane from satellite data or estimate from altitude
     let shell: string | null = null;
     let plane: string | null = null;
     
-    // Try to extract from ID patterns
-    const shellMatch = sat.id.match(/shell[_\s]?(\d+)/i);
-    const planeMatch = sat.id.match(/plane[_\s]?(\d+)/i);
+    // Try to get from orbitStore satellite data (most accurate)
+    // Also try matching by partial ID (satellite IDs might have prefixes)
+    const allOrbitSats = useOrbitSim.getState().satellites;
     
-    if (shellMatch) {
-      shell = shellMatch[1];
-    }
+    const orbitStoreSat = allOrbitSats.find(s => {
+      return s.id === sat.id || 
+        s.id === `deployed_${sat.id}` ||
+        s.id === `deployed_${sat.id}_sat` ||
+        s.id.endsWith(`_${sat.id}`) ||
+        sat.id.endsWith(`_${s.id}`) ||
+        s.id.includes(sat.id) ||
+        sat.id.includes(s.id);
+    });
     
-    if (planeMatch) {
-      plane = planeMatch[1];
-    }
-    
-    // If not found in ID, try to estimate from constellation config
-    if ((!shell || !plane) && config?.constellation) {
-      const constellation = config.constellation;
-      if (constellation.shells.length > 0) {
-        // Find matching shell by altitude
-        const shellIdx = constellation.shells.findIndex(s => Math.abs(s.altitudeKm - sat.alt_km) < 50);
-        if (shellIdx >= 0 && !shell) {
-          shell = String(shellIdx + 1);
-        }
+    // Try to get shell and plane from orbitStoreSat if it exists
+    if (orbitStoreSat) {
+      // Try to get shell from orbitStoreSat
+      if (orbitStoreSat.shell !== undefined && orbitStoreSat.shell !== null) {
+        const shellValue = orbitStoreSat.shell;
         
-        // Estimate plane from satellite position/index
-        if (!plane && shellIdx >= 0) {
-          const shellConfig = constellation.shells[shellIdx];
-          const satNumMatch = sat.id.match(/(\d+)$/);
-          if (satNumMatch && shellConfig.satsPerPlane > 0) {
-            const satNum = parseInt(satNumMatch[1]);
-            const estimatedPlane = Math.floor(satNum / shellConfig.satsPerPlane) + 1;
-            plane = String(Math.min(estimatedPlane, shellConfig.planes));
-          }
+        if (typeof shellValue === 'string') {
+          shell = shellValue;
+        } else if (typeof shellValue === 'number') {
+          // Map shell number to name
+          const shellNames: Record<number, string> = {
+            1: "VLEO",
+            2: "LEO", 
+            3: "MEO",
+            4: "GEO",
+            5: "SSO",
+          };
+          shell = shellNames[shellValue] || `Shell ${shellValue}`;
+        }
+      }
+      
+      // Try to get plane from orbitalState
+      if (orbitStoreSat.orbitalState) {
+        const orbitalState = orbitStoreSat.orbitalState as any;
+        if (orbitalState.plane !== undefined) {
+          plane = `Plane ${orbitalState.plane}`;
+        } else if (orbitalState.inclination !== undefined) {
+          plane = `Inclination ${orbitalState.inclination.toFixed(1)}°`;
         }
       }
     }
     
-    // Fallback: estimate from altitude if still unknown
-    if (!shell) {
-      if (sat.alt_km >= 1000) {
-        shell = "2";
-      } else {
-        shell = "1";
+    // Try to get from satellite shell property if available
+    if (!shell && (sat as any).shell !== undefined) {
+      const shellNum = (sat as any).shell;
+      console.log('[DetailPanel] 🎯 Shell from sat.shell:', shellNum, typeof shellNum);
+      if (typeof shellNum === 'number') {
+        const shellNames: Record<number, string> = {
+          1: "VLEO",
+          2: "LEO",
+          3: "MEO", 
+          4: "GEO",
+          5: "SSO",
+        };
+        shell = shellNames[shellNum] || `Shell ${shellNum}`;
+      } else if (typeof shellNum === 'string') {
+        shell = shellNum;
       }
     }
     
-    if (!plane) {
-      // Estimate plane from satellite number
-      const satNumMatch = sat.id.match(/(\d+)$/);
-      if (satNumMatch) {
-        const satNum = parseInt(satNumMatch[1]);
-        plane = String((satNum % 8) + 1);
+    // If not found, estimate from altitude (updated to match extreme ranges)
+    if (!shell) {
+      // Use orbitStoreSat altitude if available, otherwise use sat.alt_km
+      const altKm = orbitStoreSat ? (() => {
+        if (orbitStoreSat.orbitalState?.altitudeRadius) {
+          return orbitStoreSat.orbitalState.altitudeRadius;
+        }
+        const radius = Math.sqrt((orbitStoreSat.x || 0) ** 2 + (orbitStoreSat.y || 0) ** 2 + (orbitStoreSat.z || 0) ** 2);
+        return (radius - 1) * 6371;
+      })() : sat.alt_km;
+      
+      if (altKm >= 35786) {
+        shell = "GEO";
+      } else if (altKm >= 10000) {
+        shell = "MEO";
+      } else if (altKm >= 800 && altKm <= 1000) {
+        shell = "SSO";
+      } else if (altKm >= 400) {
+        shell = "LEO";
+      } else if (altKm >= 250) {
+        shell = "VLEO";
       } else {
-        plane = "1";
+        shell = "LEO"; // Default fallback
       }
+    }
+    
+    // Estimate plane from satellite position (use longitude as proxy)
+    if (!plane) {
+      // Use longitude to estimate plane (each plane ~22.5 degrees apart)
+      const lon = orbitStoreSat?.lon ?? (sat as any).lon ?? 0;
+      const estimatedPlane = Math.floor((lon + 180) / 22.5) + 1;
+      plane = `Plane ${Math.min(estimatedPlane, 16)}`; // Max 16 planes
+      console.log('[DetailPanel] ✅ Estimated plane from longitude:', lon, '→', plane);
+    }
+    
+    // Final fallback for shell/plane
+    if (!shell) {
+      shell = "Unknown";
+      console.warn('[DetailPanel] ⚠️ Could not determine shell, using "Unknown"');
+    }
+    if (!plane) {
+      plane = "Unknown";
+      console.warn('[DetailPanel] ⚠️ Could not determine plane, using "Unknown"');
     }
     
     // Calculate pod specs using centralized function
@@ -351,23 +401,31 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
       techLevel = calculateTechLevel(siliconYield, chipsDensity, racksMod);
     }
     
-    // Get launch year from createdAt timestamp or estimate from ID
+    // Get launch/deployment year from ID or satellite data
     let launchYear: number | null = null;
-    if ((sat as any).createdAt) {
-      launchYear = new Date((sat as any).createdAt).getFullYear();
-    } else {
-      // Try to extract from ID (e.g., "launch_launch_17649669327" -> extract timestamp)
-      const timestampMatch = sat.id.match(/(\d{10,})/);
-      if (timestampMatch) {
-        const timestamp = parseInt(timestampMatch[1]);
-        // Check if it's a reasonable timestamp (milliseconds since epoch)
-        if (timestamp > 1000000000000) {
-          launchYear = new Date(timestamp).getFullYear();
-        } else if (timestamp > 1000000000) {
-          launchYear = new Date(timestamp * 1000).getFullYear();
-        }
+    
+    // Try to extract year from ID pattern: deploy_YYYY_launch_...
+    const yearMatch = sat.id.match(/deploy[_\s](\d{4})/i) || sat.id.match(/_(\d{4})_/);
+    if (yearMatch) {
+      launchYear = parseInt(yearMatch[1]);
+      // Validate it's a reasonable year
+      if (launchYear >= 2020 && launchYear <= 2100) {
+        // Valid year
+      } else {
+        launchYear = null;
       }
     }
+    
+    // Try from createdAt timestamp
+    if (!launchYear && (sat as any).createdAt) {
+      launchYear = new Date((sat as any).createdAt).getFullYear();
+    }
+    
+    // Try from deployedAt if available (from unit)
+    if (!launchYear && (sat as any).deployedAt) {
+      launchYear = new Date((sat as any).deployedAt).getFullYear();
+    }
+    
     // Fallback: use current year from timeline if available
     if (!launchYear && timeline && timeline.length > 0) {
       launchYear = timeline[timeline.length - 1]?.year || new Date().getFullYear();
@@ -402,11 +460,81 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
     const nearestDcLatency = sat.latencyMs * 1.2; // Slightly higher
     const latencyJitter = sat.utilization > 0.8 ? "High" : sat.utilization > 0.5 ? "Med" : "Low"
     
-    // Constellation role
-    const totalOrbitalCapacity = state.satellites.reduce((sum, s) => sum + s.capacityMw, 0);
-    const trafficShare = totalOrbitalCapacity > 0 ? (sat.capacityMw / totalOrbitalCapacity) * 100 : 0;
-    const currentLoad = sat.utilization * 100;
-    const routesThrough = Math.floor(sat.utilization * 10); // Estimate
+    // Constellation role - calculate based on actual routes
+    const routes = useOrbitSim.getState().routes;
+    
+    // Get satellite ID variations to match routes (handle different ID formats)
+    const satIdVariations = [
+      sat.id,
+      `deployed_${sat.id}`,
+      `deployed_${sat.id}_sat`,
+      ...(sat.id.includes('_sat_') ? [sat.id.replace('_sat_', '_')] : []),
+      ...(sat.id.includes('launch_deploy_') ? [sat.id.replace('launch_deploy_', 'deploy_')] : []),
+    ];
+    
+    // Get satellite position for matching routes without IDs
+    const satPos = orbitStoreSat ? new Vector3(orbitStoreSat.x || 0, orbitStoreSat.y || 0, orbitStoreSat.z || 0) : 
+      (sat.x !== undefined && sat.y !== undefined && sat.z !== undefined) ? new Vector3(sat.x, sat.y, sat.z) : null;
+    const POSITION_TOLERANCE = 0.05; // Increased tolerance for better matching
+    
+    // Count routes that pass through this satellite (by ID or position)
+    const routesThroughThisSat = routes.filter(r => {
+      // Check by satellite ID variations (more flexible matching)
+      const idMatch = satIdVariations.some(idVar => {
+        const exactMatch = r.fromSatId === idVar || r.toSatId === idVar;
+        const partialMatch = r.fromSatId?.includes(idVar) || r.toSatId?.includes(idVar) ||
+          idVar.includes(r.fromSatId || '') || idVar.includes(r.toSatId || '');
+        return exactMatch || partialMatch;
+      });
+      if (idMatch) {
+        return true;
+      }
+      
+      // Fallback: check by position if IDs don't match
+      if (satPos && satPos.length() > 0.1) {
+        const fromVec = new Vector3(r.fromVec[0], r.fromVec[1], r.fromVec[2]);
+        const toVec = new Vector3(r.toVec[0], r.toVec[1], r.toVec[2]);
+        const distFrom = satPos.distanceTo(fromVec);
+        const distTo = satPos.distanceTo(toVec);
+        return distFrom < POSITION_TOLERANCE || distTo < POSITION_TOLERANCE;
+      }
+      
+      return false;
+    });
+    
+    // Calculate total traffic through this satellite
+    const totalTrafficThroughSat = routesThroughThisSat.reduce((sum, r) => sum + (r.trafficMbps || 100), 0);
+    
+    // Calculate total traffic across all satellites
+    const totalTrafficAllSats = routes.reduce((sum, r) => sum + (r.trafficMbps || 100), 0);
+    
+    // Traffic share is percentage of total traffic
+    const trafficShare = totalTrafficAllSats > 0 
+      ? (totalTrafficThroughSat / totalTrafficAllSats) * 100 
+      : 0;
+    
+    // Calculate utilization based on routes and capacity
+    // Utilization = (traffic through sat / sat capacity) * 100
+    const satCapacity = sat.capacityMw || 0.1; // MW
+    
+    // If we have routes through this satellite, calculate from traffic
+    let calculatedUtilization: number;
+    if (routesThroughThisSat.length > 0 && totalTrafficThroughSat > 0) {
+      // Convert Mbps to MW (rough: 1 Mbps ≈ 0.001 MW for compute traffic)
+      const trafficThroughSatMw = totalTrafficThroughSat / 1000;
+      calculatedUtilization = satCapacity > 0 
+        ? Math.min(1.0, trafficThroughSatMw / satCapacity)
+        : 0.5; // Default if capacity is 0
+    } else {
+      // No routes through this satellite - use congestion from orbitStore or default
+      const congestion = orbitStoreSat?.congestion || 0;
+      // If congestion is available, use it; otherwise use a low default
+      calculatedUtilization = congestion > 0 ? Math.min(1.0, congestion) : 0.1;
+    }
+    
+    // Use calculated utilization (never use hardcoded sat.utilization from simStore)
+    const currentLoad = calculatedUtilization * 100;
+    const routesThrough = routesThroughThisSat.length;
     
     // Reliability
     const health = sat.sunlit ? 95 : 85;
@@ -430,11 +558,123 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
         </button>
         {/* Header */}
         <div className="text-xs uppercase text-gray-400 tracking-[0.2em] mb-1">{getEntityTypeLabel(selectedEntity.type)}</div>
-          <h2 className="text-lg sm:text-xl font-semibold text-white mb-1 break-words pr-8">{sat.id}</h2>
-        <div className="text-xs text-gray-400 mb-3 sm:mb-4 break-words">
-          Shell {shell}, Plane {plane} • {sat.alt_km.toFixed(0)} km • {sat.capacityMw > 0.1 ? "Edge" : sat.capacityMw > 0.05 ? "Bulk" : "Green"}
-          {launchYear && ` • Launched ${launchYear}`}
-        </div>
+        {(() => {
+          // Get satellite class from orbitStore or sat data
+          const satClass = orbitStoreSat?.satelliteClass || (sat as any).satelliteClass || "A";
+          const isClassB = satClass === "B";
+          
+          // Get strategy to determine usage
+          const strategy = config?.strategy || "BALANCED";
+          const strategyUpper = strategy.toUpperCase();
+          
+          // Determine usage reason based on class and strategy
+          let usageReason = "";
+          if (isClassB) {
+            switch (strategyUpper) {
+              case "CARBON":
+                usageReason = "Carbon-optimized compute (sun-facing)";
+                break;
+              case "COST":
+                usageReason = "Cost-optimized high-power compute";
+                break;
+              case "LATENCY":
+                usageReason = "High-power compute (limited use)";
+                break;
+              default:
+                usageReason = "High-power compute";
+            }
+          } else {
+            switch (strategyUpper) {
+              case "LATENCY":
+                usageReason = "Low-latency networking";
+                break;
+              case "COST":
+                usageReason = "Cost-efficient networking";
+                break;
+              case "CARBON":
+                usageReason = "Carbon-efficient networking";
+                break;
+              default:
+                usageReason = "Networking & compute";
+            }
+          }
+          
+          // Parse satellite ID using new naming schema: [CLASS]-[SHELL]-[DEPLOY_YEAR]-[SEQUENCE]
+          // Example: A-LOW-2029-01472, B-SSO-2032-00304, A-MID-2031-00811 [RET]
+          let displayName = sat.id;
+          let humanReadableAlias = "";
+          let isRetired = false;
+          let deployYearFromId: number | null = null;
+          
+          // Check for new naming schema pattern
+          const newSchemaMatch = sat.id.match(/^([AB])-([A-Z]+)-(\d{4})-(\d{5})(\s+\[RET\])?$/);
+          if (newSchemaMatch) {
+            const [, classLetter, shellName, year, sequenceStr, retSuffix] = newSchemaMatch;
+            const sequence = parseInt(sequenceStr);
+            deployYearFromId = parseInt(year);
+            isRetired = !!retSuffix;
+            
+            // Primary display name is the full ID
+            displayName = sat.id;
+            
+            // Generate human-readable alias
+            const shellDesc = shellName === "SSO" ? "Sun-Synchronous" : 
+                              shellName === "LOW" ? "Low-LEO" :
+                              shellName === "MID" ? "Mid-LEO" : "High-LEO";
+            
+            if (classLetter === "B") {
+              humanReadableAlias = `${shellDesc} Inference Node ${sequence}`;
+            } else {
+              humanReadableAlias = `${shellDesc} Compute Node ${sequence}`;
+            }
+          } else {
+            // Fallback: try to parse old format IDs for backwards compatibility
+            const launchDeployMatch = sat.id.match(/launch[_\s]deploy[_\s](\d{4})[_\s]launch[_\s](\d+)/i);
+            if (launchDeployMatch) {
+              const year = parseInt(launchDeployMatch[1]);
+              const launchNum = parseInt(launchDeployMatch[2]);
+              deployYearFromId = year;
+              displayName = `Launch ${launchNum} • ${year}`;
+            } else {
+              const deployMatch = sat.id.match(/deploy[_\s](\d{4})[_\s]launch[_\s](\d+)/i);
+              if (deployMatch) {
+                const year = parseInt(deployMatch[1]);
+                const launchNum = parseInt(deployMatch[2]);
+                deployYearFromId = year;
+                displayName = `Launch ${launchNum} • ${year}`;
+              } else {
+                // Final fallback
+                displayName = `Orbital Pod`;
+              }
+            }
+          }
+          
+          return (
+            <>
+              <h2 className="text-lg sm:text-xl font-semibold text-white mb-1 break-words pr-8 font-mono">
+                {displayName}
+                {isRetired && <span className="ml-2 text-xs text-red-400">[RET]</span>}
+              </h2>
+              {humanReadableAlias ? (
+                <div className="text-xs text-gray-400 mb-2 break-words">
+                  {humanReadableAlias}
+                  {deployYearFromId && ` · Deployed ${deployYearFromId}`}
+                </div>
+              ) : (
+                <>
+                  <div className="text-xs text-gray-400 mb-2 break-words">
+                    {usageReason}
+                  </div>
+                  <div className="text-xs text-gray-500 mb-3 sm:mb-4 break-words">
+                    {shell !== "Unknown" && plane !== "Unknown" ? `${shell} • Plane ${plane} • ` : ''}
+                    {sat.alt_km.toFixed(0)} km
+                    {launchYear && ` • Deployed ${launchYear}`}
+                  </div>
+                </>
+              )}
+            </>
+          );
+        })()}
 
             {/* Compute Specs */}
             <Section title="Compute Specs">
@@ -459,12 +699,6 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
           <Metric label="Carbon impact" value={`${carbonImpact.toFixed(2)} tCO₂/yr`} />
         </Section>
 
-        {/* Constellation Role */}
-        <Section title="Constellation Role">
-          <Metric label="Assigned traffic share" value={`${trafficShare.toFixed(2)}%`} />
-          <Metric label="Current load" value={`${currentLoad.toFixed(1)}%`} />
-          <Metric label="Routes passing through" value={routesThrough} />
-        </Section>
 
         {/* Reliability */}
         <Section title="Reliability">
@@ -476,32 +710,32 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
     );
   }
 
-      // 2. GROUND DATA CENTERS
-      if (selectedEntity.type === "ground") {
-        const site = state.groundSites.find((s) => s.id === selectedEntity.id);
-        if (!site) {
-          // Fallback card if site not found
-          return (
-            <div 
-              className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-6 sm:right-auto w-full sm:w-80 md:w-96 lg:w-[420px] max-w-[100vw] sm:max-w-[90vw] panel-glass rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 max-h-[70vh] sm:max-h-[85vh] overflow-y-auto z-[120] shadow-2xl border border-white/10"
-              {...cardContainerProps}
-            >
-              {/* Close button */}
-              <button
-                onClick={handleClose}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-white transition-colors z-10"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <div className="text-xs uppercase text-gray-400 tracking-[0.2em] mb-1">Ground Data Center</div>
-              <h2 className="text-lg sm:text-xl font-semibold text-white mb-1 break-words pr-8">{selectedEntity.id}</h2>
-              <div className="text-sm text-gray-400">Data center information loading...</div>
-            </div>
-          );
-        }
+  // 2. GROUND DATA CENTERS
+  if (selectedEntity.type === "ground") {
+    const site = state.groundSites.find((s) => s.id === selectedEntity.id);
+    if (!site) {
+      // Fallback card if site not found
+      return (
+        <div 
+          className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-6 sm:right-auto w-full sm:w-80 md:w-96 lg:w-[420px] max-w-[100vw] sm:max-w-[90vw] panel-glass rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 max-h-[70vh] sm:max-h-[85vh] overflow-y-auto z-[120] shadow-2xl border border-white/10"
+          {...cardContainerProps}
+        >
+          {/* Close button */}
+          <button
+            onClick={handleClose}
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-white transition-colors z-10"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div className="text-xs uppercase text-gray-400 tracking-[0.2em] mb-1">Ground Data Center</div>
+          <h2 className="text-lg sm:text-xl font-semibold text-white mb-1 break-words pr-8">{selectedEntity.id}</h2>
+          <div className="text-sm text-gray-400">Data center information loading...</div>
+        </div>
+      );
+    }
 
     // Determine type from label/ID
     const isEdge = site.label.toLowerCase().includes('edge') || site.id.includes('edge');

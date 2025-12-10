@@ -50,7 +50,7 @@ export default function DualClassStackChart({
   const height = typeof window !== 'undefined'
     ? Math.min(360, (window.innerHeight - 200) * 0.6)
     : 360;
-  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+  const padding = { top: 20, right: 24, bottom: 35, left: 50 }; // Increased padding to prevent cutoff
 
   const getX = (year: number) => {
     if (!isFinite(year) || !isFinite(firstYear) || !isFinite(yearRange) || yearRange === 0) {

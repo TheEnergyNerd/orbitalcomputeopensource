@@ -13,9 +13,8 @@ export type TutorialStep =
   | 4  // Viewing metrics
   | 5  // Globe interaction
   | 6  // AI Router (required)
-  | 7  // Constellation deployment (required)
-  | 8  // Fast-forward
-  | 9  // Futures tab (required)
+  | 7  // Futures tab (required)
+  | 8  // Satellite classes
   | "done";
 
 interface TutorialStore {
@@ -44,7 +43,7 @@ export const useTutorialStore = create<TutorialStore>((set, get) => ({
     const { currentStep } = get();
     if (currentStep === "done") return;
     
-    const next: TutorialStep = currentStep === 9 ? "done" : ((currentStep + 1) as TutorialStep);
+    const next: TutorialStep = currentStep === 8 ? "done" : ((currentStep + 1) as TutorialStep);
     set({ currentStep: next });
     
     // Auto-close when done
@@ -59,7 +58,7 @@ export const useTutorialStore = create<TutorialStore>((set, get) => ({
     const { currentStep } = get();
     if (currentStep === 1 || currentStep === "done") return;
     
-    // At this point, currentStep must be a number (2-9) since we've already checked for 1 and "done"
+    // At this point, currentStep must be a number (2-8) since we've already checked for 1 and "done"
     const prev: TutorialStep = (currentStep - 1) as TutorialStep;
     set({ currentStep: prev });
   },

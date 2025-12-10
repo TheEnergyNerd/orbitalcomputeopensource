@@ -214,19 +214,65 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const nextResult = runSimulationFromPlans(config, nextPlans);
       const nextLast = nextResult.timeline[nextResult.timeline.length - 1];
       
-      // Trigger launch animations for deployed satellites
-      // Calculate pods delta (new pods deployed in these years)
-      const prevPods = prevLast?.podsTotal || 0;
-      const newPods = nextLast?.podsTotal || 0;
-      const podsDelta = Math.max(0, newPods - prevPods);
-      
-      // Dispatch event to trigger launch animations
-      // Scale by years to show more launches for longer fast-forwards
-      if (podsDelta > 0 && typeof window !== 'undefined') {
-        const event = new CustomEvent('controls-changed', {
-          detail: { podsDelta: podsDelta * yearsToAdd } // Scale by years for visual effect
-        });
-        window.dispatchEvent(event);
+      // CRITICAL: Add units to OrbitalUnitsStore for EACH year that was added
+      // This ensures satellites are created for all skipped years
+      try {
+        const { useOrbitalUnitsStore } = require("./orbitalUnitsStore");
+        
+        // Calculate pods delta for each year and create units
+        // We need to process each year individually to create proper deployment units
+        let currentYearPlan = [...yearPlans];
+        let currentTimeline = timeline;
+        let prevPods = prevLast?.podsTotal || 0;
+        
+        // Process each year one by one to get accurate pod counts per year
+        for (let yearOffset = 0; yearOffset < yearsToAdd; yearOffset++) {
+          // Add one year at a time
+          const yearPlan = [...currentYearPlan, { ...last }];
+          const yearResult = runSimulationFromPlans(config, yearPlan);
+          const yearLast = yearResult.timeline[yearResult.timeline.length - 1];
+          const currentYear = yearLast.year;
+          
+          // Calculate pods delta for this specific year
+          const yearPodsDelta = Math.max(0, (yearLast.podsTotal || 0) - prevPods);
+          
+          if (yearPodsDelta > 0) {
+            // Create units based on pods delta for this year
+            // Estimate launches: assume ~6 pods per launch (Starship capacity)
+            const estimatedLaunches = Math.ceil(yearPodsDelta / 6);
+            
+            for (let launchNum = 0; launchNum < estimatedLaunches; launchNum++) {
+              // Create one unit per launch (represents satellites in that launch)
+              const unitId = `deploy_${currentYear}_launch_${launchNum}_${Date.now()}_${yearOffset}`;
+              const unit = {
+                id: unitId,
+                type: "leo_pod" as const,
+                name: `Deployment ${currentYear} Launch ${launchNum + 1}`,
+                cost: 2, // $2M per pod
+                powerOutputMw: 0.1, // 100 kW
+                latencyMs: 65,
+                lifetimeYears: 7,
+                buildTimeDays: 0, // Instant deploy for year-based deployment
+                status: "deployed" as const,
+                deployedAt: Date.now() + yearOffset * 1000, // Stagger timestamps slightly
+              };
+              
+              // Add directly to units with deployed status (bypass queue)
+              useOrbitalUnitsStore.setState((storeState: any) => ({
+                units: [...storeState.units, unit],
+              }));
+            }
+            
+            console.log(`[simulationStore] ✅ Created ${estimatedLaunches} launches (${yearPodsDelta} pods) for year ${currentYear}`);
+          }
+          
+          // Update for next iteration
+          currentYearPlan = yearPlan;
+          currentTimeline = yearResult.timeline;
+          prevPods = yearLast.podsTotal || 0;
+        }
+      } catch (e) {
+        console.error(`[simulationStore] Error creating deployment units for extended years:`, e);
       }
       
       set({

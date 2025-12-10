@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useEffect } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useOrbitSim } from "../state/orbitStore";
 import { useSimulationStore } from "../store/simulationStore";
 import { 
@@ -184,6 +185,42 @@ function OrbitalShellRing({
 }) {
   const radius = 1.0 + (altitude / 6371.0); // Normalized to Earth radius = 1
   const inclinationRad = (inclination * Math.PI) / 180;
+  const scaleRef = useRef(1.0);
+  const pulseActiveRef = useRef(false);
+  
+  // Annual deployment pulse - expand on year change
+  const timeline = useSimulationStore((s) => s.timeline);
+  const lastYearRef = useRef<number | null>(null);
+  
+  useEffect(() => {
+    if (!timeline || timeline.length === 0) return;
+    const currentYear = timeline[timeline.length - 1]?.year;
+    const lastYear = lastYearRef.current;
+    
+    if (lastYear !== null && currentYear !== lastYear) {
+      // Year advanced - trigger pulse
+      console.log(`[StaticOrbitalShells] 🎆 Year advanced: ${lastYear} → ${currentYear}, triggering pulse`);
+      pulseActiveRef.current = true;
+      scaleRef.current = 1.04; // Increased to 4% expansion for better visibility
+      
+      // Decay back to 1.0 over 400ms
+      const startTime = Date.now();
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(1, elapsed / 400);
+        scaleRef.current = 1.04 - (0.04 * progress); // Decay from 1.04 to 1.0
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          pulseActiveRef.current = false;
+        }
+      };
+      requestAnimationFrame(animate);
+    }
+    
+    lastYearRef.current = currentYear;
+  }, [timeline]);
 
   // Generate ring points (static, no animation)
   const points = useMemo(() => {
@@ -220,9 +257,22 @@ function OrbitalShellRing({
     return arr;
   }, [points]);
 
+  const lineRef = useRef<any>(null);
+  const materialRef = useRef<LineBasicMaterial>(null);
+  
+  // Apply scale animation
+  useFrame(() => {
+    if (materialRef.current && pulseActiveRef.current) {
+      // Apply opacity pulse during expansion
+      materialRef.current.opacity = opacity * (1.0 + (scaleRef.current - 1.0) * 5); // Scale opacity with expansion
+    } else if (materialRef.current) {
+      materialRef.current.opacity = opacity;
+    }
+  });
+
   return (
-    <group>
-      <line>
+    <group scale={[scaleRef.current, scaleRef.current, scaleRef.current]}>
+      <line ref={lineRef}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
@@ -232,6 +282,7 @@ function OrbitalShellRing({
           />
         </bufferGeometry>
         <lineBasicMaterial
+          ref={materialRef}
           color={color}
           opacity={opacity}
           transparent

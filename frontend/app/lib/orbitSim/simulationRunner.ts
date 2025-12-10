@@ -81,7 +81,7 @@ export function runSimulationFromPlans(
   // Logistic orbital share model - smooth growth, no hard cap
   let orbitalShare = 0; // fraction of world compute that *could* be orbital, 0–1
   const ORBITAL_SHARE_MAX = 0.9;
-  const ORBITAL_SHARE_GAIN = 0.12; // how aggressive factory is
+  const ORBITAL_SHARE_GAIN = 0.04; // Reduced from 0.12 to slow growth - should take 3-4 years to reach 50%
 
   // Cumulative orbital assets (for tracking)
   let podsTotal = 0;

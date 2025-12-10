@@ -30,7 +30,6 @@ export function LaunchAnimation() {
 
   // Detect new deployments and create launch animations
   useEffect(() => {
-    console.log(`[LaunchAnimation] Setting up subscription...`);
     
     const unsubscribe = useOrbitalUnitsStore.subscribe((state) => {
       const allUnits = state.units;
@@ -43,11 +42,8 @@ export function LaunchAnimation() {
       const newDeployments = deployedUnits.filter(u => !lastDeployedUnitsRef.current.has(u.id));
 
       if (newDeployments.length > 0) {
-        console.log(`[LaunchAnimation] 🚀 DETECTED ${newDeployments.length} NEW deployments! Creating launches...`);
-        
         newDeployments.forEach((unit) => {
         if (unit.type === "leo_pod") {
-          console.log(`[LaunchAnimation] Creating launch for: ${unit.id}`);
           // Pick launch site (consistent based on unit ID to match satellite placement)
           const launchSiteIndex = unit.id.charCodeAt(0) % LAUNCH_SITES.length;
           const launchSite = LAUNCH_SITES[launchSiteIndex];
@@ -95,7 +91,6 @@ export function LaunchAnimation() {
             phase: "rise",
             shell: 1, // LEO-1
           });
-          console.log(`[LaunchAnimation] ✅ Launch created: ${unit.id}, simTime=${currentSimTime.toFixed(2)}, duration=${duration}ms`);
         }
       });
       }
@@ -109,7 +104,6 @@ export function LaunchAnimation() {
     const initialState = useOrbitalUnitsStore.getState();
     const initialDeployed = initialState.units.filter(u => u.status === "deployed" && u.deployedAt);
     initialDeployed.forEach(u => lastDeployedUnitsRef.current.add(u.id));
-    console.log(`[LaunchAnimation] Initial state: ${initialDeployed.length} deployed units tracked (not creating launches for existing)`);
 
     return () => unsubscribe();
   }, []);
@@ -214,7 +208,6 @@ export function LaunchAnimation() {
           useOrbitSim.setState({
             satellites: [...currentSats, ...newSats],
           });
-          console.log(`[LaunchAnimation] 🛰️ Spawned ${newSats.length} satellites from launch ${launch.id}`);
         }
         
         toRemove.push(id);

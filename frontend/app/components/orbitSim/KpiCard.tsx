@@ -40,9 +40,9 @@ export default function KpiCard({
 }: KpiCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [crossoverGlow, setCrossoverGlow] = useState(0); // 0-1 glow intensity
-  // Responsive chart dimensions
+  // Responsive chart dimensions - increased height on mobile to prevent cutoff
   const chartWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 140 : 180;
-  const chartHeight = typeof window !== 'undefined' && window.innerWidth < 640 ? 60 : 80;
+  const chartHeight = typeof window !== 'undefined' && window.innerWidth < 640 ? 90 : 80; // Increased from 60 to 90 on mobile
   
   // Calculate crossover year for cost/carbon charts
   const crossoverYear = useMemo(() => {
@@ -64,17 +64,27 @@ export default function KpiCard({
   const currentYear = timeline.length > 0 ? timeline[timeline.length - 1].year : null;
   const isCrossoverActive = crossoverYear !== null && currentYear !== null && currentYear >= crossoverYear;
   
-  // Animate glow when crossover happens
+  // Animate glow when crossover happens - enhanced pulsing effect
   useEffect(() => {
-    if (isCrossoverActive && crossoverGlow < 1) {
+    if (isCrossoverActive) {
+      // Start with strong glow, then pulse
+      setCrossoverGlow(1.0);
       const interval = setInterval(() => {
-        setCrossoverGlow(prev => Math.min(1, prev + 0.05));
+        setCrossoverGlow(prev => {
+          // Pulse between 0.6 and 1.0
+          const time = Date.now() / 1000;
+          return 0.6 + Math.sin(time * 2) * 0.4;
+        });
       }, 50);
       return () => clearInterval(interval);
-    } else if (!isCrossoverActive && crossoverGlow > 0) {
-      setCrossoverGlow(0);
+    } else {
+      // Fade out when crossover is not active
+      const fadeInterval = setInterval(() => {
+        setCrossoverGlow(prev => Math.max(0, prev - 0.1));
+      }, 50);
+      return () => clearInterval(fadeInterval);
     }
-  }, [isCrossoverActive, crossoverGlow]);
+  }, [isCrossoverActive]);
 
   // Compute chart data - always show both curves for OPEX and Carbon
   const chartData = useMemo(() => {
@@ -94,7 +104,7 @@ export default function KpiCard({
 
     ctx.clearRect(0, 0, chartWidth, chartHeight);
 
-    const chartPadding = { top: 4, right: 4, bottom: 4, left: 4 };
+    const chartPadding = { top: 8, right: 16, bottom: 24, left: 10 }; // Increased padding to prevent cutoff on mobile
     const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
     const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
 
@@ -123,9 +133,18 @@ export default function KpiCard({
     });
     ctx.stroke();
 
-    // Draw mix line (green)
+    // Draw mix line (green) - enhanced with glow when crossover active
     ctx.strokeStyle = mixColor;
     ctx.lineWidth = 2;
+    
+    // Add glow effect to mix line when crossover is active
+    if (isCrossoverActive && crossoverGlow > 0.1) {
+      ctx.shadowBlur = 15 * crossoverGlow;
+      ctx.shadowColor = mixColor;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    
     ctx.beginPath();
     chartData.forEach((d, idx) => {
       const x = chartPadding.left + (plotWidth / (chartData.length - 1)) * idx;
@@ -138,6 +157,7 @@ export default function KpiCard({
       }
     });
     ctx.stroke();
+    ctx.shadowBlur = 0; // Reset shadow
 
     // Draw forecast bands if available
     if (forecastBands && forecastKey) {
@@ -185,7 +205,7 @@ export default function KpiCard({
         ctx.setLineDash([]);
       }
     }
-  }, [timeline, groundKey, mixKey, groundColor, mixColor, chartData, forecastBands, forecastKey]);
+  }, [timeline, groundKey, mixKey, groundColor, mixColor, chartData, forecastBands, forecastKey, isCrossoverActive, crossoverGlow]);
 
   if (!timeline || timeline.length === 0) return null;
 
@@ -195,26 +215,52 @@ export default function KpiCard({
   const savings = savingsKey ? (lastStep[savingsKey] as number) : null;
 
   // Determine color scheme: red-dominant before crossover, green-dominant after
+  // Carbon flips from red-dominant to green-dominant once crossover happens
   const isGreenDominant = isCrossoverActive;
   const groundColorClass = isGreenDominant ? "text-red-300" : "text-red-400";
   const mixColorClass = isGreenDominant ? "text-green-400" : "text-green-300";
   
+  // For Carbon chart specifically: ensure green becomes dominant after crossover
+  const carbonColorTransition = title === "Carbon" && isCrossoverActive;
+  
+  // Enhanced glow effect - visual feedback when crossover happens
+  const glowStyle = isCrossoverActive && crossoverGlow > 0.1
+    ? {
+        boxShadow: `0 0 ${30 * crossoverGlow}px rgba(16, 185, 129, ${0.7 * crossoverGlow}), 0 0 ${60 * crossoverGlow}px rgba(16, 185, 129, ${0.3 * crossoverGlow})`,
+        border: `2px solid rgba(16, 185, 129, ${0.5 * crossoverGlow})`,
+      }
+    : {};
+
   return (
     <div 
-      className={`p-3 bg-gray-900/50 rounded transition-all duration-500 ${
-        isCrossoverActive ? 'ring-2 ring-green-500 ring-opacity-50' : ''
+      className={`p-3 bg-gray-900/50 rounded transition-all duration-300 ${
+        isCrossoverActive ? 'ring-2 ring-green-500 ring-opacity-70' : ''
       }`}
-      style={{
-        boxShadow: isCrossoverActive 
-          ? `0 0 ${20 * crossoverGlow}px rgba(16, 185, 129, ${0.5 * crossoverGlow})` 
-          : 'none',
-      }}
+      style={glowStyle}
     >
       <div className="text-xs font-semibold text-gray-300 mb-2">{title}</div>
       <canvas ref={canvasRef} width={chartWidth} height={chartHeight} className="w-full h-24 mb-2" />
       <div className="flex justify-between items-center mb-1 text-[10px]">
-        <span className={groundColorClass}>Ground: {unitsFormatter(groundValue)}</span>
-        <span className={mixColorClass}>Mix: {unitsFormatter(mixValue)}</span>
+        <span 
+          className={groundColorClass}
+          style={{
+            fontWeight: carbonColorTransition ? 'normal' : 'semibold',
+            opacity: carbonColorTransition ? 0.6 : 1.0,
+          }}
+        >
+          Ground: {unitsFormatter(groundValue)}
+        </span>
+        <span 
+          className={mixColorClass}
+          style={{
+            fontWeight: carbonColorTransition ? 'bold' : 'normal',
+            textShadow: carbonColorTransition && crossoverGlow > 0.3
+              ? `0 0 ${5 * crossoverGlow}px rgba(16, 185, 129, ${crossoverGlow})`
+              : 'none',
+          }}
+        >
+          Mix: {unitsFormatter(mixValue)}
+        </span>
       </div>
       {savings !== null && savings !== undefined && (
         <div className="text-[10px] text-emerald-400">

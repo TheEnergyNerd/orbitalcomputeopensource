@@ -22,26 +22,26 @@ export interface SatellitePosition {
   shell: ShellType;
 }
 
-// Shell configuration
+// Shell configuration - EXTREME altitudes for visual distinction
 const SHELL_CONFIG = {
   LEO: {
     latitudeBand: 70, // degrees
-    altitudeRange: [550, 750] as [number, number], // km
-    minAngularSeparation: 5.0, // degrees (increased for more spread)
+    altitudeRange: [400, 600] as [number, number], // km - more distinct from VLEO
+    minAngularSeparation: 3.0, // degrees (reduced to allow more satellites, prevent clustering)
   },
   MEO: {
     latitudeBand: 55, // degrees
-    altitudeRange: [1000, 1500] as [number, number], // km (brought much closer)
-    minAngularSeparation: 8.0, // degrees (increased for more spread)
+    altitudeRange: [10000, 15000] as [number, number], // km - much higher for visual distinction
+    minAngularSeparation: 5.0, // degrees (reduced to allow more satellites, prevent clustering)
   },
   GEO: {
     latitudeBand: 2, // degrees
-    altitudeRange: [2000, 2500] as [number, number], // km (brought much closer, no longer true GEO)
-    minAngularSeparation: 12.0, // degrees (increased for more spread)
+    altitudeRange: [35786, 35786] as [number, number], // km - true GEO altitude
+    minAngularSeparation: 8.0, // degrees (reduced to allow more satellites, prevent clustering)
   },
   SSO: {
     latitudeBand: 98, // degrees (sun-synchronous, near-polar)
-    altitudeRange: [560, 560] as [number, number], // km (fixed SSO altitude)
+    altitudeRange: [800, 1000] as [number, number], // km - more distinct from LEO
     minAngularSeparation: 6.0, // degrees
     inclination: 98, // degrees (sun-synchronous)
   },
@@ -73,33 +73,26 @@ export function latLonToXYZ(latDeg: number, lonDeg: number, radius: number): [nu
 }
 
 /**
- * Sample latitude using arcsin distribution
+ * Sample latitude using UNIFORM distribution (not arcsin)
+ * This creates more even distribution across the latitude band
+ * instead of clustering near the equator
+ * 
  * u = randomUniform(0, 1)
- * lat = arcsin(2u - 1) × (bandLimit / 90) × (180 / π)
+ * lat = (2u - 1) × bandLimit
  * 
  * This creates:
- * - High density near equator (human population)
- * - Sparse near poles
+ * - Uniform density across the entire latitude band
+ * - Equal probability at all latitudes within the band
  * - Hard limit at ±bandLimit
- * 
- * The arcsin distribution naturally keeps satellites away from poles:
- * - Most satellites cluster near equator (lat ≈ 0°)
- * - Few satellites near band limits (lat ≈ ±bandLimit)
  */
 function sampleLatitude(bandLimit: number): number {
   const u = Math.random();
-  // arcsin(2u - 1) gives [-π/2, π/2] radians
-  // Convert to degrees: [-90°, 90°]
-  // Scale by (bandLimit / 90) to get [-bandLimit, bandLimit] degrees
-  const latRad = Math.asin(2 * u - 1); // [-π/2, π/2] radians
-  const latDeg = latRad * (180 / Math.PI) * (bandLimit / 90); // Scale to [-bandLimit, bandLimit] degrees
+  // Uniform distribution: [-bandLimit, +bandLimit]
+  const latDeg = (2 * u - 1) * bandLimit;
   
   // Clamp to ensure we never exceed the band limit
   const clamped = Math.max(-bandLimit, Math.min(bandLimit, latDeg));
   
-  // Additional safety: ensure we're not too close to poles
-  // For LEO (70° band), this means satellites stay between -70° and +70° (20° from poles)
-  // The arcsin distribution already does this, but enforce explicitly
   return clamped;
 }
 
@@ -240,17 +233,9 @@ export function generateSatellitePosition(
     // 3. Clamp to band limit (should already be clamped, but double-check)
     lat = Math.max(-config.latitudeBand, Math.min(config.latitudeBand, lat));
     
-    // 4. CRITICAL: Ensure satellite maintains appropriate distance from poles
-    // Add a buffer zone to keep satellites away from the extreme band limits
-    // This prevents satellites from clustering too close to the poles
-    const poleBuffer = Math.max(5, config.latitudeBand * 0.1); // 10% of band or 5° minimum
-    const effectiveBandLimit = config.latitudeBand - poleBuffer;
-    const absLat = Math.abs(lat);
-    
-    // Reject positions that are too close to the pole
-    if (absLat > effectiveBandLimit) {
-      continue; // Too close to pole, resample
-    }
+    // REMOVED: Pole buffer was causing clustering
+    // Uniform distribution should naturally spread satellites evenly
+    // No need to reject positions near band limits
     
     // 5. Check angular spacing
     if (violatesAngularSpacing(lat, lon, existingPositions, shell, minSeparation)) {
@@ -322,12 +307,17 @@ export function getShellAltitude(shell: ShellType): number {
  * Get shell from altitude
  */
 export function getShellFromAltitude(altKm: number): ShellType {
-  if (altKm >= 1000 && altKm <= 1500) {
-    return "MEO";
-  } else if (altKm >= 2000 && altKm <= 2500) {
-    return "GEO";
+  // Updated to match extreme altitude ranges for visual distinction
+  if (altKm >= 10000) {
+    return "MEO"; // 10,000-15,000 km - much higher for visual distinction
+  } else if (altKm >= 800 && altKm <= 1000) {
+    return "SSO"; // 800-1000 km - more distinct from LEO
+  } else if (altKm >= 400 && altKm < 800) {
+    return "LEO"; // 400-600 km (MID-LEO) - more distinct from VLEO
+  } else if (altKm >= 250 && altKm < 400) {
+    return "LEO"; // 250-350 km (VLEO, but map to LEO for now)
   } else {
-    return "LEO"; // Default to LEO (550-750 km)
+    return "LEO"; // Default to LEO
   }
 }
 

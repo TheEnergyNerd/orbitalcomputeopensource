@@ -26,7 +26,7 @@ interface TutorialStepConfig {
 const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   1: {
     title: "Welcome to Orbital Compute Simulator",
-    description: "This simulator lets you explore the economics and logistics of orbital computing. You'll make strategic decisions about deployment, routing, and infrastructure.",
+    description: "This simulator lets you explore the economics and logistics of orbital computing. You'll make strategic decisions about deployment, routing, and infrastructure. Use the tabs above (Overview, World View, Futures) to navigate different views.",
     // No highlight for step 1
   },
   2: {
@@ -49,9 +49,9 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   },
   5: {
     title: "Globe Interaction",
-    description: "Switch to the Deployment tab to explore the 3D globe. The globe shows satellites (blue), data centers (orange), and launch sites. Click on any element to see details. Traffic arrows show data flow between locations. Try clicking on data centers, satellites, and constellations to see their information cards.",
+    description: "Switch to the World View tab to explore the 3D globe. The globe shows satellites (teal circles = Class A, white diamonds = Class B), data centers (orange), and launch sites. Click on any element to see details. Traffic arrows show data flow between locations. Try clicking on data centers, satellites, and constellations to see their information cards.",
     highlight: "[data-tutorial-deployment-tab]",
-    requiresDeploymentTab: true, // Flag to switch to deployment tab
+    requiresDeploymentTab: true, // Flag to switch to deployment tab (now World View)
     interactionTime: 5000, // Give users 5 seconds to explore
     allowGlobeClicks: true, // Allow clicks on globe elements during this step
   },
@@ -64,17 +64,17 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
     panelInstructions: "In the AI Router panel, you can adjust routing weights for cost, latency, and carbon. Try changing the presets (Latency-first, Cost-first, Carbon-first, or Balanced) or manually adjusting the sliders to see how it affects job routing.",
   },
   7: {
-    title: "Constellation Deployment",
-    description: "Deploy satellite constellations to expand orbital capacity. Configure shell altitude, number of satellites, and orbital planes. On mobile, first open the menu, then click Constellation.",
-    highlight: "[data-tutorial-constellation-button]",
-    action: "Open the Constellation editor (on mobile: open menu first)",
-    panelInstructions: "In the Constellation editor, you can configure satellite shells by adjusting altitude, number of planes, and satellites per plane. You can also use AI design presets or manually customize each shell.",
-  },
-  8: {
     title: "Futures Tab",
-    description: "The Futures tab shows probabilistic forecasts of cost trends. It uses Monte Carlo simulation to predict how orbit vs ground costs will evolve.",
+    description: "The Futures tab shows probabilistic forecasts of cost trends. It uses Monte Carlo simulation to predict how orbit vs ground costs will evolve. Watch for cost and carbon crossover alerts when orbital compute becomes cheaper or greener than ground.",
     highlight: "[data-tutorial-futures-tab]",
     action: "Switch to the Futures tab",
+  },
+  8: {
+    title: "Satellite Classes",
+    description: "There are two types of satellites: Class A (teal circles) for low-latency networking and Class B (white diamonds) for high-power compute. Class B satellites face the sun for maximum solar power. You'll see more Class B satellites in cost/carbon-first strategies after 2030.",
+    highlight: "[data-tutorial-deployment-tab]",
+    action: "Switch to World View to see the satellites",
+    requiresDeploymentTab: true,
   },
 };
 
@@ -90,9 +90,8 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   const [step5DeploymentTabClicked, setStep5DeploymentTabClicked] = useState(false);
   const [step6MenuOpened, setStep6MenuOpened] = useState(false);
   const [step6AiRouterOpened, setStep6AiRouterOpened] = useState(false);
-  const [step7MenuOpened, setStep7MenuOpened] = useState(false);
-  const [step7ConstellationOpened, setStep7ConstellationOpened] = useState(false);
-  const [step8FuturesTabClicked, setStep8FuturesTabClicked] = useState(false);
+  const [step7FuturesTabClicked, setStep7FuturesTabClicked] = useState(false);
+  const [step8DeploymentTabClicked, setStep8DeploymentTabClicked] = useState(false);
   
   // Track if tutorial should be temporarily hidden (for step 2)
   const [tutorialHidden, setTutorialHidden] = useState(false);
@@ -126,13 +125,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
       }
       return "[data-tutorial-ai-router-button]";
     }
-    if (currentStep === 7) {
-      const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-      if (isMobile && !step7MenuOpened) {
-        return "[data-tutorial-mobile-menu-button]";
-      }
-      return "[data-tutorial-constellation-button]";
-    }
     return stepConfig?.highlight;
   };
 
@@ -153,12 +145,8 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
       const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
       return isMobile ? (step6MenuOpened && step6AiRouterOpened) : step6AiRouterOpened;
     }
-    if (currentStep === 7) {
-      // On mobile, require menu then Constellation; on desktop, just Constellation
-      const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-      return isMobile ? (step7MenuOpened && step7ConstellationOpened) : step7ConstellationOpened;
-    }
-    if (currentStep === 8) return step8FuturesTabClicked;
+    if (currentStep === 7) return step7FuturesTabClicked;
+    if (currentStep === 8) return step8DeploymentTabClicked;
     return true;
   })();
 
@@ -178,13 +166,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           return "[data-tutorial-mobile-menu-button]";
         }
         return "[data-tutorial-ai-router-button]";
-      }
-      if (currentStep === 7) {
-        const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-        if (isMobile && !step7MenuOpened) {
-          return "[data-tutorial-mobile-menu-button]";
-        }
-        return "[data-tutorial-constellation-button]";
       }
       return stepConfig?.highlight;
     };
@@ -213,16 +194,22 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     updateHighlight();
     const interval = setInterval(updateHighlight, 100);
     return () => clearInterval(interval);
-  }, [isActive, currentStep, stepConfig, step6MenuOpened, step7MenuOpened]);
+  }, [isActive, currentStep, stepConfig, step6MenuOpened]);
 
-  // Handle step 5 - switch to deployment tab and allow interaction
+  // Handle step 5 and 8 - switch to deployment tab and allow interaction
   useEffect(() => {
-    if (currentStep === 5 && isActive) {
-      const stepConfig = TUTORIAL_STEPS[5];
+    if ((currentStep === 5 || currentStep === 8) && isActive) {
+      const stepConfig = TUTORIAL_STEPS[currentStep];
       
       // Switch to deployment tab if required
-      if (stepConfig.requiresDeploymentTab && activeSurface !== "deployment") {
+      if (stepConfig?.requiresDeploymentTab && activeSurface !== "deployment") {
         onSurfaceChange("deployment");
+        // Also mark as clicked since we auto-switched
+        if (currentStep === 5) {
+          setStep5DeploymentTabClicked(true);
+        } else if (currentStep === 8) {
+          setStep8DeploymentTabClicked(true);
+        }
       }
       
       // Give users time to interact (scroll, click data centers, satellites, constellations)
@@ -265,11 +252,8 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
       setStep6MenuOpened(false);
       setStep6AiRouterOpened(false);
     }
-    if (currentStep !== 7) {
-      setStep7MenuOpened(false);
-      setStep7ConstellationOpened(false);
-    }
-    if (currentStep !== 8) setStep8FuturesTabClicked(false);
+    if (currentStep !== 7) setStep7FuturesTabClicked(false);
+    if (currentStep !== 8) setStep8DeploymentTabClicked(false);
     setTutorialHidden(false);
   }, [currentStep]);
 
@@ -318,25 +302,33 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive]);
 
-  // Track step 5: Deployment tab clicked
+  // Track step 5 and 8: Deployment tab clicked
   useEffect(() => {
-    if (currentStep === 5 && isActive) {
+    if ((currentStep === 5 || currentStep === 8) && isActive) {
       // Listen for tab clicks
       const handleTabClick = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-tutorial-deployment-tab]')) {
-          setStep5DeploymentTabClicked(true);
+          if (currentStep === 5) {
+            setStep5DeploymentTabClicked(true);
+          } else if (currentStep === 8) {
+            setStep8DeploymentTabClicked(true);
+          }
         }
       };
-      document.addEventListener('click', handleTabClick);
+      document.addEventListener('click', handleTabClick, true);
       
       // Also check if we're already on deployment tab
       if (activeSurface === "deployment") {
-        setStep5DeploymentTabClicked(true);
+        if (currentStep === 5) {
+          setStep5DeploymentTabClicked(true);
+        } else if (currentStep === 8) {
+          setStep8DeploymentTabClicked(true);
+        }
       }
       
       return () => {
-        document.removeEventListener('click', handleTabClick);
+        document.removeEventListener('click', handleTabClick, true);
       };
     }
   }, [currentStep, isActive, activeSurface]);
@@ -382,53 +374,48 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive]);
 
-  // Track step 7: Menu opened then Constellation opened
+  // Track step 4: Auto-close menu if open to see charts clearly
   useEffect(() => {
-    if (currentStep === 7 && isActive) {
-      // Listen for Constellation open events
-      const handleConstellationOpen = () => {
-        setStep7ConstellationOpened(true);
-      };
-      
-      // Check menu state periodically (for mobile)
-      const checkMenu = () => {
-        const menu = document.querySelector('[data-tutorial-mobile-menu]');
-        if (menu) {
-          // Menu is open when it has translate-x-0 class (Tailwind class when isOpen=true)
-          const hasTranslateX0 = menu.classList.contains('translate-x-0');
-          if (hasTranslateX0) {
-            setStep7MenuOpened(true);
+    if (currentStep === 4 && isActive) {
+      // Close mobile menu if it's open
+      const menu = document.querySelector('[data-tutorial-mobile-menu]');
+      if (menu) {
+        const hasTranslateX0 = menu.classList.contains('translate-x-0');
+        if (hasTranslateX0) {
+          // Menu is open, close it by dispatching close event
+          // Find the close button and click it, or dispatch a custom event
+          const closeButton = menu.querySelector('button[aria-label="Close menu"]');
+          if (closeButton) {
+            (closeButton as HTMLElement).click();
+          } else {
+            // Fallback: dispatch custom event to close menu
+            window.dispatchEvent(new CustomEvent('close-mobile-menu'));
           }
         }
-      };
-      
-      // Check Constellation panel state
-      const checkConstellation = () => {
-        const panel = document.querySelector('[data-tutorial-constellation-panel]');
-        if (panel && window.getComputedStyle(panel as HTMLElement).display !== 'none') {
-          setStep7ConstellationOpened(true);
-        }
-      };
-      
-      window.addEventListener('open-constellation', handleConstellationOpen);
-      const interval = setInterval(() => {
-        checkMenu();
-        checkConstellation();
-      }, 100);
-      
-      return () => {
-        window.removeEventListener('open-constellation', handleConstellationOpen);
-        clearInterval(interval);
-      };
+      }
     }
   }, [currentStep, isActive]);
 
-  // Track step 8: Futures tab clicked
+  // Track step 7: Futures tab clicked
   useEffect(() => {
-    if (currentStep === 8 && isActive) {
+    if (currentStep === 7 && isActive) {
+      // Listen for tab clicks
+      const handleTabClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-tutorial-futures-tab]')) {
+          setStep7FuturesTabClicked(true);
+        }
+      };
+      document.addEventListener('click', handleTabClick, true);
+      
+      // Also check if we're already on futures tab
       if (activeSurface === "futures") {
-        setStep8FuturesTabClicked(true);
+        setStep7FuturesTabClicked(true);
       }
+      
+      return () => {
+        document.removeEventListener('click', handleTabClick, true);
+      };
     }
   }, [currentStep, isActive, activeSurface]);
 
@@ -444,13 +431,14 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     <>
       {/* Dark overlay with cutout for highlighted element - blocks clicks except on highlighted areas */}
       {/* For step 5 (deployment tab), allow clicks through to globe elements */}
+      {/* For step 6, allow clicks on AI Router button */}
       <div
         className="fixed inset-0 z-[150] pointer-events-auto"
         style={{
           background: highlightRect
             ? `radial-gradient(ellipse ${highlightRect.width}px ${highlightRect.height}px at ${highlightRect.left + highlightRect.width / 2}px ${highlightRect.top + highlightRect.height / 2}px, transparent 40%, rgba(0, 0, 0, 0.85) 70%)`
             : "rgba(0, 0, 0, 0.85)",
-          pointerEvents: currentStep === 5 ? 'none' : 'auto', // Allow clicks through during step 5
+          pointerEvents: (currentStep === 5 || currentStep === 6 || currentStep === 7) ? 'none' : 'auto', // Allow clicks through during step 5, 6, and 7
         }}
         onClick={(e) => {
           // For step 5, don't block any clicks - let them pass through to globe
@@ -505,7 +493,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
               <div className="text-xs text-cyan-400 mb-1">
-                Step {typeof currentStep === "number" ? currentStep : "Complete"} of 9
+                Step {typeof currentStep === "number" ? currentStep : "Complete"} of 8
               </div>
               <h3 className="text-xl font-bold text-white mb-2">{stepConfig.title}</h3>
               <p className="text-sm text-gray-300 mb-3">{stepConfig.description}</p>
@@ -517,14 +505,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
               {currentStep === 6 && step6AiRouterOpened && (
                 <div className="mt-3 p-3 bg-cyan-900/30 border border-cyan-500/50 rounded-lg">
                   <div className="text-xs text-green-400 mb-2">✓ AI Router opened!</div>
-                  {stepConfig.panelInstructions && (
-                    <div className="text-xs text-gray-300">{stepConfig.panelInstructions}</div>
-                  )}
-                </div>
-              )}
-              {currentStep === 7 && step7ConstellationOpened && (
-                <div className="mt-3 p-3 bg-cyan-900/30 border border-cyan-500/50 rounded-lg">
-                  <div className="text-xs text-green-400 mb-2">✓ Constellation editor opened!</div>
                   {stepConfig.panelInstructions && (
                     <div className="text-xs text-gray-300">{stepConfig.panelInstructions}</div>
                   )}
@@ -566,7 +546,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
                 !canProceed ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {currentStep === 8 ? "Finish" : "Next"}
+              {currentStep === 7 ? "Finish" : "Next"}
             </button>
           </div>
         </div>

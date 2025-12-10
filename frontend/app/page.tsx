@@ -34,6 +34,7 @@ import TutorialSystem from "./components/TutorialSystem";
 import DebugExportPanel from "./components/DebugExportPanel";
 import { SatelliteCounters } from "./components/SatelliteCounters";
 import { PerformanceWarning } from "./components/PerformanceWarning";
+import { VisualGlossary } from "./components/VisualGlossary";
 
 // Always use lightweight Three.js globe (OrbitalScene)
 export default function Home() {
@@ -43,6 +44,19 @@ export default function Home() {
   // Log GPU event on mount
   useEffect(() => {
     logGpuEvent("app_mounted", {});
+  }, []);
+
+  // Listen for navigation events from SimpleModeView tabs
+  useEffect(() => {
+    const handleNavigate = (e: CustomEvent<{ surface: SurfaceType }>) => {
+      setActiveSurface(e.detail.surface);
+      // Also dispatch to update other components
+      window.dispatchEvent(new CustomEvent('surface-changed', { detail: { surface: e.detail.surface } }));
+    };
+    window.addEventListener('navigate-surface', handleNavigate as EventListener);
+    return () => {
+      window.removeEventListener('navigate-surface', handleNavigate as EventListener);
+    };
   }, []);
   const loading = useSimStore((s) => s.loading);
   const error = useSimStore((s) => s.error);
@@ -119,6 +133,9 @@ export default function Home() {
         
         {/* Tutorial System */}
         <TutorialSystem activeSurface={activeSurface} onSurfaceChange={setActiveSurface} />
+        
+        {/* Visual Glossary - interactive legend - hidden in futures tab */}
+        {activeSurface !== "futures" && <VisualGlossary />}
       </>
       </main>
     </div>

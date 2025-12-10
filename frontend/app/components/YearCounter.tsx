@@ -25,7 +25,6 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
   useEffect(() => {
     const handleDeploy1Year = () => deployNextYear();
     const handleDeploy5Years = () => extendYears(5);
-    const handleDeploy10Years = () => extendYears(10);
     const handleOpenAiRouter = () => {
       const event = new CustomEvent('open-ai-router');
       window.dispatchEvent(event);
@@ -37,14 +36,12 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
 
     window.addEventListener('tutorial-deploy-1-year', handleDeploy1Year);
     window.addEventListener('tutorial-deploy-5-years', handleDeploy5Years);
-    window.addEventListener('tutorial-deploy-10-years', handleDeploy10Years);
     window.addEventListener('tutorial-open-ai-router', handleOpenAiRouter);
     window.addEventListener('tutorial-open-constellation', handleOpenConstellation);
 
     return () => {
       window.removeEventListener('tutorial-deploy-1-year', handleDeploy1Year);
       window.removeEventListener('tutorial-deploy-5-years', handleDeploy5Years);
-      window.removeEventListener('tutorial-deploy-10-years', handleDeploy10Years);
       window.removeEventListener('tutorial-open-ai-router', handleOpenAiRouter);
       window.removeEventListener('tutorial-open-constellation', handleOpenConstellation);
     };
@@ -56,7 +53,7 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
   }
 
   return (
-    <div className="fixed top-20 right-4 lg:right-6 pointer-events-none" style={{ zIndex: 200 }} data-tutorial-year-counter>
+    <div className="fixed top-28 sm:top-24 right-2 sm:right-4 lg:right-6 pointer-events-none" style={{ zIndex: 200 }} data-tutorial-year-counter>
       {/* Deploy buttons above year counter */}
       <div className="mb-3 flex flex-col gap-2 pointer-events-auto" data-tutorial-fast-forward>
         <button
@@ -66,20 +63,12 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
         >
           Deploy 1 year
         </button>
-        <div className="flex gap-2">
-          <button
-            onClick={() => extendYears(5)}
-            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition"
-          >
-            +5 years
-          </button>
-          <button
-            onClick={() => extendYears(10)}
-            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition"
-          >
-            +10 years
-          </button>
-        </div>
+        <button
+          onClick={() => extendYears(5)}
+          className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition"
+        >
+          +5 years
+        </button>
       </div>
       
       {/* Year counter */}

@@ -93,13 +93,13 @@ export function RoutingArrows() {
       
       // Only show arrows if orbit share changed significantly (>5% - lowered threshold)
       if (orbitChange < 0.05 && lastPolicyHash.current !== "") {
-        console.log(`[RoutingArrows] Policy change too small (${(orbitChange * 100).toFixed(1)}%), skipping`);
+      // Silent
         lastPolicyHash.current = policyHash;
         lastOrbitProb = currentOrbitProb;
         return;
       }
       
-      console.log(`[RoutingArrows] Significant policy change: ${(orbitChange * 100).toFixed(1)}% orbit share change`);
+      // Silent - too verbose
       lastPolicyHash.current = policyHash;
       lastOrbitProb = currentOrbitProb;
 
@@ -107,23 +107,23 @@ export function RoutingArrows() {
       arrowsRef.current.clear();
 
       if (!policy) {
-        console.log(`[RoutingArrows] No policy, skipping arrows`);
+        // Silent
         return;
       }
 
       // CRITICAL: Only use visible satellites (those that have spawned)
       const visibleSatellites = getVisibleSatellites();
-      console.log(`[RoutingArrows] Policy change detected: ${visibleSatellites.length} visible satellites (${useOrbitSim.getState().satellites.length} total)`);
+      // Silent - too verbose
       
       if (visibleSatellites.length === 0) {
-        console.log(`[RoutingArrows] No visible satellites, skipping arrows`);
+        // Silent
         return;
       }
 
       // Create arrows only for significant policy changes - fewer arrows, more meaningful
       const orbitProb = policy.jobs?.realtime?.orbit || 0;
       const numArrows = Math.min(3, Math.max(1, Math.floor(visibleSatellites.length / 20))); // Much fewer arrows
-      console.log(`[RoutingArrows] Creating ${numArrows} arrows for orbit share: ${(orbitProb * 100).toFixed(1)}%`);
+      // Silent - too verbose
       
       let arrowCount = 0;
       let attempts = 0;
@@ -156,7 +156,7 @@ export function RoutingArrows() {
         arrowCount++;
       }
       
-      console.log(`[RoutingArrows] Created ${arrowsRef.current.size} arrows (attempted ${attempts} times)`);
+      // Silent - too verbose
     });
 
     return () => unsubscribe();

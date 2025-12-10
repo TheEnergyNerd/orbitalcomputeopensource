@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import type { YearStep } from "../../lib/orbitSim/simulationConfig";
 import { 
   getInitialDeploymentState,
@@ -37,6 +37,49 @@ export default function GlobalKPIStrip({
   // Calculate deployment metrics for current year
   const deploymentMetrics = calculateDeploymentMetrics(timeline, year, strategyByYear);
 
+  // Detect threshold moments for glow/pulse animations
+  const thresholdMoments = useMemo(() => {
+    const moments: Array<{ type: string; glow: number }> = [];
+    
+    // 1. Orbit > 50% of world compute
+    const orbitalShare = currentStep.orbitalShare || 0;
+    if (orbitalShare > 0.5) {
+      moments.push({ type: 'orbit_50_percent', glow: 0.8 });
+    }
+    
+    // 2. First >1 TW orbital power
+    const totalPowerTW = deploymentMetrics.totalPowerMW / 1000 / 1000; // Convert MW to TW
+    if (totalPowerTW >= 1.0) {
+      moments.push({ type: 'first_1TW_power', glow: 1.0 });
+    }
+    
+    // 3. First >1 EFLOP orbital compute
+    const totalComputeEFLOPs = deploymentMetrics.totalComputePFLOPs / 1000; // Convert PFLOPs to EFLOPs
+    if (totalComputeEFLOPs >= 1.0) {
+      moments.push({ type: 'first_1EFLOP_compute', glow: 1.0 });
+    }
+    
+    return moments;
+  }, [currentStep, deploymentMetrics]);
+
+  // Animate glow intensity
+  const [glowIntensity, setGlowIntensity] = useState(0);
+  useEffect(() => {
+    if (thresholdMoments.length > 0) {
+      const maxGlow = Math.max(...thresholdMoments.map(m => m.glow));
+      setGlowIntensity(maxGlow);
+      
+      // Pulse animation
+      const interval = setInterval(() => {
+        const time = Date.now() / 1000;
+        setGlowIntensity(maxGlow * (0.7 + Math.sin(time * 2) * 0.3));
+      }, 50);
+      return () => clearInterval(interval);
+    } else {
+      setGlowIntensity(0);
+    }
+  }, [thresholdMoments]);
+
   const kpis = [
     {
       label: "Year",
@@ -66,16 +109,46 @@ export default function GlobalKPIStrip({
   ];
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 pointer-events-none">
-      <div className="bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 px-4 py-2">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          {kpis.map((kpi, i) => (
-            <div key={i} className="flex flex-col items-center min-w-[120px]">
+    <div 
+      className="bg-slate-950/95 backdrop-blur-sm border-b border-slate-800 px-2 sm:px-4 py-2 transition-all duration-300 overflow-x-auto"
+      style={{
+        boxShadow: glowIntensity > 0.1
+          ? `0 0 ${40 * glowIntensity}px rgba(16, 185, 129, ${0.6 * glowIntensity}), 0 0 ${80 * glowIntensity}px rgba(16, 185, 129, ${0.3 * glowIntensity})`
+          : 'none',
+        borderColor: glowIntensity > 0.1 ? `rgba(16, 185, 129, ${0.5 * glowIntensity})` : undefined,
+      }}
+    >
+      <div className="flex items-center justify-between max-w-7xl mx-auto gap-2 sm:gap-4 min-w-max">
+        {kpis.map((kpi, i) => {
+          // Highlight specific KPIs when thresholds are reached
+          const shouldGlow = thresholdMoments.some(m => 
+            (m.type === 'orbit_50_percent' && kpi.label === 'Class B Share') ||
+            (m.type === 'first_1TW_power' && kpi.label === 'Orbital Power') ||
+            (m.type === 'first_1EFLOP_compute' && kpi.label === 'Orbital Compute')
+          );
+          
+          return (
+            <div 
+              key={i} 
+              className="flex flex-col items-center min-w-[100px] sm:min-w-[120px] flex-shrink-0 transition-all duration-300"
+              style={{
+                textShadow: shouldGlow && glowIntensity > 0.1
+                  ? `0 0 ${10 * glowIntensity}px rgba(16, 185, 129, ${glowIntensity})`
+                  : 'none',
+              }}
+            >
               <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">
                 {kpi.label}
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="text-lg font-semibold text-white">
+                <span 
+                  className="text-lg font-semibold transition-colors duration-300"
+                  style={{
+                    color: shouldGlow && glowIntensity > 0.1
+                      ? `rgba(16, 185, 129, ${1.0})`
+                      : 'white',
+                  }}
+                >
                   {kpi.value}
                 </span>
                 {kpi.unit && (
@@ -85,8 +158,8 @@ export default function GlobalKPIStrip({
                 )}
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -33,21 +33,21 @@ export default function MobileMenu({ isOpen, onClose, children }: MobileMenuProp
       {/* Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-[100] lg:hidden"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
+          className="fixed inset-0 bg-black/50 z-[199]"
+          onClick={onClose}
+          onTouchStart={onClose}
+          style={{ zIndex: 199 }}
         />
       )}
 
       {/* Menu */}
       <div
-        className={`fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-[101] transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto ${
+        className={`fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-[200] transform transition-transform duration-300 ease-in-out overflow-y-auto ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
         data-tutorial-mobile-menu
+        style={{ zIndex: 200 }}
       >
         <div className="p-4">
           {/* Header with close button and hint */}
@@ -62,10 +62,16 @@ export default function MobileMenu({ isOpen, onClose, children }: MobileMenuProp
             </div>
             <button
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
+                console.log('[MobileMenu] Close button clicked');
                 onClose();
               }}
-              className="p-2 hover:bg-slate-800 rounded-lg transition ml-2"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="p-2 hover:bg-slate-800 rounded-lg transition ml-2 pointer-events-auto z-[102] relative"
               aria-label="Close menu"
             >
               <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

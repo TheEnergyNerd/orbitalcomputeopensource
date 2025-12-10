@@ -84,10 +84,45 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
     }
   },
   updateSatellites: (sats: SimSatellite[]) => {
-    if (!sats || sats.length === 0) {
-      console.log("[orbitStore] updateSatellites called with empty array");
-      set({ satellites: [] });
+    const currentState = get();
+    const currentSatellites = currentState.satellites;
+    const hasDeployedSats = currentSatellites.some(s => s.id.startsWith("deployed_"));
+    
+    // CRITICAL: Never clear satellites if we have ANY satellites (not just deployed)
+    // This prevents accidental clearing during component remounts
+    if ((!sats || sats.length === 0) && currentSatellites.length > 0) {
+      console.error(`[orbitStore] 🚨 BLOCKED: updateSatellites called with empty array but ${currentSatellites.length} satellites exist (${hasDeployedSats ? 'including deployed' : 'no deployed'}). Ignoring to prevent data loss.`);
       return;
+    }
+    
+    if (!sats || sats.length === 0) {
+      // Only allow clearing if there are truly no satellites
+      if (currentSatellites.length === 0) {
+        console.log("[orbitStore] updateSatellites called with empty array (no satellites to clear)");
+        set({ satellites: [] });
+      }
+      return;
+    }
+    
+    // CRITICAL: If we have ANY satellites and the new array has fewer, check for data loss
+    if (currentSatellites.length > 0 && sats.length < currentSatellites.length) {
+      const currentIds = new Set(currentSatellites.map(s => s.id));
+      const newIds = new Set(sats.map(s => s.id));
+      const missingIds = Array.from(currentIds).filter(id => !newIds.has(id));
+      const deployedMissing = missingIds.filter(id => id.startsWith("deployed_"));
+      
+      // Block if we would lose ANY deployed satellites
+      if (deployedMissing.length > 0) {
+        console.error(`[orbitStore] 🚨 BLOCKED: Would lose ${deployedMissing.length} deployed satellites (${missingIds.length} total). Current: ${currentSatellites.length}, New: ${sats.length}. Ignoring update.`);
+        return;
+      }
+      
+      // Block if we would lose more than 10% of satellites (likely a bug)
+      const lossPercentage = (missingIds.length / currentSatellites.length) * 100;
+      if (lossPercentage > 10) {
+        console.error(`[orbitStore] 🚨 BLOCKED: Would lose ${lossPercentage.toFixed(1)}% of satellites (${missingIds.length} of ${currentSatellites.length}). This likely indicates a bug. Ignoring update.`);
+        return;
+      }
     }
     
     const satellites: Satellite[] = sats.map((sat) => {
@@ -137,6 +172,9 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
       if (podTypeHash === 1) podType = "relay";
       else if (podTypeHash === 2) podType = "storage";
       
+      // Get satellite class from satellite data (if available)
+      const satelliteClass = (sat as any).satelliteClass || ((sat as any).alt_km >= 800 ? "B" : "A"); // SSO orbits (800km+) are Class B
+      
       return {
         x,
         y,
@@ -146,6 +184,7 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
         shell,
         orbitalState,
         podType, // NEW: Add pod type for coloring
+        satelliteClass, // NEW: Add satellite class (A or B)
       };
     });
     
@@ -193,8 +232,7 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
     
     // Log data centers for debugging
     if (dataCenterPositions.length > 0) {
-      console.log(`[orbitStore] Found ${dataCenterPositions.length} data centers for routes:`, 
-        dataCenterPositions.map(dc => `${dc.id} (${dc.lat.toFixed(2)}, ${dc.lon.toFixed(2)})`));
+      // Silent - too verbose
     }
     
     jobTypes.forEach((jobType) => {
@@ -241,12 +279,48 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
                 latencyMs,
                 congestionIndex,
                 trafficMbps,
+                toSatId: toSat.id, // Store satellite ID for traffic share calculation
               });
             }
           } else {
-            // Orbit to orbit route
-            const from = validSatellites[Math.floor(Math.random() * validSatellites.length)];
-            const to = validSatellites[Math.floor(Math.random() * validSatellites.length)];
+            // Orbit to orbit route - ensure routes go to different shells for better distribution
+            // Group satellites by shell
+            const satellitesByShell = new Map<string | number, Array<typeof validSatellites[0]>>();
+            validSatellites.forEach(sat => {
+              const shell = sat.shell !== undefined ? sat.shell : "unknown";
+              if (!satellitesByShell.has(shell)) {
+                satellitesByShell.set(shell, []);
+              }
+              satellitesByShell.get(shell)!.push(sat);
+            });
+            
+            // Try to create routes between different shells (70% chance)
+            let from: typeof validSatellites[0];
+            let to: typeof validSatellites[0];
+            
+            if (Math.random() < 0.7 && satellitesByShell.size > 1) {
+              // Route between different shells
+              const shells = Array.from(satellitesByShell.keys());
+              const fromShell = shells[Math.floor(Math.random() * shells.length)];
+              const toShell = shells.filter(s => s !== fromShell)[Math.floor(Math.random() * (shells.length - 1))];
+              
+              const fromShellSats = satellitesByShell.get(fromShell)!;
+              const toShellSats = satellitesByShell.get(toShell)!;
+              
+              if (fromShellSats.length > 0 && toShellSats.length > 0) {
+                from = fromShellSats[Math.floor(Math.random() * fromShellSats.length)];
+                to = toShellSats[Math.floor(Math.random() * toShellSats.length)];
+              } else {
+                // Fallback to random if shell grouping failed
+                from = validSatellites[Math.floor(Math.random() * validSatellites.length)];
+                to = validSatellites[Math.floor(Math.random() * validSatellites.length)];
+              }
+            } else {
+              // Random route (30% chance or if only one shell)
+              from = validSatellites[Math.floor(Math.random() * validSatellites.length)];
+              to = validSatellites[Math.floor(Math.random() * validSatellites.length)];
+            }
+            
             if (from.id !== to.id) {
               // CRITICAL: Validate positions before creating route
               const fromRadius = Math.sqrt(from.x ** 2 + from.y ** 2 + from.z ** 2);

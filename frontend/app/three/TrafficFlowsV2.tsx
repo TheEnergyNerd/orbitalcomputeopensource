@@ -5,12 +5,52 @@
 
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Vector3, Quaternion } from "three";
+import * as THREE from "three";
+import { Vector3, Quaternion, TubeGeometry, CatmullRomCurve3 } from "three";
 import { Line } from "@react-three/drei";
 import { useOrbitSim } from "../state/orbitStore";
 import { createGeodesicArc } from "../lib/three/coordinateUtils";
+// Route tube component - updates geometry per frame for animated jitter
+function RouteTube({ curve, radius, color }: { curve: CatmullRomCurve3, radius: number, color: string }) {
+  const meshRef = useRef<any>(null);
+  const geometryRef = useRef<TubeGeometry | null>(null);
+  
+  useFrame(() => {
+    if (!meshRef.current) return;
+    
+    // Dispose old geometry
+    if (geometryRef.current) {
+      geometryRef.current.dispose();
+    }
+    
+    // Create new geometry with updated curve (jitter animation)
+    geometryRef.current = new TubeGeometry(curve, 50, radius, 8, false);
+    meshRef.current.geometry = geometryRef.current;
+  });
+  
+  useEffect(() => {
+    return () => {
+      if (geometryRef.current) {
+        geometryRef.current.dispose();
+      }
+    };
+  }, []);
+  
+  return (
+    <mesh ref={meshRef}>
+      <meshStandardMaterial
+        color={color}
+        emissive={color}
+        emissiveIntensity={0.5}
+        transparent
+        opacity={0.8}
+      />
+    </mesh>
+  );
+}
+
 // Arrowhead component - properly aligned with direction
 function Arrowhead({ direction, color }: { direction: Vector3, color: string }) {
   const arrowLength = 0.06;
@@ -80,23 +120,37 @@ export function TrafficFlowsV2() {
         // Speed is inverse of latency (lower latency = faster animation)
         const animationSpeed = Math.max(0.1, Math.min(2.0, 100 / latency));
         
-        // Thickness based on route type (estimate load)
-        const loadMultiplier = 1.0; // Default multiplier (route.type doesn't include "realtime" or "interactive")
-        const thickness = 2 * loadMultiplier;
+        // Thickness based on actual traffic load (trafficMbps) - MUCH MORE VISIBLE
+        const trafficMbps = route.trafficMbps || 100; // Default 100 Mbps
+        // Scale: 10 Mbps = 0.01 radius, 100 Mbps = 0.05 radius, 500 Mbps = 0.15 radius
+        // Much larger range for visible differences
+        const minRadius = 0.01;
+        const maxRadius = 0.15;
+        const thickness = Math.max(minRadius, Math.min(maxRadius, (trafficMbps / 10) * 0.01));
         
-        // Color based on policy (blue = orbit, green = ground, purple = core)
-        const color = route.type === "orbit" ? "#00ffff" : route.type === "core" ? "#bd10e0" : "#00ff00";
+        // Log thickness for debugging (only first few routes)
+        if (pulsesRef.current.size < 3) {
+          console.log(`[TrafficFlowsV2] Route ${route.id}: trafficMbps=${trafficMbps.toFixed(1)}, radius=${thickness.toFixed(4)}`);
+        }
         
-        // Jitter based on congestion (estimate)
-        const congestion = 0.3; // TODO: Get from actual congestion data
-        const jitter = congestion * 0.1; // 0-0.1 jitter based on congestion
+        // Color based on strategy/policy (blue = latency, green = cost, emerald = carbon, purple = balanced)
+        // Map route type to strategy color
+        let color = "#00ffff"; // Default cyan
+        if (route.type === "orbit") color = "#00ffff"; // Cyan for orbit
+        else if (route.type === "core") color = "#bd10e0"; // Purple for core
+        else if (route.type === "ground") color = "#00ff00"; // Green for ground
+        // TODO: Get actual strategy from route metadata if available
+        
+        // Jitter based on actual congestion index - MORE VISIBLE
+        const congestionIndex = route.congestionIndex !== undefined ? route.congestionIndex : 0.3;
+        const jitter = Math.min(0.3, congestionIndex * 0.5); // Scale congestion 0-1 to jitter 0-0.3 (increased from 0.15)
         
         pulsesRef.current.set(route.id, {
           routeId: route.id,
           progress: Math.random(), // Start at random position
           speed: animationSpeed,
           color,
-          thickness,
+          thickness, // This is now the radius (0.01 to 0.15)
           jitter,
           lastUpdate: Date.now(),
         });
@@ -104,11 +158,15 @@ export function TrafficFlowsV2() {
     });
   }, [routes]);
 
-  // Animate pulses
+  // Store jittered arc points per route (updated per frame for animation)
+  const jitteredArcsRef = useRef<Map<string, Vector3[]>>(new Map());
+  
+  // Animate pulses and update jittered arcs
   useFrame((state, delta) => {
     if (simPaused) return;
     
     const effectiveDelta = delta * simSpeed;
+    const time = state.clock.getElapsedTime();
     
     // Update pulse progress
     for (const pulse of Array.from(pulsesRef.current.values())) {
@@ -117,15 +175,76 @@ export function TrafficFlowsV2() {
         pulse.progress = 0; // Loop
       }
     }
+    
+    // Update jittered arcs for visible routes only (performance optimization)
+    // Only update every 5th frame to reduce CPU load significantly
+    const frameSkip = state.frame % 5 === 0;
+    if (!frameSkip) return;
+    
+    const MAX_ROUTES = 30; // Reduced from 50 for much better performance
+    const routesToUpdate = routes.length > MAX_ROUTES
+      ? [...routes].sort((a, b) => (b.trafficMbps || 0) - (a.trafficMbps || 0)).slice(0, MAX_ROUTES)
+      : routes;
+    
+    routesToUpdate.forEach((route) => {
+      const pulse = pulsesRef.current.get(route.id);
+      if (!pulse) return;
+      
+      const fromVec = new Vector3(route.fromVec[0], route.fromVec[1], route.fromVec[2]);
+      const toVec = new Vector3(route.toVec[0], route.toVec[1], route.toVec[2]);
+      
+      const fromRadius = fromVec.length();
+      const toRadius = toVec.length();
+      
+      const fromLat = Math.asin(fromVec.z / fromRadius) * 180 / Math.PI;
+      const fromLon = Math.atan2(fromVec.y, fromVec.x) * 180 / Math.PI;
+      const fromAlt = (fromRadius - 1) * 6371;
+      
+      const toLat = Math.asin(toVec.z / toRadius) * 180 / Math.PI;
+      const toLon = Math.atan2(toVec.y, toVec.x) * 180 / Math.PI;
+      const toAlt = (toRadius - 1) * 6371;
+      
+      const arcPoints = createGeodesicArc(fromLat, fromLon, fromAlt, toLat, toLon, toAlt, 50);
+      const arcVector3 = arcPoints.map(([x, y, z]) => new Vector3(x, y, z));
+      
+      // Apply animated jitter to arc points
+      const jitteredPoints = arcVector3.map((point, i) => {
+        const progress = i / (arcVector3.length - 1);
+        const jitterPhase = ((progress * 2 * Math.PI * 8) + (time * 2)) % (Math.PI * 2);
+        const jitterAmount = Math.sin(jitterPhase) * pulse.jitter;
+        const bucklePhase = ((progress * 2 * Math.PI * 20) + (time * 3)) % (Math.PI * 2);
+        const buckleAmount = Math.sin(bucklePhase) * pulse.jitter * 0.3;
+        const totalJitter = jitterAmount + buckleAmount;
+        
+        const nextPoint = arcVector3[Math.min(i + 1, arcVector3.length - 1)];
+        const prevPoint = arcVector3[Math.max(i - 1, 0)];
+        const direction = nextPoint.clone().sub(prevPoint).normalize();
+        const perpendicular = new Vector3(-direction.y, direction.x, 0).normalize();
+        if (perpendicular.length() < 0.1) {
+          perpendicular.set(0, 0, 1);
+        }
+        
+        return point.clone().add(perpendicular.multiplyScalar(totalJitter));
+      });
+      
+      jitteredArcsRef.current.set(route.id, jitteredPoints);
+    });
   });
 
   if (routes.length === 0) {
     return null;
   }
 
+  // Performance optimization: limit routes rendered at once (prioritize by traffic)
+  // Aggressively reduced for better performance
+  const MAX_ROUTES = 30; // Reduced from 50 for much better performance
+  const visibleRoutes = routes.length > MAX_ROUTES
+    ? [...routes].sort((a, b) => (b.trafficMbps || 0) - (a.trafficMbps || 0)).slice(0, MAX_ROUTES)
+    : routes;
+
   return (
     <>
-      {routes.map((route, idx) => {
+      {visibleRoutes.map((route, idx) => {
         const pulse = pulsesRef.current.get(route.id);
         if (!pulse) return null;
 
@@ -145,45 +264,54 @@ export function TrafficFlowsV2() {
         const toLon = Math.atan2(toVec.y, toVec.x) * 180 / Math.PI;
         const toAlt = (toRadius - 1) * 6371;
         
-        // Create geodesic arc
-        const arcPoints = createGeodesicArc(fromLat, fromLon, fromAlt, toLat, toLon, toAlt, 50);
-        const arcVector3 = arcPoints.map(([x, y, z]) => new Vector3(x, y, z));
+        // Get jittered arc points (updated per frame in useFrame)
+        const jitteredArcPoints = jitteredArcsRef.current.get(route.id);
+        if (!jitteredArcPoints) return null; // Skip if not yet calculated
         
-        // Find current pulse position on arc
-        const arcIndex = Math.floor(pulse.progress * (arcVector3.length - 1));
-        const nextIndex = Math.min(arcIndex + 1, arcVector3.length - 1);
-        const t = (pulse.progress * (arcVector3.length - 1)) % 1;
+        // Find current pulse position on arc (forward direction)
+        const arcIndex = Math.floor(pulse.progress * (jitteredArcPoints.length - 1));
+        const nextIndex = Math.min(arcIndex + 1, jitteredArcPoints.length - 1);
+        const t = (pulse.progress * (jitteredArcPoints.length - 1)) % 1;
         
-        const currentPoint = arcVector3[arcIndex].clone().lerp(arcVector3[nextIndex], t);
-        const nextPoint = arcVector3[Math.min(nextIndex + 1, arcVector3.length - 1)];
+        const currentPoint = jitteredArcPoints[arcIndex].clone().lerp(jitteredArcPoints[nextIndex], t);
+        const nextPoint = jitteredArcPoints[Math.min(nextIndex + 1, jitteredArcPoints.length - 1)];
         
-        // Apply jitter (congestion effect)
-        const jitterOffset = new Vector3(
-          (Math.random() - 0.5) * pulse.jitter,
-          (Math.random() - 0.5) * pulse.jitter,
-          (Math.random() - 0.5) * pulse.jitter
-        );
-        const jitteredPos = currentPoint.clone().add(jitterOffset);
+        const arcDirection = nextPoint.clone().sub(currentPoint).normalize();
+        const jitteredPos = currentPoint;
         
-        // Direction for arrowhead
-        const direction = nextPoint.clone().sub(currentPoint).normalize();
+        // Direction for arrowhead (forward)
+        const forwardDirection = nextPoint.clone().sub(currentPoint).normalize();
+        
+        // BIDIRECTIONAL: Create reverse pulse (orbit→ground or orbit→orbit reverse)
+        const reverseProgress = (1 - pulse.progress) % 1;
+        const reverseArcIndex = Math.floor(reverseProgress * (jitteredArcPoints.length - 1));
+        const reverseNextIndex = Math.min(reverseArcIndex + 1, jitteredArcPoints.length - 1);
+        const reverseT = (reverseProgress * (jitteredArcPoints.length - 1)) % 1;
+        
+        const reverseCurrentPoint = jitteredArcPoints[reverseArcIndex].clone().lerp(jitteredArcPoints[reverseNextIndex], reverseT);
+        const reverseNextPoint = jitteredArcPoints[Math.min(reverseNextIndex + 1, jitteredArcPoints.length - 1)];
+        const reverseDirection = reverseNextPoint.clone().sub(reverseCurrentPoint).normalize();
+        const reverseJitteredPos = reverseCurrentPoint;
+        
+        // Create tube geometry for visible thickness (lineWidth doesn't work in WebGL)
+        // pulse.thickness is already the radius (0.01 to 0.15)
+        const tubeRadius = pulse.thickness;
+        const curve = new CatmullRomCurve3(jitteredArcPoints);
+        
+        // Log first few routes for debugging
+        if (idx < 3) {
+          console.log(`[TrafficFlowsV2] Route ${route.id}: trafficMbps=${(route.trafficMbps || 100).toFixed(1)}, tubeRadius=${tubeRadius.toFixed(4)}, jitter=${pulse.jitter.toFixed(3)}`);
+        }
         
         return (
           <group key={route.id || idx}>
-            {/* Static arc (base path) */}
-            <Line
-              points={arcPoints}
-              color={pulse.color}
-              lineWidth={pulse.thickness * 0.3}
-              transparent
-              opacity={0.3}
-            />
+            {/* Static arc (base path) - thickness encodes load - USING TUBE GEOMETRY with animated jitter */}
+            <RouteTube curve={curve} radius={tubeRadius} color={pulse.color} />
             
-            {/* Animated pulse */}
+            {/* Forward pulse (ground→orbit or orbit→orbit) */}
             <group position={jitteredPos}>
-              {/* Pulse sphere */}
               <mesh>
-                <sphereGeometry args={[0.03, 16, 16]} />
+                <sphereGeometry args={[0.02, 12, 12]} />
                 <meshStandardMaterial
                   color={pulse.color}
                   emissive={pulse.color}
@@ -192,9 +320,22 @@ export function TrafficFlowsV2() {
                   depthTest={true}
                 />
               </mesh>
-              
-              {/* Arrowhead pointing in direction of travel */}
-              <Arrowhead direction={direction} color={pulse.color} />
+              <Arrowhead direction={forwardDirection} color={pulse.color} />
+            </group>
+            
+            {/* Reverse pulse (orbit→ground or orbit→orbit reverse) */}
+            <group position={reverseJitteredPos}>
+              <mesh>
+                <sphereGeometry args={[0.02, 12, 12]} />
+                <meshStandardMaterial
+                  color={pulse.color}
+                  emissive={pulse.color}
+                  emissiveIntensity={2.0} // Slightly dimmer for reverse
+                  depthWrite={true}
+                  depthTest={true}
+                />
+              </mesh>
+              <Arrowhead direction={reverseDirection.clone().negate()} color={pulse.color} />
             </group>
           </group>
         );

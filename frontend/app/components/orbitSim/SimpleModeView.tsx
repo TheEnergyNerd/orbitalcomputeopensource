@@ -352,6 +352,7 @@ export default function SimpleModeView() {
 
   // Don't auto-open mobile menu - user should manually open it
 
+
   // Listen for tutorial button clicks from YearCounter
   useEffect(() => {
     const handleOpenAiRouter = () => {
@@ -365,25 +366,34 @@ export default function SimpleModeView() {
     const handleCloseAiRouter = () => setAiRouterOpen(false);
     const handleCloseConstellation = () => setConstellationEditorOpen(false);
 
+    const handleCloseMobileMenu = () => {
+      setMobileMenuOpen(false);
+    };
+
     window.addEventListener('open-ai-router', handleOpenAiRouter);
     window.addEventListener('open-constellation', handleOpenConstellation);
     window.addEventListener('close-ai-router', handleCloseAiRouter);
     window.addEventListener('close-constellation', handleCloseConstellation);
+    window.addEventListener('close-mobile-menu', handleCloseMobileMenu);
 
     return () => {
       window.removeEventListener('open-ai-router', handleOpenAiRouter);
       window.removeEventListener('open-constellation', handleOpenConstellation);
       window.removeEventListener('close-ai-router', handleCloseAiRouter);
       window.removeEventListener('close-constellation', handleCloseConstellation);
+      window.removeEventListener('close-mobile-menu', handleCloseMobileMenu);
     };
   }, []);
 
   return (
     <>
-      {/* Mobile Menu Button - only visible on mobile */}
+      {/* Mobile Menu Button - visible on mobile, hidden on desktop (strategy card is always visible on desktop) */}
       <button
-        onClick={() => setMobileMenuOpen(true)}
-        className="fixed top-16 left-4 z-[160] lg:hidden p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 shadow-lg"
+        onClick={() => {
+          console.log('[SimpleModeView] Menu button clicked, opening menu');
+          setMobileMenuOpen(true);
+        }}
+        className="fixed top-[104px] sm:top-[112px] left-4 z-[160] p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 shadow-lg pointer-events-auto lg:hidden"
         aria-label="Open menu"
         data-tutorial-mobile-menu-button
       >
@@ -459,13 +469,20 @@ export default function SimpleModeView() {
         {/* AI Router and Constellation Buttons */}
         <div className="flex flex-col gap-2">
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setConstellationEditorOpen(false);
               setAiRouterOpen(true);
               setMobileMenuOpen(false);
             }}
-            className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition pointer-events-auto relative"
             data-tutorial-ai-router-button
+            style={{ zIndex: 500, position: 'relative' }}
           >
             AI Router
           </button>
@@ -475,7 +492,7 @@ export default function SimpleModeView() {
               setConstellationEditorOpen(true);
               setMobileMenuOpen(false);
             }}
-            className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition border border-slate-700"
+            className="hidden lg:block w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition border border-slate-700"
             data-tutorial-constellation-button
           >
             Constellation
@@ -508,17 +525,19 @@ export default function SimpleModeView() {
         </div>
       )}
 
-      {/* Global KPI Strip - Fixed top HUD */}
+      {/* Global KPI Strip - Fixed below SurfaceTabs */}
       {timeline && timeline.length > 0 && (
-        <GlobalKPIStrip 
-          timeline={timeline} 
-          currentYear={currentYear}
-          strategyByYear={getStrategyByYear(timeline)}
-        />
+        <div className="fixed top-12 sm:top-14 left-0 right-0 z-50 pointer-events-none overflow-x-auto">
+          <GlobalKPIStrip 
+            timeline={timeline} 
+            currentYear={currentYear}
+            strategyByYear={getStrategyByYear(timeline)}
+          />
+        </div>
       )}
 
       {/* Top: Strategy + Utilization Controls - only content blocks events, hidden on mobile */}
-      <div className="fixed top-20 left-0 right-0 z-30 pointer-events-none hidden lg:block">
+      <div className="fixed top-[104px] sm:top-[112px] left-0 right-0 z-30 pointer-events-none hidden lg:block">
         <div className="px-2 sm:px-4 md:px-6 pointer-events-auto w-full max-w-full overflow-x-auto">
           <TopRow
             currentYear={currentYear}
@@ -533,7 +552,7 @@ export default function SimpleModeView() {
 
       {/* Charts - collapsible bottom panel */}
       <div className={`fixed bottom-0 left-0 right-0 pointer-events-auto bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 transition-all duration-300 ${chartsCollapsed ? 'max-h-[60px] overflow-hidden' : 'max-h-[50vh] overflow-y-auto'}`} style={{ zIndex: 35 }} data-tutorial-metrics-panel>
-        <div className="flex flex-col gap-6 px-6 pb-6 pt-4">
+        <div className="flex flex-col gap-4 sm:gap-6 px-3 sm:px-6 pb-8 sm:pb-6 pt-4 overflow-x-auto">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Simulation Metrics</h3>
             <button 

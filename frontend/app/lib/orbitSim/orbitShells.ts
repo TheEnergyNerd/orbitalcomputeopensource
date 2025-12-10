@@ -27,7 +27,7 @@ export const ORBIT_SHELLS: OrbitShell[] = [
   },
   {
     id: "MID-LEO",
-    altitude_km: [500, 900],
+    altitude_km: [400, 600], // More distinct from VLEO
     latency_ms: 65,
     stability_rating: 0.9,
     solar_efficiency: 1.0,
@@ -36,7 +36,7 @@ export const ORBIT_SHELLS: OrbitShell[] = [
   },
   {
     id: "SSO",
-    altitude_km: [900, 1200],
+    altitude_km: [800, 1000], // More distinct from MID-LEO
     latency_ms: 110,
     stability_rating: 1.3,
     solar_efficiency: 1.4,
@@ -45,7 +45,7 @@ export const ORBIT_SHELLS: OrbitShell[] = [
   },
   {
     id: "MEO",
-    altitude_km: [8000, 20000],
+    altitude_km: [10000, 15000], // Much higher for visual distinction
     latency_ms: 220,
     stability_rating: 1.6,
     solar_efficiency: 0.9,
@@ -54,7 +54,7 @@ export const ORBIT_SHELLS: OrbitShell[] = [
   },
   {
     id: "GEO",
-    altitude_km: [35786, 35786], // Fixed altitude
+    altitude_km: [35786, 35786], // Fixed altitude - true GEO
     latency_ms: 280,
     stability_rating: 2.0,
     solar_efficiency: 1.2,

@@ -204,63 +204,38 @@ export default function FuturesMarketView() {
       </div>
       
       {/* Cone visualizations */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-6">
         {(activeType === 'orbit' || activeType === 'both') && (
-          <div className="bg-gray-900/50 rounded-lg p-6 border border-gray-700">
+          <div className="bg-gray-900/50 rounded-lg p-4 sm:p-6 border border-gray-700 mb-4 sm:mb-0">
             <h2 className="text-lg font-semibold text-green-400 mb-4">Orbit Futures</h2>
-            <FuturesConeVisualization
-              forecast={futuresForecast}
-              type="orbit"
-              width={800}
-              height={400}
-              onHover={(point) => setHoveredPoint(point ? { type: 'orbit', point } : null)}
-              animated={true}
-            />
+            <div className="w-full overflow-x-auto">
+              <FuturesConeVisualization
+                forecast={futuresForecast}
+                type="orbit"
+                width={800}
+                height={400}
+                onHover={(point) => setHoveredPoint(point ? { type: 'orbit', point } : null)}
+                animated={true}
+              />
+            </div>
           </div>
         )}
         
         {(activeType === 'ground' || activeType === 'both') && (
-          <div className="bg-gray-900/50 rounded-lg p-6 border border-gray-700">
+          <div className="bg-gray-900/50 rounded-lg p-4 sm:p-6 border border-gray-700">
             <h2 className="text-lg font-semibold text-red-400 mb-4">Ground Futures</h2>
-            <FuturesConeVisualization
-              forecast={futuresForecast}
-              type="ground"
-              width={800}
-              height={400}
-              onHover={(point) => setHoveredPoint(point ? { type: 'ground', point } : null)}
-              animated={true}
-            />
+            <div className="w-full overflow-x-auto">
+              <FuturesConeVisualization
+                forecast={futuresForecast}
+                type="ground"
+                width={800}
+                height={400}
+                onHover={(point) => setHoveredPoint(point ? { type: 'ground', point } : null)}
+                animated={true}
+              />
+            </div>
           </div>
         )}
-      </div>
-      
-      {/* Legend */}
-      <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-        <div className="text-sm text-gray-400 mb-2">Visual Guide</div>
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-4 h-0.5 bg-green-400"></div>
-              <span className="text-gray-300">Centerline (Mean Forecast)</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-4 h-4 bg-emerald-500/35 rounded"></div>
-              <span className="text-gray-300">Inner Cone (68% Confidence)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-teal-500/20 rounded"></div>
-              <span className="text-gray-300">Outer Cone (95% Confidence)</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-gray-300 mb-2">
-              <strong>Particles:</strong> Movement direction indicates sentiment (up = bullish, down = bearish)
-            </div>
-            <div className="text-gray-300">
-              <strong>Fog Texture:</strong> Volumetric uncertainty visualization
-            </div>
-          </div>
-        </div>
       </div>
       </div>
     </div>

@@ -41,7 +41,7 @@ export default function SurfaceTabs({ activeSurface, onSurfaceChange }: SurfaceT
         }`}
         data-tutorial-deployment-tab
       >
-        DEPLOYMENT
+        WORLD VIEW
       </button>
       <button
         onClick={() => onSurfaceChange("futures")}

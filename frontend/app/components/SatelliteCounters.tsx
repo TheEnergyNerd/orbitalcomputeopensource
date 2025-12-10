@@ -13,6 +13,41 @@ export function SatelliteCounters() {
   const routes = useOrbitSim((s) => s.routes);
   const simState = useSimStore((s) => s.state);
   
+  // Calculate render percentage (from SatellitesOptimized logic)
+  const renderInfo = useMemo(() => {
+    const totalCount = satellites.length;
+    const PERFORMANCE_LIMITS = {
+      INSTANCED_SPHERES: 500,
+      INSTANCED_POINTS: 1000,
+      GPU_POINT_SPRITES: 2000,
+    };
+    
+    let renderMode: string;
+    let renderedCount: number;
+    let renderPercentage: number;
+    
+    if (totalCount <= PERFORMANCE_LIMITS.INSTANCED_SPHERES) {
+      renderMode = "full";
+      renderedCount = totalCount;
+      renderPercentage = 100;
+    } else if (totalCount <= PERFORMANCE_LIMITS.INSTANCED_POINTS) {
+      renderMode = "points";
+      renderedCount = totalCount;
+      renderPercentage = 100;
+    } else if (totalCount <= PERFORMANCE_LIMITS.GPU_POINT_SPRITES) {
+      renderMode = "sprites";
+      renderedCount = totalCount;
+      renderPercentage = 100;
+    } else {
+      renderMode = "representative";
+      const representativePercentage = 0.05; // 5% for better performance
+      renderedCount = Math.max(1, Math.floor(totalCount * representativePercentage));
+      renderPercentage = (renderedCount / totalCount) * 100;
+    }
+    
+    return { renderMode, renderedCount, renderPercentage, totalCount };
+  }, [satellites.length]);
+  
   // Calculate metrics
   const metrics = useMemo(() => {
     const totalSatellites = satellites.length;
@@ -122,6 +157,33 @@ export function SatelliteCounters() {
             {metrics.congestionIndex.toFixed(2)}
           </span>
         </div>
+        
+        {/* Render Performance Indicator - Always show when in representative mode */}
+        {renderInfo.renderPercentage < 100 ? (
+          <div className="pt-2 mt-2 border-t border-amber-500/30 bg-amber-500/5 rounded px-2 py-1.5">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-amber-300 text-[10px] font-semibold uppercase">Performance Mode</span>
+              <span className="text-amber-400 font-mono text-[11px] font-bold">
+                {renderInfo.renderPercentage.toFixed(1)}%
+              </span>
+            </div>
+            <div className="text-[10px] text-amber-200/80">
+              Rendering <span className="font-mono font-semibold">{renderInfo.renderedCount.toLocaleString()}</span> of <span className="font-mono font-semibold">{renderInfo.totalCount.toLocaleString()}</span> satellites
+            </div>
+            <div className="text-[9px] text-amber-300/60 mt-0.5 italic">
+              Representative visualization for optimal performance
+            </div>
+          </div>
+        ) : (
+          <div className="pt-2 mt-2 border-t border-green-500/30">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400 text-[10px]">Rendering:</span>
+              <span className="text-green-400 font-mono text-[10px] font-semibold">
+                100% (Full)
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
