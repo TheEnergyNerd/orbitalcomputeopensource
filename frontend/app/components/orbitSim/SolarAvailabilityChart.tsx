@@ -14,22 +14,22 @@ interface SolarAvailabilityChartProps {
  * SBS stabilizes above 92% after SSO inference sats appear (~2030)
  */
 export default function SolarAvailabilityChart({ timeline }: SolarAvailabilityChartProps) {
+  // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
   const [hasTriggeredPulse, setHasTriggeredPulse] = useState(false);
   const [pulseActive, setPulseActive] = useState(false);
   const pulseRef = useRef<HTMLDivElement>(null);
   const satellites = useOrbitSim((s) => s.satellites);
 
-  if (!timeline || timeline.length === 0) return null;
-
-  const firstYear = timeline[0].year;
-  const lastYear = timeline[timeline.length - 1].year;
-  const yearRange = lastYear - firstYear;
-  if (yearRange <= 0 || !isFinite(yearRange)) {
-    return null;
-  }
-
-  // Calculate solar availability data
+  // Calculate solar availability data - must be called before early returns
   const solarData = useMemo(() => {
+    if (!timeline || timeline.length === 0) return [];
+    
+    const firstYear = timeline[0].year;
+    const lastYear = timeline[timeline.length - 1].year;
+    const yearRange = lastYear - firstYear;
+    if (yearRange <= 0 || !isFinite(yearRange)) {
+      return [];
+    }
     return timeline.map((step) => {
       const year = step.year;
       
@@ -76,7 +76,19 @@ export default function SolarAvailabilityChart({ timeline }: SolarAvailabilityCh
         hasSSOSats,
       };
     });
-  }, [timeline, satellites, firstYear]);
+  }, [timeline, satellites]);
+
+  // NOW we can do conditional returns after all hooks are called
+  if (!timeline || timeline.length === 0) return null;
+
+  const firstYear = timeline[0].year;
+  const lastYear = timeline[timeline.length - 1].year;
+  const yearRange = lastYear - firstYear;
+  if (yearRange <= 0 || !isFinite(yearRange)) {
+    return null;
+  }
+
+  if (solarData.length === 0) return null;
 
   // Check for regime entry (first time SBS > 92%)
   useEffect(() => {
