@@ -1,7 +1,8 @@
 "use client";
 
-import { InstancedMesh, Object3D, Vector3, Quaternion, SphereGeometry, OctahedronGeometry } from "three";
-import { useRef, useEffect, useMemo } from "react";
+import { InstancedMesh, Object3D, Vector3, Quaternion, SphereGeometry, OctahedronGeometry, MeshBasicMaterial } from "three";
+import { useRef, useEffect, useMemo, forwardRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useOrbitSim } from "../state/orbitStore";
 import { useSimulationStore } from "../store/simulationStore";
 
@@ -328,22 +329,95 @@ export function SatellitesGPUInstanced() {
         </instancedMesh>
       )}
       
-      {/* Class B - SSO (800-1000 km) */}
+      {/* Class B - SSO (800-1000 km) with breathing glow */}
       {satellitesByGroup.classBSSO.length > 0 && (
-        <instancedMesh
+        <ClassBWithBreathing
           ref={classBSSORef}
-          args={[classBGeometry, undefined, getRepresentativeSats(satellitesByGroup.classBSSO).length]}
-          frustumCulled={true}
-        >
-          <meshBasicMaterial
-            color="#ffffff"
-            transparent={true}
-            opacity={0.95}
-            alphaTest={0.15}
-          />
-        </instancedMesh>
+          geometry={classBGeometry}
+          satellites={getRepresentativeSats(satellitesByGroup.classBSSO)}
+        />
       )}
     </>
   );
 }
+
+/**
+ * Class B satellites with breathing glow effect
+ * Breathing intensity based on sun alignment quality
+ */
+const ClassBWithBreathing = forwardRef<InstancedMesh, {
+  geometry: OctahedronGeometry | SphereGeometry;
+  satellites: ReturnType<typeof useOrbitSim.getState>['satellites'];
+}>(({ geometry, satellites }, ref) => {
+  const materialRef = useRef<MeshBasicMaterial | null>(null);
+  const breathingPhaseRef = useRef(0);
+  
+  // Calculate sun direction (simplified: fixed in +X direction)
+  const sunDistanceNormalized = 150000000 / 6371;
+  const sunPosition = new Vector3(sunDistanceNormalized, 0, 0);
+  
+  useFrame((state, delta) => {
+    // Only update if material is initialized and valid
+    if (!materialRef.current || !materialRef.current.isMaterial) return;
+    
+    // Breathing cycle: 1-2 second period
+    breathingPhaseRef.current += delta * 0.5; // 2 second cycle
+    const breathingPhase = breathingPhaseRef.current % (Math.PI * 2);
+    
+    // Calculate average sun alignment for Class B satellites
+    let totalAlignment = 0;
+    let count = 0;
+    
+    satellites.forEach(sat => {
+      if (sat.x !== undefined && sat.y !== undefined && sat.z !== undefined) {
+        const satPos = new Vector3(sat.x, sat.y, sat.z);
+        const satToSun = sunPosition.clone().sub(satPos).normalize();
+        // Calculate alignment (1.0 = perfect alignment, 0.0 = perpendicular)
+        const alignment = Math.max(0, satToSun.dot(new Vector3(0, 0, -1))); // Diamond's front face
+        totalAlignment += alignment;
+        count++;
+      }
+    });
+    
+    const avgAlignment = count > 0 ? totalAlignment / count : 0.5;
+    
+    // Breathing intensity proportional to sun alignment
+    const breathingIntensity = 0.5 + Math.sin(breathingPhase) * 0.5 * avgAlignment;
+    const baseOpacity = 0.95;
+    const glowIntensity = 0.3 + (breathingIntensity * 0.4); // 0.3 to 0.7
+    
+    // Update material opacity and color for breathing effect
+    // MeshBasicMaterial doesn't support emissive, so we use color intensity instead
+    try {
+      if (materialRef.current && materialRef.current.opacity !== undefined) {
+        materialRef.current.opacity = baseOpacity + (breathingIntensity * 0.1);
+      }
+      // Adjust color brightness for breathing glow effect
+      if (materialRef.current && materialRef.current.color) {
+        const brightness = 0.7 + (breathingIntensity * 0.3); // 0.7 to 1.0
+        materialRef.current.color.setRGB(brightness, brightness, brightness);
+      }
+    } catch (e) {
+      // Material might be disposed, ignore error
+    }
+  });
+  
+  return (
+    <instancedMesh
+      ref={ref}
+      args={[geometry, undefined, satellites.length]}
+      frustumCulled={true}
+    >
+      <meshBasicMaterial
+        ref={materialRef}
+        color="#ffffff"
+        transparent={true}
+        opacity={0.95}
+        alphaTest={0.15}
+      />
+    </instancedMesh>
+  );
+});
+
+ClassBWithBreathing.displayName = "ClassBWithBreathing";
 

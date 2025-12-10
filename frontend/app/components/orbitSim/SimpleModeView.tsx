@@ -420,16 +420,23 @@ export default function SimpleModeView() {
             ].map(opt => (
               <button
                 key={opt.id}
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   updateCurrentPlan({ computeStrategy: opt.id as any });
                   setMobileMenuOpen(false);
                 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 className={cn(
-                  "rounded-xl border px-3 py-2 text-left text-xs transition-all",
+                  "rounded-xl border px-3 py-2 text-left text-xs transition-all pointer-events-auto relative z-[201]",
                   currentPlan.computeStrategy === opt.id
                     ? "border-emerald-400 bg-emerald-500/10"
                     : "border-slate-700 bg-slate-900/60"
                 )}
+                style={{ zIndex: 201 }}
               >
                 <div className="font-medium text-slate-100">{opt.label}</div>
                 <div className="text-[10px] text-slate-400">{opt.desc}</div>
@@ -448,10 +455,18 @@ export default function SimpleModeView() {
             ].map(opt => (
               <button
                 key={opt.id}
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   updateCurrentPlan({ launchStrategy: opt.id as any });
                   setMobileMenuOpen(false);
                 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="pointer-events-auto relative z-[201]"
+                style={{ zIndex: 201 }}
                 className={cn(
                   "flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all",
                   currentPlan.launchStrategy === opt.id

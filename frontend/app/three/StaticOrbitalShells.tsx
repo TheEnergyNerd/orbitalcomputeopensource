@@ -260,13 +260,70 @@ function OrbitalShellRing({
   const lineRef = useRef<any>(null);
   const materialRef = useRef<LineBasicMaterial>(null);
   
-  // Apply scale animation
-  useFrame(() => {
+  // Calculate congestion for this shell (from satellites)
+  const satellites = useOrbitSim((s) => s.satellites);
+  const routes = useOrbitSim((s) => s.routes);
+  
+  // Calculate congestion: number of satellites in this shell + routes passing through
+  const shellCongestion = useMemo(() => {
+    const shellSats = satellites.filter(sat => {
+      const satAlt = sat.orbitalState?.altitudeRadius || sat.alt_km || 550;
+      const altKm = (satAlt - 1) * 6371;
+      // Check if satellite is in this shell's altitude range
+      const altDiff = Math.abs(altKm - altitude);
+      return altDiff < 50; // Within 50km of shell altitude
+    });
+    
+    // Count routes that pass through this shell
+    const routesThroughShell = routes.filter(route => {
+      // Simple check: if route altitude is near shell altitude
+      const fromAlt = (Math.sqrt(route.fromVec[0]**2 + route.fromVec[1]**2 + route.fromVec[2]**2) - 1) * 6371;
+      const toAlt = (Math.sqrt(route.toVec[0]**2 + route.toVec[1]**2 + route.toVec[2]**2) - 1) * 6371;
+      return Math.abs(fromAlt - altitude) < 100 || Math.abs(toAlt - altitude) < 100;
+    });
+    
+    // Normalize congestion (0-1): more satellites + routes = higher congestion
+    const maxExpected = 1000; // Normalize to 1000 satellites
+    const congestion = Math.min(1.0, (shellSats.length + routesThroughShell.length * 0.1) / maxExpected);
+    return congestion;
+  }, [satellites, routes, altitude]);
+  
+  // Apply scale animation and congestion-based jitter
+  useFrame((state, delta) => {
     if (materialRef.current && pulseActiveRef.current) {
       // Apply opacity pulse during expansion
       materialRef.current.opacity = opacity * (1.0 + (scaleRef.current - 1.0) * 5); // Scale opacity with expansion
     } else if (materialRef.current) {
-      materialRef.current.opacity = opacity;
+      // Apply congestion-based visual effects
+      const baseOpacity = opacity;
+      const congestionJitter = Math.sin(state.clock.elapsedTime * (5 + shellCongestion * 10)) * shellCongestion * 0.1;
+      materialRef.current.opacity = baseOpacity * (1.0 + congestionJitter);
+      
+      // High congestion: add noise to color
+      if (shellCongestion > 0.7) {
+        const noise = (Math.random() - 0.5) * shellCongestion * 0.2;
+        materialRef.current.color.setRGB(
+          parseFloat(color.slice(1, 3)) / 255 + noise,
+          parseFloat(color.slice(3, 5)) / 255 + noise,
+          parseFloat(color.slice(5, 7)) / 255 + noise
+        );
+      }
+    }
+    
+    // Apply spatial jitter to ring for high congestion
+    if (lineRef.current && shellCongestion > 0.6) {
+      const jitterAmount = shellCongestion * 0.01;
+      const jitterX = (Math.random() - 0.5) * jitterAmount;
+      const jitterY = (Math.random() - 0.5) * jitterAmount;
+      const jitterZ = (Math.random() - 0.5) * jitterAmount;
+      // Apply jitter to ring scale
+      if (lineRef.current.scale) {
+        lineRef.current.scale.set(
+          scaleRef.current + jitterX,
+          scaleRef.current + jitterY,
+          scaleRef.current + jitterZ
+        );
+      }
     }
   });
 

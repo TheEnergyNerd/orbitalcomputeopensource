@@ -30,7 +30,18 @@ type SatelliteClass = "A" | "B";
 type ShellName = "LOW" | "MID" | "HIGH" | "SSO";
 
 // Track sequence numbers per year per shell per class
-const sequenceCounters = new Map<string, number>();
+// Use shared counter (same as LaunchAnimation) via window object
+const getSequenceCounters = (): Map<string, number> => {
+  if (typeof window !== 'undefined' && (window as any).__satelliteSequenceCounters) {
+    return (window as any).__satelliteSequenceCounters;
+  }
+  const counters = new Map<string, number>();
+  if (typeof window !== 'undefined') {
+    (window as any).__satelliteSequenceCounters = counters;
+  }
+  return counters;
+};
+const sequenceCounters = getSequenceCounters();
 
 /**
  * Map shell type to naming schema shell name
@@ -98,6 +109,10 @@ function generateTestSatellites(): SimSatellite[] {
   // Generate positions using physically coherent positioning
   const positions = generateSatellitePositions(shellType, numSats);
   
+  // Use current year for test satellites (default to 2025)
+  const currentYear = 2025;
+  const satelliteClass: SatelliteClass = "A"; // Test satellites are Class A
+  
   for (let i = 0; i < positions.length; i++) {
     const pos = positions[i];
     
@@ -105,8 +120,23 @@ function generateTestSatellites(): SimSatellite[] {
     const orbitalState = generateOrbitalState(pos.alt, getRandomInclination());
     orbitalState.theta = pos.lon * (Math.PI / 180); // Set theta based on longitude
     
+    // Map altitude to shell name for naming
+    let namingShellName: ShellName;
+    if (pos.alt >= 800 && pos.alt <= 1000) namingShellName = "SSO";
+    else if (pos.alt < 400) namingShellName = "LOW";
+    else if (pos.alt < 800) namingShellName = "MID";
+    else namingShellName = "HIGH";
+    
+    // Generate satellite ID using the new naming schema
+    const newSatelliteId = generateSatelliteId(
+      satelliteClass,
+      namingShellName,
+      currentYear,
+      false // not retired
+    );
+    
     satellites.push({
-      id: `test_sat_${i}`,
+      id: newSatelliteId, // Use new naming schema
       lat: pos.lat,
       lon: pos.lon,
       alt_km: pos.alt,
@@ -867,8 +897,23 @@ export function OrbitalDataSync() {
               loggedClassB = true;
             }
             
+            // Map shellType to naming schema shell name
+            let namingShellName: ShellName;
+            if (shellType === "SSO") namingShellName = "SSO";
+            else if (position.alt < 400) namingShellName = "LOW";
+            else if (position.alt < 800) namingShellName = "MID";
+            else namingShellName = "HIGH";
+            
+            // Generate satellite ID using the new schema
+            const newSatelliteId = generateSatelliteId(
+              satelliteClass,
+              namingShellName,
+              currentYear,
+              false // not retired
+            );
+            
             newSats.push({
-              id: `deployed_${unit.id}_sat`,
+              id: newSatelliteId, // Use the new naming schema
               lat: position.lat,
               lon: position.lon,
               alt_km: position.alt,

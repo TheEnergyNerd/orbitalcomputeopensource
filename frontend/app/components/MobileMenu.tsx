@@ -42,14 +42,15 @@ export default function MobileMenu({ isOpen, onClose, children }: MobileMenuProp
 
       {/* Menu */}
       <div
-        className={`fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-[200] transform transition-transform duration-300 ease-in-out overflow-y-auto ${
+        className={`fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-[200] transform transition-transform duration-300 ease-in-out overflow-y-auto pointer-events-auto ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
         data-tutorial-mobile-menu
         style={{ zIndex: 200 }}
       >
-        <div className="p-4">
+        <div className="p-4 pointer-events-auto">
           {/* Header with close button and hint */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
@@ -81,7 +82,7 @@ export default function MobileMenu({ isOpen, onClose, children }: MobileMenuProp
           </div>
 
           {/* Menu content */}
-          <div className="space-y-4">
+          <div className="space-y-4 pointer-events-auto">
             {children}
           </div>
         </div>

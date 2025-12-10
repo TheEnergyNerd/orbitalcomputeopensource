@@ -6,6 +6,7 @@ import { Line } from "@react-three/drei";
 import { Vector3, CatmullRomCurve3 } from "three";
 import { latLonAltToXYZ, createGeodesicArc, xyzToLatLonAlt } from "../lib/three/coordinateUtils";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
+import { useSimulationStore } from "../store/simulationStore";
 import { useOrbitSim, type Satellite } from "../state/orbitStore";
 import { LAUNCH_SITES } from "./LaunchSites";
 import { generateOrbitalState, getRandomInclination } from "../lib/orbitSim/orbitalMechanics";
@@ -153,7 +154,16 @@ export function LaunchAnimation() {
       if (launch.progress >= 1 && !launch.completed) {
         // Launch completed - spawn satellites at insertion point using physically coherent positioning
         launch.completed = true;
+        
+        // Launch Impact Blink: Flash at insertion point
         const insertionPoint = launch.to;
+        // Trigger visual blink effect (would be handled by VisualEffects component)
+        // For now, we'll emit a custom event that can be caught by other components
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('launch-impact', {
+            detail: { position: insertionPoint, launchId: launch.id }
+          }));
+        }
         const [lat, lon, alt] = xyzToLatLonAlt(insertionPoint.x, insertionPoint.y, insertionPoint.z);
         
         // Determine shell type from altitude
@@ -183,7 +193,32 @@ export function LaunchAnimation() {
             const orbitalState = generateOrbitalState(position.alt, getRandomInclination());
             orbitalState.theta = position.lon * (Math.PI / 180);
             
-            const satelliteId = `launch_${launch.id}_sat_${i}`;
+            // Determine satellite class and shell name for naming
+            const timeline = useSimulationStore.getState().timeline;
+            const currentYear = timeline && timeline.length > 0 ? timeline[timeline.length - 1]?.year || 2025 : 2025;
+            const isSSO = shellType === "SSO" || (position.alt >= 800 && position.alt <= 1000);
+            const satelliteClass = (currentYear >= 2030 && isSSO) ? "B" : "A";
+            
+            // Map shellType to naming schema shell name
+            type ShellName = "LOW" | "MID" | "HIGH" | "SSO";
+            let namingShellName: ShellName;
+            if (shellType === "SSO") namingShellName = "SSO";
+            else if (position.alt < 400) namingShellName = "LOW";
+            else if (position.alt < 800) namingShellName = "MID";
+            else namingShellName = "HIGH";
+            
+            // Generate satellite ID using the new schema
+            // Use a module-level counter shared across launches
+            const key = `${satelliteClass}-${namingShellName}-${currentYear}`;
+            const currentSeq = (window as any).__satelliteSequenceCounters?.get(key) || 0;
+            const nextSeq = currentSeq + 1;
+            if (!(window as any).__satelliteSequenceCounters) {
+              (window as any).__satelliteSequenceCounters = new Map<string, number>();
+            }
+            (window as any).__satelliteSequenceCounters.set(key, nextSeq);
+            const sequenceStr = nextSeq.toString().padStart(5, '0');
+            const satelliteId = `${satelliteClass}-${namingShellName}-${currentYear}-${sequenceStr}`;
+            
             newSats.push({
               x: position.x,
               y: position.y,
