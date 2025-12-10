@@ -234,6 +234,8 @@ function calculateDeploymentMetrics(
     };
   }
 
+  // Use effective compute (after constraints) instead of raw compute
+  const effectiveCompute = finalResult.effectiveComputePFLOPs || finalResult.totalComputePFLOPs;
   const computeA = finalResult.S_A * finalResult.computePerA;
   const computeB = finalResult.S_B * finalResult.computePerB;
   const totalCompute = computeA + computeB;
@@ -246,7 +248,7 @@ function calculateDeploymentMetrics(
   const carbonDelta = carbonGround > 0 ? ((carbonGround - carbonMix) / carbonGround) * 100 : 0;
 
   return {
-    totalComputePFLOPs: totalCompute,
+    totalComputePFLOPs: effectiveCompute, // Use effective compute (after constraints)
     classBSharePercent: classBShare,
     totalPowerMW: finalResult.totalPowerMW,
     carbonDeltaPercent: carbonDelta,

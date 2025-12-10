@@ -23,6 +23,11 @@ import {
   SAT_A_LIFETIME_Y,
   SAT_B_LIFETIME_Y,
 } from "./satelliteClasses";
+import {
+  calculateLaunchConstraints,
+  calculateConstrainedEffectiveCompute,
+  type EffectiveComputeResult,
+} from "./deploymentConstraints";
 
 export interface YearDeploymentState {
   year: number;
@@ -69,11 +74,23 @@ export interface YearDeploymentResult {
   totalComputePFLOPs: number;
   totalPowerMW: number;
   
+  // Effective compute (after constraints)
+  effectiveComputePFLOPs: number;
+  heatUtilization: number;
+  survivalFraction: number;
+  
   // Per-satellite metrics
   computePerA: number;
   powerPerA: number;
   computePerB: number;
   powerPerB: number;
+  
+  // Constraint information
+  constraints?: {
+    launch: { massLimited: number; costLimited: number; allowed: number };
+    heat: { utilizationMax: number; heatLimited: boolean };
+    maintenance: { failureRate: number; failuresThisYear: number; recoverable: number; permanentLoss: number; survivalFraction: number };
+  };
 }
 
 const START_YEAR = 2025;
@@ -98,10 +115,27 @@ export function calculateYearDeployment(
   const growthMultiplier = STRATEGY_GROWTH_MULTIPLIERS[strategy];
   const totalLaunches = Math.round(baseLaunches * growthMultiplier);
   
-  // 3. Split between Class A and Class B
+  // 3. Split between Class A and Class B (before constraints)
   const fracB = getClassBShare(strategy, year);
-  const newB = Math.round(totalLaunches * fracB);
-  const newA = totalLaunches - newB;
+  const newB_target = Math.round(totalLaunches * fracB);
+  const newA_target = totalLaunches - newB_target;
+  
+  // 3.5. APPLY LAUNCH CONSTRAINTS (mass and cost gating)
+  const launchConstraints = calculateLaunchConstraints(
+    totalLaunches,
+    newA_target,
+    newB_target,
+    year,
+    strategy
+  );
+  
+  // Apply launch-gated limits proportionally to A and B
+  const totalTarget = newA_target + newB_target;
+  const allowedTotal = launchConstraints.allowed;
+  const scaleFactor = totalTarget > 0 ? allowedTotal / totalTarget : 0;
+  
+  const newA = Math.round(newA_target * scaleFactor);
+  const newB = Math.round(newB_target * scaleFactor);
   
   // 4. Distribute Class A across orbits based on strategy
   const orbitAlloc = getOrbitAllocation(strategy);
@@ -134,12 +168,26 @@ export function calculateYearDeployment(
   const computePerB = getClassBCompute(year);
   const powerPerB = getClassBPower(year);
   
-  // 8. Calculate aggregate metrics
+  // 8. Calculate raw aggregate metrics (before constraints)
   const totalComputePFLOPs = 
     S_A_new * computePerA + 
     S_B_new * computePerB;
   const totalPowerMW = 
     (S_A_new * powerPerA + S_B_new * powerPerB) / 1000;
+  
+  // 8.5. APPLY HEAT AND MAINTENANCE CONSTRAINTS
+  const effectiveComputeResult = calculateConstrainedEffectiveCompute(
+    totalComputePFLOPs,
+    S_A_new,
+    S_B_new,
+    powerPerA,
+    powerPerB,
+    year,
+    strategy,
+    totalLaunches,
+    newA,
+    newB
+  );
   
   // 9. Update deployment history
   const newDeployedByYear_A = new Map(deployedByYear_A);
@@ -163,10 +211,14 @@ export function calculateYearDeployment(
     S_B_sunSync: S_B_sunSync_new,
     totalComputePFLOPs,
     totalPowerMW,
+    effectiveComputePFLOPs: effectiveComputeResult.effectiveCompute,
+    heatUtilization: effectiveComputeResult.heatUtilization,
+    survivalFraction: effectiveComputeResult.survivalFraction,
     computePerA,
     powerPerA,
     computePerB,
     powerPerB,
+    constraints: effectiveComputeResult.constraints,
   };
 }
 
