@@ -372,7 +372,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
     
     setSelectedScenarioKey: (key: ScenarioKey) => {
-      set({ selectedScenarioKey: key });
+      // Locked to BASELINE - scenario selection disabled
+      set({ selectedScenarioKey: "BASELINE" as ScenarioKey });
       // Note: This does NOT trigger a recompute - it only changes which scenario data is displayed
       // The scenario buttons should call this, not updateConfig
     },

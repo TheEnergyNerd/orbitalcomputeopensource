@@ -40,14 +40,13 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   },
   3: {
     title: "Choose Strategy",
-    description: "Open the menu (☰) and select a strategy: Latency-first, Cost-first, Carbon-first, or Balanced. Also choose a scenario: Baseline, Bear, or Bull.",
+    description: "Open the menu (☰) and select a strategy: Latency-first, Cost-first, Carbon-first, or Balanced.",
     highlight: "[data-tutorial-mobile-menu-button]",
     action: "Open menu to select strategy",
   },
   4: {
     title: "View Metrics",
     description: "The System Overview tab shows cost, latency, carbon, and orbit share. Click 'Expand Charts' to see detailed visualizations.",
-    highlight: "[data-tutorial-metrics-panel]",
     action: "View metrics in System Overview",
   },
   5: {
@@ -314,7 +313,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   }, [currentStep, isActive]);
 
 
-  // Track step 4: Auto-close menu if open to see charts clearly, and expand metrics panel
+  // Track step 4: Auto-close menu if open to see charts clearly
   useEffect(() => {
     if (currentStep === 4 && isActive) {
       // Close mobile menu if it's open
@@ -330,19 +329,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           } else {
             // Fallback: dispatch custom event to close menu
             window.dispatchEvent(new CustomEvent('close-mobile-menu'));
-          }
-        }
-      }
-      
-      // Expand metrics panel if it's collapsed
-      const metricsPanel = document.querySelector('[data-tutorial-metrics-panel]');
-      if (metricsPanel) {
-        const isCollapsed = metricsPanel.classList.contains('max-h-[60px]');
-        if (isCollapsed) {
-          // Find the collapse button and click it to expand
-          const collapseButton = metricsPanel.querySelector('button');
-          if (collapseButton) {
-            (collapseButton as HTMLElement).click();
           }
         }
       }

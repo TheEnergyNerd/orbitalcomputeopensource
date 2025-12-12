@@ -18,7 +18,6 @@ import OrbitLayer from "./OrbitLayer";
 import AiRouterPanelV2 from "./AiRouterPanelV2";
 import YearCounter from "../YearCounter";
 import MobileMenu from "../MobileMenu";
-import ScenarioMenu from "./ScenarioMenu";
 import { checkAutomaticEvents } from "../../lib/orbitSim/automaticEvents";
 import type { SurfaceType } from "../SurfaceTabs";
 import type { ComputeStrategy, LaunchStrategy, ScenarioMode } from "../../lib/orbitSim/simulationConfig";
@@ -169,10 +168,6 @@ function TopRow({
           ))}
         </div>
 
-        {/* Scenario Menu - Inside strategy card, at the bottom */}
-        <div className="mt-3 pt-3 border-t border-slate-800">
-          <ScenarioMenu />
-        </div>
       </div>
 
       {/* Right: buttons moved to YearCounter component */}
@@ -494,10 +489,6 @@ export default function SimpleModeView() {
             ))}
           </div>
 
-          {/* Scenario Menu - Inside mobile strategy card */}
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            <ScenarioMenu />
-          </div>
         </div>
 
         {/* Help Button - Below strategy card in mobile menu */}
