@@ -322,6 +322,7 @@ export function calculateYearDeployment(
     groundStations?: number;
     mooresLawDoublingYears?: number;
     launchCostPerKg?: number;
+    launchCostImprovementRate?: number; // Annual improvement rate (e.g., 0.15 = 15% per year)
     satelliteBaseCost?: number;
     processNode?: number;
     chipTdp?: number;
@@ -1024,11 +1025,17 @@ export function calculateYearDeployment(
                                    scenarioMode === "ORBITAL_BEAR" ? 500 : // Bear: $500/kg (conservative)
                                    200; // Baseline: $200/kg (standard)
   
-  const cost_per_kg_to_leo = sandboxOverrides?.launchCostPerKg ?? 
-    (base_cost_per_kg_to_leo * launchCostDeclineFactor);
-  
+  // Apply sandbox launch cost with improvement rate if provided
+  let cost_per_kg_to_leo: number;
   if (sandboxOverrides?.launchCostPerKg) {
-    console.log(`[SANDBOX OVERRIDE] Year ${year}: cost_per_kg_to_leo = ${cost_per_kg_to_leo} (sandbox override: ${sandboxOverrides.launchCostPerKg})`);
+    const baseLaunchCost = sandboxOverrides.launchCostPerKg;
+    const improvementRate = sandboxOverrides.launchCostImprovementRate ?? launchCostDeclinePerYear;
+    // Apply improvement rate: cost decreases by improvementRate each year
+    const improvementFactor = Math.pow(1 - improvementRate, yearIndex);
+    cost_per_kg_to_leo = baseLaunchCost * improvementFactor;
+    console.log(`[SANDBOX OVERRIDE] Year ${year}: cost_per_kg_to_leo = ${cost_per_kg_to_leo.toFixed(2)} (base: ${baseLaunchCost}, improvement: ${(improvementRate * 100).toFixed(1)}%/yr)`);
+  } else {
+    cost_per_kg_to_leo = base_cost_per_kg_to_leo * launchCostDeclineFactor;
   }
   const launchCostThisYearUSD = launchMassThisYearKg * cost_per_kg_to_leo;
   const avgCostPerSatelliteUSD = (costA + costB) / 2;

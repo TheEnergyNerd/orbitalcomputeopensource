@@ -262,11 +262,27 @@ const styles: Record<string, React.CSSProperties> = {
   
   header: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    gap: '16px',
     marginBottom: '32px',
     position: 'relative',
     zIndex: 1,
+  },
+  
+  headerTop: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: '12px',
+  },
+  
+  headerButtons: {
+    display: 'flex',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: '12px',
+    justifyContent: 'flex-end',
   },
   
   title: {
@@ -688,6 +704,7 @@ const calculateSafeDefaults = (year: string) => {
       launchesPerYear: 36,
       satsPerLaunch: 50,
       launchCostPerKg: 80,
+      launchCostImprovementRate: 0.15, // 15% per year improvement (similar to baseline scenario)
       satelliteBaseCost: 180000,
       // Compute / Silicon
       processNode: 5,               // 5nm - good balance of efficiency and maturity
@@ -856,61 +873,63 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
       
       {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>Physics Sandbox</h2>
-          <p style={styles.subtitle}>Stress-test the constraints. Break the physics.</p>
-          {hasSimulationStarted && (
-            <div style={{
-              marginTop: '12px',
-              padding: '12px',
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '6px',
-              fontSize: '11px',
-              color: '#ef4444',
-            }}>
-              ⚠ Simulation has started. Changes require resetting the world.
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button
-            className="physics-button"
-            onClick={resetToDefaults}
-            style={styles.button}
-            disabled={hasSimulationStarted}
-          >
-            Reset Params
-          </button>
-          {hasSimulationStarted && (
+        <div style={styles.headerTop}>
+          <div style={{ flex: '1', minWidth: '200px' }}>
+            <h2 style={styles.title}>Physics Sandbox</h2>
+            <p style={styles.subtitle}>Stress-test the constraints. Break the physics.</p>
+            {hasSimulationStarted && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                fontSize: '11px',
+                color: '#ef4444',
+              }}>
+                ⚠ Simulation has started. Changes require resetting the world.
+              </div>
+            )}
+          </div>
+          <div style={styles.headerButtons}>
             <button
               className="physics-button"
-              onClick={resetSimulation}
+              onClick={resetToDefaults}
+              style={styles.button}
+              disabled={hasSimulationStarted}
+            >
+              Reset Params
+            </button>
+            {hasSimulationStarted && (
+              <button
+                className="physics-button"
+                onClick={resetSimulation}
+                style={{
+                  ...styles.button,
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  borderColor: '#ef4444',
+                  color: '#ef4444',
+                }}
+              >
+                Reset World
+              </button>
+            )}
+            <button
+              className="physics-button"
+              onClick={handleApplyToGlobe}
+              disabled={!results.allSystemsOK}
               style={{
                 ...styles.button,
-                background: 'rgba(239, 68, 68, 0.2)',
-                borderColor: '#ef4444',
-                color: '#ef4444',
+                ...styles.buttonPrimary,
+                animation: results.allSystemsOK ? 'glow 2s ease-in-out infinite' : 'none',
+                opacity: results.allSystemsOK ? 1 : 0.5,
+                cursor: results.allSystemsOK ? 'pointer' : 'not-allowed',
               }}
+              title={!results.allSystemsOK ? 'Fix physics constraints before deploying' : 'Apply parameters to simulation'}
             >
-              Reset World
+              View on Globe →
             </button>
-          )}
-          <button
-            className="physics-button"
-            onClick={handleApplyToGlobe}
-            disabled={!results.allSystemsOK}
-            style={{
-              ...styles.button,
-              ...styles.buttonPrimary,
-              animation: results.allSystemsOK ? 'glow 2s ease-in-out infinite' : 'none',
-              opacity: results.allSystemsOK ? 1 : 0.5,
-              cursor: results.allSystemsOK ? 'pointer' : 'not-allowed',
-            }}
-            title={!results.allSystemsOK ? 'Fix physics constraints before deploying' : 'Apply parameters to simulation'}
-          >
-            View on Globe →
-          </button>
+          </div>
         </div>
       </div>
 
