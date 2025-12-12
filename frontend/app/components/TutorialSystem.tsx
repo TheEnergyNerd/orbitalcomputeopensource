@@ -21,6 +21,7 @@ interface TutorialStepConfig {
   requiresFuturesTab?: boolean; // Whether this step requires switching to futures tab
   requiresConstraintsTab?: boolean; // Whether this step requires switching to constraints tab
   requiresPhysicsTab?: boolean; // Whether this step requires switching to physics tab
+  requiresCalculatorTab?: boolean; // Whether this step requires switching to calculator tab
   interactionTime?: number; // Time in ms to allow user interaction before auto-advancing
   allowGlobeClicks?: boolean; // Allow clicks on globe elements during this step
 }
@@ -78,6 +79,13 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
     action: "Switch to Physics & Limits tab",
     requiresPhysicsTab: true,
   },
+  9: {
+    title: "Physics Sandbox",
+    description: "Switch to Sandbox tab to adjust physics parameters like radiator area, emissivity, optical terminals, and more. See how changes affect the simulation.",
+    highlight: "[data-tutorial-calculator-tab]",
+    action: "Switch to Sandbox tab",
+    requiresCalculatorTab: true,
+  },
 };
 
 export default function TutorialSystem({ activeSurface, onSurfaceChange }: TutorialSystemProps) {
@@ -93,6 +101,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   const [step6FuturesTabClicked, setStep6FuturesTabClicked] = useState(false);
   const [step7ConstraintsTabClicked, setStep7ConstraintsTabClicked] = useState(false);
   const [step8PhysicsTabClicked, setStep8PhysicsTabClicked] = useState(false);
+  const [step9CalculatorTabClicked, setStep9CalculatorTabClicked] = useState(false);
   
   // Track if tutorial should be temporarily hidden (for step 2)
   const [tutorialHidden, setTutorialHidden] = useState(false);
@@ -136,6 +145,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     if (currentStep === 6) return step6FuturesTabClicked;
     if (currentStep === 7) return step7ConstraintsTabClicked;
     if (currentStep === 8) return step8PhysicsTabClicked;
+    if (currentStep === 9) return step9CalculatorTabClicked;
     return true;
   })();
 
@@ -254,6 +264,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     if (currentStep !== 6) setStep6FuturesTabClicked(false);
     if (currentStep !== 7) setStep7ConstraintsTabClicked(false);
     if (currentStep !== 8) setStep8PhysicsTabClicked(false);
+    if (currentStep !== 9) setStep9CalculatorTabClicked(false);
     setTutorialHidden(false);
   }, [currentStep]);
 
@@ -303,7 +314,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   }, [currentStep, isActive]);
 
 
-  // Track step 4: Auto-close menu if open to see charts clearly
+  // Track step 4: Auto-close menu if open to see charts clearly, and expand metrics panel
   useEffect(() => {
     if (currentStep === 4 && isActive) {
       // Close mobile menu if it's open
@@ -319,6 +330,19 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           } else {
             // Fallback: dispatch custom event to close menu
             window.dispatchEvent(new CustomEvent('close-mobile-menu'));
+          }
+        }
+      }
+      
+      // Expand metrics panel if it's collapsed
+      const metricsPanel = document.querySelector('[data-tutorial-metrics-panel]');
+      if (metricsPanel) {
+        const isCollapsed = metricsPanel.classList.contains('max-h-[60px]');
+        if (isCollapsed) {
+          // Find the collapse button and click it to expand
+          const collapseButton = metricsPanel.querySelector('button');
+          if (collapseButton) {
+            (collapseButton as HTMLElement).click();
           }
         }
       }
@@ -410,6 +434,20 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive, activeSurface]);
 
+  // Handle step 8 - switch to physics tab
+  useEffect(() => {
+    if (currentStep === 8 && isActive) {
+      const stepConfig = TUTORIAL_STEPS[8];
+      
+      if (stepConfig?.requiresPhysicsTab && activeSurface !== "physics") {
+        onSurfaceChange("physics");
+        setTimeout(() => setStep8PhysicsTabClicked(true), 100);
+      } else if (activeSurface === "physics") {
+        setStep8PhysicsTabClicked(true);
+      }
+    }
+  }, [currentStep, isActive, activeSurface, onSurfaceChange]);
+
   // Track step 8: Physics tab clicked
   useEffect(() => {
     if (currentStep === 8 && isActive) {
@@ -431,10 +469,38 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive, activeSurface]);
   
-  // Track when activeSurface changes to "physics" during step 8
+  // Handle step 9 - switch to calculator tab
   useEffect(() => {
-    if (currentStep === 8 && isActive && activeSurface === "physics") {
-      setStep8PhysicsTabClicked(true);
+    if (currentStep === 9 && isActive) {
+      const stepConfig = TUTORIAL_STEPS[9];
+      
+      if (stepConfig?.requiresCalculatorTab && activeSurface !== "calculator") {
+        onSurfaceChange("calculator");
+        setTimeout(() => setStep9CalculatorTabClicked(true), 100);
+      } else if (activeSurface === "calculator") {
+        setStep9CalculatorTabClicked(true);
+      }
+    }
+  }, [currentStep, isActive, activeSurface, onSurfaceChange]);
+
+  // Track step 9: Calculator tab clicked
+  useEffect(() => {
+    if (currentStep === 9 && isActive) {
+      const handleTabClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-tutorial-calculator-tab]')) {
+          setStep9CalculatorTabClicked(true);
+        }
+      };
+      document.addEventListener('click', handleTabClick, true);
+      
+      if (activeSurface === "calculator") {
+        setStep9CalculatorTabClicked(true);
+      }
+      
+      return () => {
+        document.removeEventListener('click', handleTabClick, true);
+      };
     }
   }, [currentStep, isActive, activeSurface]);
 
@@ -457,12 +523,12 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           background: highlightRect
             ? `radial-gradient(ellipse ${highlightRect.width}px ${highlightRect.height}px at ${highlightRect.left + highlightRect.width / 2}px ${highlightRect.top + highlightRect.height / 2}px, transparent 40%, rgba(0, 0, 0, 0.85) 70%)`
             : "rgba(0, 0, 0, 0.85)",
-          pointerEvents: (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8) ? 'none' : 'auto', // Allow clicks through during interactive steps
+          pointerEvents: (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8 || currentStep === 9) ? 'none' : 'auto', // Allow clicks through during interactive steps
           display: currentStep === 5 ? 'none' : 'block', // CRITICAL: Hide overlay completely for step 5 to ensure tabs are clickable
         }}
         onClick={(e) => {
           // For interactive steps, don't block clicks - let them pass through
-          if (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8) {
+          if (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8 || currentStep === 9) {
             return;
           }
           // Allow clicks to pass through to highlighted elements
@@ -514,7 +580,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
           <div className="flex items-start justify-between p-4 sm:p-6 pb-2 sm:pb-4 flex-shrink-0 sticky top-0 bg-gray-900 z-10 border-b border-cyan-500/30 sm:border-b-0">
             <div className="flex-1 pr-2">
               <div className="text-xs text-cyan-400 mb-1">
-                Step {typeof currentStep === "number" ? currentStep : "Complete"} of 8
+                Step {typeof currentStep === "number" ? currentStep : "Complete"} of 9
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white">{stepConfig.title}</h3>
             </div>
@@ -564,7 +630,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
                 !canProceed ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {currentStep === 8 ? "Finish" : "Next"}
+              {currentStep === 9 ? "Finish" : "Next"}
             </button>
           </div>
         </div>

@@ -312,8 +312,35 @@ export function calculateYearDeployment(
   let modifiedBusPhysicsA: BusPhysicsOutputs = placeholderBus;
   let modifiedBusPhysicsB: BusPhysicsOutputs = placeholderBus;
   
-  // PHYSICS STANDARDIZATION: All scenarios use the same physical chassis (ORBITAL_BULL model)
-  // Only economics, reliability, and carbon differ between scenarios
+  type SandboxOverrides = {
+    radiatorArea_m2?: number;
+    emissivity?: number;
+    busPowerKw?: number;
+    radiatorTempC?: number;
+    opticalTerminals?: number;
+    linkCapacityGbps?: number;
+    groundStations?: number;
+    mooresLawDoublingYears?: number;
+    launchCostPerKg?: number;
+    satelliteBaseCost?: number;
+    processNode?: number;
+    chipTdp?: number;
+    radiationHardening?: number;
+    memoryPerNode?: number;
+    solarEfficiency?: number;
+    degradationRate?: number;
+    batteryBuffer?: number;
+    powerMargin?: number;
+    batteryDensity?: number;
+    batteryCost?: number;
+  };
+  let sandboxOverrides: SandboxOverrides | null = null;
+  if (typeof window !== 'undefined') {
+    const params = (window as { __physicsSandboxParams?: { physicsOverrides?: SandboxOverrides } }).__physicsSandboxParams;
+    if (params?.physicsOverrides) {
+      sandboxOverrides = params.physicsOverrides;
+    }
+  }
   const baseMassPerSatKg = 1500.0;
   const basePowerPerSatKw = 100.0;
   const baseComputeTflopsPerSat = 50.0;
@@ -321,12 +348,17 @@ export function calculateYearDeployment(
   powerGrowthPerYear = 0.1;
   const massPowerGrowthFactor = Math.pow(1.1, yearIndex);
   // FIX: Accelerate compute deflation - change from 1.45x to 1.6x for ORBITAL_BULL
-  const computeGrowthFactor = scenarioMode === "ORBITAL_BULL" 
-    ? Math.pow(1.6, yearIndex) // 60% annual growth for BULL scenario
-    : Math.pow(1.45, yearIndex); // 45% for others
+  // Use sandbox Moore's Law if available
+  const mooresLawDoublingYears = sandboxOverrides?.mooresLawDoublingYears ?? 2.5;
+  const computeGrowthFactor = sandboxOverrides 
+    ? Math.pow(2, yearIndex / mooresLawDoublingYears) // Use sandbox Moore's Law
+    : (scenarioMode === "ORBITAL_BULL" 
+      ? Math.pow(1.6, yearIndex) // 60% annual growth for BULL scenario
+      : Math.pow(1.45, yearIndex)); // 45% for others
   
   const massPerSatKg = Math.min(baseMassPerSatKg * massPowerGrowthFactor, 5000.0);
-  const powerPerSatKw = Math.min(basePowerPerSatKw * massPowerGrowthFactor, 1000.0);
+  // Use sandbox power if available, otherwise calculate normally
+  const powerPerSatKw = sandboxOverrides?.busPowerKw ?? Math.min(basePowerPerSatKw * massPowerGrowthFactor, 1000.0);
   const computeTflopsPerSat = baseComputeTflopsPerSat * computeGrowthFactor;
   
   physicsMassPerSatelliteKgA = massPerSatKg;
@@ -338,9 +370,23 @@ export function calculateYearDeployment(
   // FIX #2: Radiator sizing using realistic flux limit (0.3 kW/m² for 300K radiator)
   // FIX: 85% of bus power becomes heat (15% is electrical losses)
   const heatGenPerSatKw = powerPerSatKw * 0.85; // 85% of power becomes heat
-  const RADIATOR_FLUX_LIMIT_KW_PER_M2 = 0.3;
+  
+  // Calculate radiator capacity per m² from sandbox if available
+  let RADIATOR_FLUX_LIMIT_KW_PER_M2 = 0.3; // Default
+  if (sandboxOverrides) {
+    const STEFAN_BOLTZMANN = 5.67e-8;
+    const T_SINK = 200; // K (deep space)
+    const emissivity = sandboxOverrides.emissivity ?? 0.9;
+    const T_rad_K = (sandboxOverrides.radiatorTempC ?? 70) + 273.15;
+    const heatRejectionPerM2_W = emissivity * STEFAN_BOLTZMANN * 
+      (Math.pow(T_rad_K, 4) - Math.pow(T_SINK, 4));
+    RADIATOR_FLUX_LIMIT_KW_PER_M2 = heatRejectionPerM2_W / 1000; // Convert to kW
+  }
+  
   const safety_margin = 1.2;
-  modifiedRadiatorAreaPerSat = (heatGenPerSatKw / RADIATOR_FLUX_LIMIT_KW_PER_M2) * safety_margin;
+  // Use sandbox radiator area if specified, otherwise calculate
+  modifiedRadiatorAreaPerSat = sandboxOverrides?.radiatorArea_m2 ?? 
+    ((heatGenPerSatKw / RADIATOR_FLUX_LIMIT_KW_PER_M2) * safety_margin);
   
   // Calculate solar array mass: ~5 kg/kW (200 W/kg specific power)
   // This matches the designBus.ts calculation: SOLAR_SPECIFIC_MASS_KG_PER_KW = 5
@@ -382,8 +428,9 @@ export function calculateYearDeployment(
   
   const physicsComputePFLOPsDerated = physicsComputeTflopsDerated * 1e3;
   
-  const powerPerA = physicsPowerPerSatelliteKw;
-  const powerPerB = physicsPowerPerSatelliteKw;
+  // Use sandbox power if available (sandboxOverrides already declared above)
+  const powerPerA = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
+  const powerPerB = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
   
   const computePerA_physics = physicsComputePFLOPsDerated;
   const computePerB_physics = physicsComputePFLOPsDerated;
@@ -485,20 +532,48 @@ export function calculateYearDeployment(
       orbitalShell: dominantShell,
     };
   } else {
+    // Check for physics sandbox overrides
+    let sandboxOverrides: any = null;
+    if (typeof window !== 'undefined' && (window as any).__physicsSandboxParams?.physicsOverrides) {
+      sandboxOverrides = (window as any).__physicsSandboxParams.physicsOverrides;
+    }
+    
+    // Use sandbox overrides if available, otherwise use defaults
+    const emissivity = sandboxOverrides?.emissivity ?? 0.9;
+    const temp_core_C = sandboxOverrides?.radiatorTempC ?? 70;
+    
+    // Calculate radiator_kw_per_m2 from sandbox params if available
+    // Using Stefan-Boltzmann: q = εσ(T⁴ - T_sink⁴)
+    let radiator_kw_per_m2 = 0.3; // Default
+    if (sandboxOverrides) {
+      const STEFAN_BOLTZMANN = 5.67e-8;
+      const T_SINK = 200; // K (deep space)
+      const T_rad_K = (sandboxOverrides.radiatorTempC || temp_core_C) + 273.15;
+      const heatRejectionPerM2_W = emissivity * STEFAN_BOLTZMANN * 
+        (Math.pow(T_rad_K, 4) - Math.pow(T_SINK, 4));
+      radiator_kw_per_m2 = heatRejectionPerM2_W / 1000; // Convert to kW
+    }
+    
+    // Override radiator area if sandbox specifies it
+    const effectiveRadiatorArea = sandboxOverrides?.radiatorArea_m2 ?? radiatorArea_m2;
+    
+    // Override power if sandbox specifies it (but keep compute calculation)
+    const effectivePowerKw = sandboxOverrides?.busPowerKw ?? power_total_kw;
+    
     physicsState = createPhysicsState(
-      power_total_kw,
+      effectivePowerKw,
       compute_raw_flops,
-      radiatorArea_m2,
+      effectiveRadiatorArea,
       backhaul_capacity_tbps,
       maintenance_capacity_pods,
       {
         electrical_efficiency: 0.85,
-        radiator_kw_per_m2: 0.3, // FIX #2: Realistic flux limit (0.3 kW/m² for 300K radiator)
-        emissivity: 0.9,
+        radiator_kw_per_m2: radiator_kw_per_m2,
+        emissivity: emissivity,
         eclipse_fraction: 0.1,
         shadowing_loss: 0.05,
         thermal_mass_J_per_C: 2e6,
-        temp_core_C: 70,
+        temp_core_C: temp_core_C,
         auto_design_mode: false,
         risk_mode: "SAFE",
       }
@@ -764,8 +839,9 @@ export function calculateYearDeployment(
   // Launch: launch_cost_per_kg × (battery_mass + radiator_mass)
   const BATTERY_COST_PER_KWH = 1000; // $/kWh
   const RADIATOR_COST_PER_KG = 500; // $/kg
-  // Note: launch_cost_per_kg will be defined later, use base cost for now
-  const BASE_LAUNCH_COST_PER_KG = 200; // $/kg (Starship optimistic)
+  // Note: Use sandbox override if available, otherwise use base cost
+  // The actual cost_per_kg_to_leo is calculated later and will also respect sandbox override
+  const BASE_LAUNCH_COST_PER_KG = sandboxOverrides?.launchCostPerKg ?? 200; // $/kg (Starship optimistic)
   
   // Calculate battery capacity from mass (200 Wh/kg = 0.2 kWh/kg)
   const batteryMassA_kg = scenarioMode === "ORBITAL_BULL"
@@ -948,11 +1024,12 @@ export function calculateYearDeployment(
                                    scenarioMode === "ORBITAL_BEAR" ? 500 : // Bear: $500/kg (conservative)
                                    200; // Baseline: $200/kg (standard)
   
-  // Scenario-dependent launch cost decline (already using scenarioParams.launchCostDeclinePerYear)
-  const cost_per_kg_to_leo =
-    base_cost_per_kg_to_leo * launchCostDeclineFactor;
+  const cost_per_kg_to_leo = sandboxOverrides?.launchCostPerKg ?? 
+    (base_cost_per_kg_to_leo * launchCostDeclineFactor);
   
-  // Launch and replacement (only this year's launches)
+  if (sandboxOverrides?.launchCostPerKg) {
+    console.log(`[SANDBOX OVERRIDE] Year ${year}: cost_per_kg_to_leo = ${cost_per_kg_to_leo} (sandbox override: ${sandboxOverrides.launchCostPerKg})`);
+  }
   const launchCostThisYearUSD = launchMassThisYearKg * cost_per_kg_to_leo;
   const avgCostPerSatelliteUSD = (costA + costB) / 2;
   const replacementCostUSD = replacementCadence * avgCostPerSatelliteUSD;

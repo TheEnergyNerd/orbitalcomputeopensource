@@ -97,9 +97,16 @@ export default function CarbonRiver({
 
     // Add axes
     const xAxis = d3.axisBottom(xScale)
-      .tickFormat(d => `${d}`);
+      .tickFormat(d => `${Math.round(Number(d))}`)
+      .ticks(isMobile ? 5 : 10);
+    const formatYAxis = (d: d3.NumberValue) => {
+      const val = Number(d);
+      if (val >= 1e6) return `${(val / 1e6).toFixed(1)}T`;
+      if (val >= 1e3) return `${(val / 1e3).toFixed(1)}k`;
+      return `${val.toFixed(0)}`;
+    };
     const yAxis = d3.axisLeft(yScale)
-      .tickFormat(d => `${d} kt`);
+      .tickFormat(formatYAxis);
 
     const xAxisGroup = g.append("g")
       .attr("transform", `translate(0,${innerHeight})`)

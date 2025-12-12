@@ -24,7 +24,6 @@ import Futures3DScene from "../futures/Futures3DScene";
 import FleetGrowthChart from "./FleetGrowthChart";
 import CostCrossoverChart from "./CostCrossoverChart";
 import ComputeEfficiencyChart from "./ComputeEfficiencyChart";
-import { ExportAllChartsButton } from "./ChartExportButton";
 
 /**
  * Futures (Scenarios) View
@@ -68,9 +67,6 @@ export default function ScenariosView() {
         <div>
           <h1 className="text-lg sm:text-xl font-bold text-white mb-2">Futures (Scenarios)</h1>
           <p className="text-xs sm:text-sm text-slate-400">How do baseline, bear, and bull scenarios diverge?</p>
-        </div>
-        <div className="flex-shrink-0">
-          <ExportAllChartsButton />
         </div>
       </div>
 

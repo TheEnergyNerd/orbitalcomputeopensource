@@ -19,7 +19,6 @@ import DualClassStackChart from "./DualClassStackChart";
 import { getStrategyByYear } from "./SimpleModeView";
 import MassEfficiencyWaterfall from "./MassEfficiencyWaterfall";
 import MooresLawOfMass from "./MooresLawOfMass";
-import { ExportAllChartsButton } from "./ChartExportButton";
 
 /**
  * Physics & Limits View
@@ -53,7 +52,6 @@ export default function PhysicsEngineeringView() {
           <p className="text-xs sm:text-sm text-slate-400">What does the actual physics look like?</p>
         </div>
         <div className="flex-shrink-0">
-          <ExportAllChartsButton />
         </div>
       </div>
 

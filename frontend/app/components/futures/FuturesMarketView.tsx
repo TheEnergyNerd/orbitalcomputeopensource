@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import FuturesConeVisualization from './FuturesConeVisualization';
 import { useSimulationStore } from '@/app/store/simulationStore';
 import type { StrategyId } from '@/app/lib/futures/types';
-import { ExportAllChartsButton } from '../orbitSim/ChartExportButton';
 
 export default function FuturesMarketView() {
   const [activeType, setActiveType] = useState<'orbit' | 'ground' | 'both'>('both');
@@ -119,10 +118,6 @@ export default function FuturesMarketView() {
             ))}
           </div>
           
-          {/* Export all charts button */}
-          <div className="flex-shrink-0">
-            <ExportAllChartsButton />
-          </div>
           
           {/* Run futures button */}
           <button

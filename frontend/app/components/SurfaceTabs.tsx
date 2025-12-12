@@ -2,7 +2,7 @@
 
 import { useTutorialStore } from "../store/tutorialStore";
 
-export type SurfaceType = "overview" | "world" | "futures" | "constraints" | "physics";
+export type SurfaceType = "overview" | "world" | "futures" | "constraints" | "physics" | "calculator";
 
 interface SurfaceTabsProps {
   activeSurface: SurfaceType;
@@ -24,29 +24,31 @@ export default function SurfaceTabs({ activeSurface, onSurfaceChange }: SurfaceT
       </button>
       <button
         onClick={() => onSurfaceChange("overview")}
-        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[8px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
           activeSurface === "overview"
             ? "bg-cyan-500 text-white"
             : "text-gray-400 hover:text-white"
         }`}
       >
-        SYSTEM OVERVIEW
+        <span className="sm:hidden">SYSTEM</span>
+        <span className="hidden sm:inline">SYSTEM OVERVIEW</span>
       </button>
       <button
         onClick={() => onSurfaceChange("world")}
         data-tutorial-world-tab
-        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[8px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
           activeSurface === "world"
             ? "bg-cyan-500 text-white"
             : "text-gray-400 hover:text-white"
         }`}
       >
-        WORLD VIEW
+        <span className="sm:hidden">WORLD</span>
+        <span className="hidden sm:inline">WORLD VIEW</span>
       </button>
       <button
         onClick={() => onSurfaceChange("futures")}
         data-tutorial-futures-tab
-        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[8px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
           activeSurface === "futures"
             ? "bg-cyan-500 text-white"
             : "text-gray-400 hover:text-white"
@@ -57,24 +59,38 @@ export default function SurfaceTabs({ activeSurface, onSurfaceChange }: SurfaceT
       <button
         onClick={() => onSurfaceChange("constraints")}
         data-tutorial-constraints-tab
-        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[8px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
           activeSurface === "constraints"
             ? "bg-cyan-500 text-white"
             : "text-gray-400 hover:text-white"
         }`}
       >
-        CONSTRAINTS & RISK
+        <span className="sm:hidden">CONSTRAINTS</span>
+        <span className="hidden sm:inline">CONSTRAINTS & RISK</span>
       </button>
       <button
         onClick={() => onSurfaceChange("physics")}
         data-tutorial-physics-tab
-        className={`px-2 sm:px-4 py-1.5 sm:py-2 text-[8px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
           activeSurface === "physics"
             ? "bg-cyan-500 text-white"
             : "text-gray-400 hover:text-white"
         }`}
       >
-        PHYSICS & LIMITS
+        <span className="sm:hidden">PHYSICS</span>
+        <span className="hidden sm:inline">PHYSICS & LIMITS</span>
+      </button>
+      <button
+        onClick={() => onSurfaceChange("calculator")}
+        data-tutorial-calculator-tab
+        className={`px-1.5 sm:px-4 py-1.5 sm:py-2 text-[7px] sm:text-xs font-semibold rounded transition whitespace-nowrap ${
+          activeSurface === "calculator"
+            ? "bg-cyan-500 text-white"
+            : "text-gray-400 hover:text-white"
+        }`}
+      >
+        <span className="sm:hidden">SANDBOX</span>
+        <span className="hidden sm:inline">SANDBOX</span>
       </button>
     </div>
   );

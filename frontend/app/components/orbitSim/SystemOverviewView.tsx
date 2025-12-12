@@ -9,7 +9,6 @@ import PowerComputeFrontier from "./PowerComputeFrontier";
 import CostComputeChart from "./CostComputeChart";
 import LatencyChart from "./LatencyChart";
 import CrossoverChart from "./CrossoverChart";
-import { ExportAllChartsButton } from "./ChartExportButton";
 
 export default function SystemOverviewView() {
   const { timeline, yearPlans, config } = useSimulationStore();

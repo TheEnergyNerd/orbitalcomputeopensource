@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { getDebugStateEntries, scenarioModeToKey } from "../../lib/orbitSim/debugState";
 import type { YearStep } from "../../lib/orbitSim/simulationConfig";
 
@@ -22,64 +22,79 @@ const Sparkline = ({
   groundColor?: string; 
   mixColor?: string;
 }) => {
-  const height = 60;
-  const width = 100; // Use percentage-based width
-  const padding = 4;
+  const height = 80;  // Taller for better visibility
+  const width = 280;
+  const padding = 8;
   
-  // Combine all values to get scale (allow zeros but filter null/NaN)
-  const allValues = [...groundData, ...mixData].filter(v => v != null && !isNaN(v));
-  if (allValues.length === 0) return <svg width="100%" height={height} style={{ display: 'block' }} />;
+  // Filter valid values
+  const validGround = groundData.filter(v => v != null && !isNaN(v) && isFinite(v));
+  const validMix = mixData.filter(v => v != null && !isNaN(v) && isFinite(v));
   
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
-  // Add padding only if there's actual range
-  const range = max - min;
-  const padding = range > 0 ? range * 0.1 : Math.max(1, max * 0.1); // 10% padding, or 10% of max if all values are the same
-  const scaledMin = Math.max(0, min - padding); // Don't go below 0 for display
-  const scaledMax = max + padding;
-  const scaledRange = scaledMax - scaledMin || 1;
+  // If no valid data, show placeholder
+  if (validGround.length === 0 && validMix.length === 0) {
+    return (
+      <svg width={width} height={height} style={{ display: 'block' }}>
+        <text x={width/2} y={height/2} textAnchor="middle" fill="#64748b" fontSize="12">No data</text>
+      </svg>
+    );
+  }
   
-  // Convert data to SVG path using percentage-based coordinates
+  // Calculate scale from all values
+  const allValues = [...validGround, ...validMix];
+  const dataMin = Math.min(...allValues);
+  const dataMax = Math.max(...allValues);
+  
+  // Add padding to range so lines don't touch edges
+  // Also ensure minimum range so close values are still visible
+  const dataRange = dataMax - dataMin;
+  const minRange = dataMax * 0.2; // At least 20% of max value as range
+  const effectiveRange = Math.max(dataRange, minRange);
+  const rangePadding = effectiveRange * 0.15;
+  
+  const min = dataMin - rangePadding;
+  const max = dataMax + rangePadding;
+  const range = max - min || 1;
+  
+  // Convert data to SVG path
   const toPath = (data: number[]) => {
     if (data.length === 0) return '';
-    const points = data.map((v, i) => {
-      const xPercent = padding + (i / Math.max(1, data.length - 1)) * (100 - padding * 2);
-      // Normalize value to scaled range
-      const normalized = (v - scaledMin) / scaledRange;
-      const yPercent = 100 - padding - normalized * (100 - padding * 2);
-      return `${xPercent},${yPercent}`;
+    const filtered = data.filter(v => v != null && !isNaN(v) && isFinite(v));
+    if (filtered.length === 0) return '';
+    
+    const points = filtered.map((v, i) => {
+      const x = padding + (i / Math.max(1, filtered.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((v - min) / range) * (height - padding * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
     return `M ${points.join(' L ')}`;
   };
 
-  // Debug: log data if empty or suspicious
-  if (allValues.length === 0 || (mixData.length > 0 && mixData.every(v => v === 0))) {
-    console.warn('[Sparkline] Empty or zero data:', { groundData, mixData, allValues });
-  }
+  const groundPath = toPath(groundData);
+  const mixPath = toPath(mixData);
 
   return (
-    <svg width="100%" height={height} style={{ display: 'block' }} viewBox="0 0 100 60" preserveAspectRatio="none">
-      {/* Ground line - dashed */}
-      {groundData.length > 0 && groundData.some(v => v != null && !isNaN(v)) && (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      {/* Ground line - dashed red */}
+      {groundPath && (
         <path
-          d={toPath(groundData)}
+          d={groundPath}
           fill="none"
           stroke={groundColor}
-          strokeWidth="1.5"
-          strokeDasharray="3 2"
+          strokeWidth="2"
+          strokeDasharray="6 4"
           strokeLinecap="round"
-          strokeOpacity="0.8"
+          strokeLinejoin="round"
         />
       )}
-      {/* Mix line - solid */}
-      {mixData.length > 0 && mixData.some(v => v != null && !isNaN(v)) && (
+      {/* Mix line - solid green (drawn on top) */}
+      {mixPath && (
         <path
-          d={toPath(mixData)}
+          d={mixPath}
           fill="none"
           stroke={mixColor}
-          strokeWidth="2"
+          strokeWidth="3"
           strokeLinecap="round"
-          strokeOpacity="1"
+          strokeLinejoin="round"
         />
       )}
     </svg>
@@ -95,8 +110,8 @@ const MetricCard = ({
   sparkMix, 
   savings, 
   unit = '' 
-}: { 
-  title: string; 
+}: {
+  title: string;
   groundValue: string; 
   mixValue: string; 
   sparkGround: number[]; 
@@ -107,47 +122,92 @@ const MetricCard = ({
   const savingsPositive = savings > 0;
   
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 to-slate-800/80 p-5 w-full">
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8))',
+      border: '1px solid rgba(0, 240, 255, 0.2)',
+      borderRadius: '12px',
+      padding: '20px',
+      minWidth: '320px',
+    }}>
       {/* Title */}
-      <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">
+      <div style={{
+        color: '#94a3b8',
+        fontSize: '13px',
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: '12px',
+      }}>
         {title}
       </div>
       
       {/* Sparkline */}
-      <div className="mb-4">
+      <div style={{ marginBottom: '16px' }}>
         <Sparkline groundData={sparkGround} mixData={sparkMix} />
       </div>
       
       {/* Values row */}
-      <div className="flex justify-between items-end gap-4">
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        gap: '16px',
+      }}>
         {/* Ground */}
         <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-4 h-0.5 bg-red-500 rounded" />
-            <span className="text-slate-500 text-[11px]">Ground</span>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            marginBottom: '4px',
+          }}>
+            <div style={{
+              width: '20px',
+              height: '2px',
+              background: '#ef4444',
+              borderRadius: '1px',
+              opacity: 0.8,
+            }} />
+            <span style={{ color: '#64748b', fontSize: '11px' }}>Ground</span>
           </div>
-          <div className="text-red-500 text-lg font-semibold">
-            {groundValue}{unit}
+          <div style={{ color: '#ef4444', fontSize: '20px', fontWeight: 600, fontFamily: 'monospace' }}>
+            {groundValue}
           </div>
         </div>
         
         {/* Mix */}
-        <div className="text-center">
-          <div className="flex items-center gap-1.5 mb-1 justify-center">
-            <div className="w-4 h-0.5 bg-green-500 rounded" />
-            <span className="text-slate-500 text-[11px]">Mix</span>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            marginBottom: '4px',
+            justifyContent: 'center',
+          }}>
+            <div style={{
+              width: '20px',
+              height: '3px',
+              background: '#10b981',
+              borderRadius: '1px',
+            }} />
+            <span style={{ color: '#64748b', fontSize: '11px' }}>Mix</span>
           </div>
-          <div className="text-green-500 text-lg font-semibold">
-            {mixValue}{unit}
+          <div style={{ color: '#10b981', fontSize: '20px', fontWeight: 600, fontFamily: 'monospace' }}>
+            {mixValue}
           </div>
         </div>
         
         {/* Savings */}
-        <div className="text-right">
-          <div className="text-slate-500 text-[11px] mb-1">
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ color: '#64748b', fontSize: '11px', marginBottom: '4px' }}>
             Savings
           </div>
-          <div className={`text-base font-semibold ${savingsPositive ? 'text-green-500' : 'text-red-500'}`}>
+          <div style={{ 
+            color: savingsPositive ? '#10b981' : '#ef4444', 
+            fontSize: '18px', 
+            fontWeight: 600,
+            fontFamily: 'monospace',
+          }}>
             {savingsPositive ? '↓' : '↑'} {Math.abs(savings).toFixed(0)}%
           </div>
         </div>
@@ -157,155 +217,191 @@ const MetricCard = ({
 };
 
 // Format helpers
-const formatCost = (v: number) => `$${v.toFixed(0)}`;
-const formatLatency = (v: number) => `${v.toFixed(0)}`;
-const formatOpex = (v: number) => `$${(v / 1e6).toFixed(0)}`;
-const formatCarbon = (v: number) => {
-  // v is in kg, convert to tons
-  const tons = v / 1000;
-  if (tons >= 1e12) return `${(tons / 1e12).toFixed(1)}T`;
-  if (tons >= 1e9) return `${(tons / 1e9).toFixed(0)}B`;
-  if (tons >= 1e6) return `${(tons / 1e6).toFixed(0)}M`;
-  if (tons >= 1e3) return `${(tons / 1e3).toFixed(0)}k`;
-  return `${tons.toFixed(0)}`;
+const formatCost = (v: number | null | undefined) => {
+  if (v == null || isNaN(v)) return '$--';
+  return `$${v.toFixed(0)}/PFLOP`;
 };
 
-/**
- * SimulationMetrics - Clean sparkline cards for key metrics
- * Replaces the old MetricsGrid with a simpler, more compact design
- */
+const formatLatency = (v: number | null | undefined) => {
+  if (v == null || isNaN(v)) return '--ms';
+  return `${v.toFixed(0)}ms`;
+};
+
+const formatOpex = (v: number | null | undefined) => {
+  if (v == null || isNaN(v)) return '$--';
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}k`;
+  return `$${v.toFixed(0)}`;
+};
+
+const formatCarbon = (v: number | null | undefined) => {
+  if (v == null || isNaN(v)) return '--';
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}T tCO₂`;
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B tCO₂`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(0)}M tCO₂`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k tCO₂`;
+  return `${v.toFixed(0)} tCO₂`;
+};
+
+// Safe number helper
+const safeNum = (v: number | null | undefined, fallback = 0) => {
+  if (v == null || isNaN(v) || !isFinite(v)) return fallback;
+  return v;
+};
+
+// Main component
 export default function SimulationMetrics({ 
   timeline, 
   scenarioMode, 
   currentYear 
 }: SimulationMetricsProps) {
   const scenarioKey = scenarioModeToKey(scenarioMode);
+  const [sandboxParams, setSandboxParams] = useState<unknown>(null);
+  
+  useEffect(() => {
+    const checkSandbox = () => {
+      if (typeof window !== 'undefined') {
+        setSandboxParams((window as { __physicsSandboxParams?: unknown }).__physicsSandboxParams || null);
+      }
+    };
+    checkSandbox();
+    const interval = setInterval(checkSandbox, 100);
+    window.addEventListener('physics-sandbox-applied', checkSandbox);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('physics-sandbox-applied', checkSandbox);
+    };
+  }, []);
+  
+  // Force re-render when timeline changes by using timeline length as a dependency
+  const timelineLength = timeline.length;
+  const lastTimelineYear = timeline.length > 0 ? timeline[timeline.length - 1]?.year : null;
+  
   const entries = useMemo(() => {
     return getDebugStateEntries(scenarioKey).sort((a, b) => a.year - b.year);
-  }, [scenarioKey]);
+  }, [scenarioKey, sandboxParams, timelineLength, lastTimelineYear, currentYear]);
 
-  // Extract time series for sparklines - ensure data is aligned by year
+  // Extract time series for sparklines
   const years = entries.map(e => e.year);
   
-  const costGround = entries.map(e => e.cost_per_compute_ground ?? 0);
-  const costMix = entries.map(e => e.cost_per_compute_mix ?? 0);
-  
-  // Latency from timeline (not in debug state) - align with entries by year
-  const latencyGround = entries.map(e => {
-    const timelineStep = timeline.find(s => s.year === e.year);
-    return timelineStep?.latencyGroundMs ?? 120;
+  const costGround = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.cost_per_compute_ground);
   });
-  const latencyMix = entries.map(e => {
-    const timelineStep = timeline.find(s => s.year === e.year);
-    return timelineStep?.latencyMixMs ?? 120;
+  const costMix = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.cost_per_compute_mix);
   });
   
-  // OPEX: Use all-ground baseline for ground, mix for actual
-  const opexGround = entries.map(e => {
-    const val = e.annual_opex_ground_all_ground ?? e.annual_opex_ground ?? 0;
-    return val;
+  const latencyGround = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    const timelineStep = timeline.find(s => s.year === y);
+    return safeNum(timelineStep?.latencyGroundMs ?? entry?.latency_ground_ms);
   });
-  const opexMix = entries.map(e => {
-    const val = e.annual_opex_mix ?? 0;
-    return val;
+  const latencyMix = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    const timelineStep = timeline.find(s => s.year === y);
+    return safeNum(timelineStep?.latencyMixMs ?? entry?.latency_mix_ms);
+  });
+  
+  const opexGround = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.annual_opex_ground_all_ground ?? entry?.annual_opex_ground);
+  });
+  const opexMix = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.annual_opex_mix);
   });
   
   // Carbon: Ground should be "all ground" counterfactual, Mix should be actual
-  const carbonGround = entries.map(e => {
-    const val = e.annual_carbon_ground_all_ground ?? 0;
-    return val;
+  const carbonGround = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.annual_carbon_ground_all_ground);
   });
-  const carbonMix = entries.map(e => {
-    const val = e.annual_carbon_mix ?? 0;
-    return val;
+  const carbonMix = years.map(y => {
+    const entry = entries.find(e => e.year === y);
+    return safeNum(entry?.annual_carbon_mix);
   });
   
-  // Debug: Log OPEX and Carbon data to check if values are present
-  React.useEffect(() => {
-    if (entries.length > 0) {
-      const lastEntry = entries[entries.length - 1];
-      console.log('[SimulationMetrics] Data check:', {
-        opexGround: lastEntry.annual_opex_ground_all_ground,
-        opexMix: lastEntry.annual_opex_mix,
-        carbonGround: lastEntry.annual_carbon_ground_all_ground,
-        carbonMix: lastEntry.annual_carbon_mix,
-        opexGroundArray: opexGround.slice(-5),
-        opexMixArray: opexMix.slice(-5),
-        carbonGroundArray: carbonGround.slice(-5),
-        carbonMixArray: carbonMix.slice(-5),
-      });
-    }
-  }, [entries, opexGround, opexMix, carbonGround, carbonMix]);
+  // Current values (use last year if currentYear not found)
+  const currentEntry = currentYear 
+    ? entries.find(e => e.year === currentYear) || entries[entries.length - 1]
+    : entries[entries.length - 1];
   
-  // Get current values
-  const currentEntry = entries.find(e => e.year === currentYear) || entries[entries.length - 1];
-  const currentTimelineStep = timeline.find(s => s.year === currentYear) || timeline[timeline.length - 1];
-  
-  if (!currentEntry || !currentTimelineStep) {
-    return null;
+  if (!currentEntry) {
+    return (
+      <div style={{ color: '#64748b', padding: '20px' }}>No data available</div>
+    );
   }
   
-  // Calculate savings percentages
-  const costSavings = currentEntry.cost_per_compute_ground > 0
-    ? ((currentEntry.cost_per_compute_ground - currentEntry.cost_per_compute_mix) / currentEntry.cost_per_compute_ground) * 100
-    : 0;
+  // Safe current values
+  const currentCostGround = safeNum(currentEntry.cost_per_compute_ground);
+  const currentCostMix = safeNum(currentEntry.cost_per_compute_mix);
+  const currentLatencyGround = safeNum(timeline.find(s => s.year === currentEntry.year)?.latencyGroundMs ?? currentEntry.latency_ground_ms);
+  const currentLatencyMix = safeNum(timeline.find(s => s.year === currentEntry.year)?.latencyMixMs ?? currentEntry.latency_mix_ms);
+  const currentOpexGround = safeNum(currentEntry.annual_opex_ground_all_ground ?? currentEntry.annual_opex_ground);
+  const currentOpexMix = safeNum(currentEntry.annual_opex_mix);
+  const currentCarbonGround = safeNum(currentEntry.annual_carbon_ground_all_ground);
+  const currentCarbonMix = safeNum(currentEntry.annual_carbon_mix);
   
-  const latencySavings = currentTimelineStep.latencyGroundMs > 0
-    ? ((currentTimelineStep.latencyGroundMs - currentTimelineStep.latencyMixMs) / currentTimelineStep.latencyGroundMs) * 100
+  // Calculate savings percentages (avoid division by zero)
+  const costSavings = currentCostGround > 0 
+    ? ((currentCostGround - currentCostMix) / currentCostGround) * 100 
     : 0;
-  
-  const opexSavings = currentEntry.annual_opex_ground_all_ground > 0
-    ? ((currentEntry.annual_opex_ground_all_ground - currentEntry.annual_opex_mix) / currentEntry.annual_opex_ground_all_ground) * 100
+  const latencySavings = currentLatencyGround > 0 
+    ? ((currentLatencyGround - currentLatencyMix) / currentLatencyGround) * 100 
     : 0;
-  
-  const carbonSavings = currentEntry.annual_carbon_ground_all_ground > 0
-    ? ((currentEntry.annual_carbon_ground_all_ground - currentEntry.annual_carbon_mix) / currentEntry.annual_carbon_ground_all_ground) * 100
+  const opexSavings = currentOpexGround > 0 
+    ? ((currentOpexGround - currentOpexMix) / currentOpexGround) * 100 
+    : 0;
+  const carbonSavings = currentCarbonGround > 0 
+    ? ((currentCarbonGround - currentCarbonMix) / currentCarbonGround) * 100 
     : 0;
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+    <div 
+      data-tutorial-metrics-panel
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: '16px',
+      }}>
         <MetricCard
           title="Cost / Compute"
-          groundValue={formatCost(currentEntry.cost_per_compute_ground ?? 0)}
-          mixValue={formatCost(currentEntry.cost_per_compute_mix ?? 0)}
+          groundValue={formatCost(currentCostGround)}
+          mixValue={formatCost(currentCostMix)}
           sparkGround={costGround}
           sparkMix={costMix}
           savings={costSavings}
-          unit="/PFLOP"
         />
         
         <MetricCard
           title="Latency"
-          groundValue={formatLatency(currentTimelineStep.latencyGroundMs ?? 120)}
-          mixValue={formatLatency(currentTimelineStep.latencyMixMs ?? 120)}
+          groundValue={formatLatency(currentLatencyGround)}
+          mixValue={formatLatency(currentLatencyMix)}
           sparkGround={latencyGround}
           sparkMix={latencyMix}
           savings={latencySavings}
-          unit="ms"
         />
         
         <MetricCard
           title="Annual OPEX"
-          groundValue={formatOpex(currentEntry.annual_opex_ground_all_ground ?? 0)}
-          mixValue={formatOpex(currentEntry.annual_opex_mix ?? 0)}
+          groundValue={formatOpex(currentOpexGround)}
+          mixValue={formatOpex(currentOpexMix)}
           sparkGround={opexGround}
           sparkMix={opexMix}
           savings={opexSavings}
-          unit="M"
         />
         
         <MetricCard
           title="Carbon"
-          groundValue={formatCarbon(currentEntry.annual_carbon_ground_all_ground ?? 0)}
-          mixValue={formatCarbon(currentEntry.annual_carbon_mix ?? 0)}
+          groundValue={formatCarbon(currentCarbonGround)}
+          mixValue={formatCarbon(currentCarbonMix)}
           sparkGround={carbonGround}
           sparkMix={carbonMix}
           savings={carbonSavings}
-          unit=" tCO₂"
         />
-      </div>
     </div>
   );
 }
-

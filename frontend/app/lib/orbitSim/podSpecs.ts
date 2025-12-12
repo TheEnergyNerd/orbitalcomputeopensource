@@ -6,6 +6,7 @@ export interface PodSpecInputs {
   techLevel: number;        // 0..1 from factoryMultipliers and deployment choices
   orbitShellAltitudeKm: number;
   factoryState?: import('./factoryModel').FactoryState; // Optional factory state for upgrades
+  deploymentYear?: number;  // Optional deployment year for efficiency curve calculation
 }
 
 export interface PodSpec {
@@ -26,8 +27,9 @@ import { calculateComputeFromPower } from "./computeEfficiency";
  * Compute pod specifications based on power (power-first model)
  */
 export function computePodSpec(input: PodSpecInputs): PodSpec {
-  const { techLevel, factoryState } = input;
-  const currentYear = new Date().getFullYear();
+  const { techLevel, factoryState, deploymentYear } = input;
+  // Use deployment year if provided, otherwise current year
+  const yearForEfficiency = deploymentYear || new Date().getFullYear();
 
   // Power is the primary driver - minimum 100kW enforced
   // Power can scale with tech level, but never below 100kW
@@ -38,8 +40,8 @@ export function computePodSpec(input: PodSpecInputs): PodSpec {
   const pod = { base_power_kw: powerKW } as any;
   assertPodPower(pod);
 
-  // Compute is DERIVED from power using efficiency curves
-  const computeTFLOPs = calculateComputeFromPower(powerKW * 1000, currentYear) * 1e3; // Convert PFLOPs to TFLOPs
+  // Compute is DERIVED from power using efficiency curves at deployment time
+  const computeTFLOPs = calculateComputeFromPower(powerKW * 1000, yearForEfficiency) * 1e3; // Convert PFLOPs to TFLOPs
 
   // ORBITAL OPEX (NO GRID ELECTRICITY)
   // Only: laser comm + stationkeeping + replacement amortization + ground ops

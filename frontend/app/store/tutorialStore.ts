@@ -15,6 +15,7 @@ export type TutorialStep =
   | 6  // AI Router (required)
   | 7  // Futures tab (required)
   | 8  // Satellite classes
+  | 9  // Physics Sandbox
   | "done";
 
 interface TutorialStore {
@@ -43,7 +44,7 @@ export const useTutorialStore = create<TutorialStore>((set, get) => ({
     const { currentStep } = get();
     if (currentStep === "done") return;
     
-    const next: TutorialStep = currentStep === 8 ? "done" : ((currentStep + 1) as TutorialStep);
+    const next: TutorialStep = currentStep === 9 ? "done" : ((currentStep + 1) as TutorialStep);
     set({ currentStep: next });
     
     // Auto-close when done

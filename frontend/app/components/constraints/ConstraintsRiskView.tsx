@@ -99,17 +99,6 @@ export default function ConstraintsRiskView() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  exportDebugData();
-                }}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold cursor-pointer z-50 relative"
-                type="button"
-              >
-                Export Debug Data
-              </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
                   setShowGraphOverlay(prev => !prev);
                 }}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-semibold cursor-pointer z-50 relative"

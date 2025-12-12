@@ -402,31 +402,23 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
       console.warn('[DetailPanel] ⚠️ Could not determine plane, using "Unknown"');
     }
     
-    // Calculate pod specs using centralized function
-    // Get factory state to calculate tech level
-    const factoryState = (config as any)?.factoryState || null;
+    // Get deployment metadata from satellite (stored at deployment time)
+    const deploymentYear = (sat as any).deploymentYear || null;
+    const deploymentTechLevel = (sat as any).deploymentTechLevel ?? 0.2;
+    const deploymentFactoryState = (sat as any).deploymentFactoryState || null;
     
-    // Calculate tech level from factory breakthroughs (if available)
-    let techLevel = 0.2; // Default baseline
-    if (factoryState) {
-      const siliconYield = factoryState.stages?.silicon?.breakthroughs?.find((b: any) => b.id === 'silicon_yield')?.level || 0;
-      const chipsDensity = factoryState.stages?.chips?.breakthroughs?.find((b: any) => b.id === 'chips_density')?.level || 0;
-      const racksMod = factoryState.stages?.racks?.breakthroughs?.find((b: any) => b.id === 'racks_modularity')?.level || 0;
-      techLevel = calculateTechLevel(siliconYield, chipsDensity, racksMod);
-    }
+    // Get launch/deployment year from multiple sources (prioritize stored deploymentYear)
+    let launchYear: number | null = deploymentYear;
     
-    // Get launch/deployment year from ID or satellite data
-    let launchYear: number | null = null;
-    
-    // Try to extract year from ID pattern: deploy_YYYY_launch_...
-    const yearMatch = sat.id.match(/deploy[_\s](\d{4})/i) || sat.id.match(/_(\d{4})_/);
-    if (yearMatch) {
-      launchYear = parseInt(yearMatch[1]);
-      // Validate it's a reasonable year
-      if (launchYear >= 2020 && launchYear <= 2100) {
-        // Valid year
-      } else {
-        launchYear = null;
+    // If not stored, try to extract from ID pattern: [CLASS]-[SHELL]-[YEAR]-[SEQUENCE]
+    if (!launchYear) {
+      const yearMatch = sat.id.match(/-(\d{4})-\d{5}/) || sat.id.match(/deploy[_\s](\d{4})/i) || sat.id.match(/_(\d{4})_/);
+      if (yearMatch) {
+        launchYear = parseInt(yearMatch[1]);
+        // Validate it's a reasonable year
+        if (launchYear < 2020 || launchYear > 2100) {
+          launchYear = null;
+        }
       }
     }
     
@@ -445,24 +437,78 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
       launchYear = timeline[timeline.length - 1]?.year || new Date().getFullYear();
     }
     
-    // Calculate pod specs (factoryState already defined above)
+    type SandboxParams = {
+      params?: unknown;
+      results?: {
+        computePerSat_TFLOPS?: number;
+        thermalMargin?: number;
+        radiatorUtilization?: number;
+        annualOpex?: number;
+        costPerPflop?: number;
+        carbonIntensity?: number;
+      };
+      physicsOverrides?: {
+        busPowerKw?: number;
+        radiatorArea_m2?: number;
+        emissivity?: number;
+      };
+    };
+    let sandboxParams: SandboxParams | null = null;
+    if (typeof window !== 'undefined') {
+      sandboxParams = (window as { __physicsSandboxParams?: SandboxParams }).__physicsSandboxParams || null;
+    }
+    
+    // CRITICAL: Use deployment-time technology state, not current state
+    // This ensures satellites show specs from when they were deployed
+    const factoryState = deploymentFactoryState || (config as any)?.factoryState || null;
+    const techLevel = deploymentTechLevel;
+    
+    // Calculate pod specs using deployment-time technology state
     const podSpec = computePodSpec({
       techLevel,
       orbitShellAltitudeKm: sat.alt_km,
       factoryState: factoryState,
+      deploymentYear: launchYear || undefined, // Use deployment year for efficiency curves
     });
     
-    const computeCapacityTflops = podSpec.computeTFLOPs;
-    const powerEnvelopeKw = podSpec.powerKW;
-    const annualOpex = podSpec.annualOpexUSD;
-    const carbonImpact = podSpec.carbonTonsPerYear;
+    // Use sandbox physics if available, otherwise use stored properties or calculated
+    const computeCapacityTflops = sandboxParams?.results?.computePerSat_TFLOPS ?? 
+      ((sat as any).computeTFLOPs ?? podSpec.computeTFLOPs);
+    const powerEnvelopeKw = sandboxParams?.physicsOverrides?.busPowerKw ?? 
+      ((sat as any).powerKW ?? podSpec.powerKW);
     
-    // Use realistic cost per TFLOP model (not derived from OPEX)
-    const currentYear = launchYear || new Date().getFullYear();
-    const costPerTFLOP = getCostPerTFLOP(currentYear);
+    let annualOpex = podSpec.annualOpexUSD;
+    let carbonImpact = podSpec.carbonTonsPerYear;
+    
+    if (sandboxParams?.results) {
+      const annualOpexTotal = sandboxParams.results.annualOpex || 0;
+      const costPerPflop = sandboxParams.results.costPerPflop || 0;
+      const carbonIntensity = sandboxParams.results.carbonIntensity || 0;
+      
+      const computePFlops = (computeCapacityTflops / 1000);
+      annualOpex = costPerPflop * computePFlops * 0.1;
+      carbonImpact = (powerEnvelopeKw * 8760 * carbonIntensity) / 1e6;
+    }
+    const deploymentYearForCost = launchYear || new Date().getFullYear();
+    const costPerTFLOP = getCostPerTFLOP(deploymentYearForCost);
     const costPerComputeUnit = costPerTFLOP; // Cost per TFLOP (not per compute unit in old sense)
     
-    const thermalMargin = sat.sunlit ? 75 : 45; // Higher when sunlit
+    // Calculate thermal margin from sandbox physics if available
+    let thermalMargin = sat.sunlit ? 75 : 45; // Default
+    let radiatorAreaM2 = 0;
+    let emissivity = 0.9;
+    let radiatorUtilization = 0;
+    
+    if (sandboxParams?.results) {
+      thermalMargin = sandboxParams.results.thermalMargin ? 
+        (sandboxParams.results.thermalMargin * 100) : thermalMargin;
+      radiatorUtilization = sandboxParams.results.radiatorUtilization || 0;
+    }
+    
+    if (sandboxParams?.physicsOverrides) {
+      radiatorAreaM2 = sandboxParams.physicsOverrides.radiatorArea_m2 || 0;
+      emissivity = sandboxParams.physicsOverrides.emissivity || 0.9;
+    }
     // Calculate storage based on factory upgrades
     const podsLevel = factoryState?.stages.find((s: any) => s.id === 'pods')?.upgradeLevel || 0;
     const baseStorageGb = 8 * 1024; // 8 TB base (8192 GB)
@@ -703,7 +749,24 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
               <Metric label="Compute capacity" value={`${computeCapacityTflops.toFixed(0)} TFLOPs`} />
               <Metric label="Power envelope" value={`${powerEnvelopeKw.toFixed(1)} kW`} />
               <Metric label="Efficiency" value={`${(powerEnvelopeKw / computeCapacityTflops * 1000).toFixed(1)} W/TFLOP`} />
-              <Metric label="Thermal margin" value={`${thermalMargin}%`} />
+              <Metric 
+                label="Thermal margin" 
+                value={`${thermalMargin.toFixed(1)}%`} 
+                color={thermalMargin > 0 ? "text-green-400" : "text-red-400"}
+              />
+              {radiatorAreaM2 > 0 && (
+                <Metric label="Radiator area" value={`${radiatorAreaM2.toFixed(1)} m²`} />
+              )}
+              {emissivity > 0 && emissivity !== 0.9 && (
+                <Metric label="Emissivity" value={emissivity.toFixed(2)} />
+              )}
+              {radiatorUtilization > 0 && (
+                <Metric 
+                  label="Radiator utilization" 
+                  value={`${(radiatorUtilization * 100).toFixed(1)}%`}
+                  color={radiatorUtilization > 0.9 ? "text-yellow-400" : "text-green-400"}
+                />
+              )}
               <Metric label="Onboard storage" value={`${(onboardStorageGb / 1024).toFixed(1)} TB`} />
             </Section>
 

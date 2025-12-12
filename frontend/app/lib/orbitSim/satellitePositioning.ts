@@ -151,40 +151,67 @@ function violatesAngularSpacing(
  * Generate SSO (Sun-Synchronous Orbit) position for Class B satellites
  * 
  * SSO satellites use:
- * - Inclination ~98° (sun-synchronous)
- * - Altitude ~560 km
+ * - Inclination ~98° (sun-synchronous, dawn-dusk orbit)
+ * - Altitude 600-800 km
+ * - Even longitude distribution around the globe (for snapshot of a year)
  * - Latitude distribution constrained by inclination
  * 
  * @param existingPositions Array of existing positions to check spacing against
+ * @param targetIndex Optional index for even distribution (if provided, uses deterministic spacing)
  * @returns SatellitePosition or null if unable to find valid position
  */
 export function generateSSOPosition(
-  existingPositions: Array<{ lat: number; lon: number; shell: ShellType }> = []
+  existingPositions: Array<{ lat: number; lon: number; shell: ShellType }> = [],
+  targetIndex?: number
 ): SatellitePosition | null {
   const config = SHELL_CONFIG.SSO;
   const inclinationRad = config.inclination * (Math.PI / 180);
   const maxAttempts = 100;
   
+  // Count existing SSO satellites for even distribution
+  const existingSSO = existingPositions.filter(p => p.shell === "SSO");
+  const existingSSOCount = existingSSO.length;
+  
+  // For even distribution: space longitudes evenly around the globe
+  // If targetIndex is provided, use deterministic spacing
+  let targetLon: number | null = null;
+  if (targetIndex !== undefined) {
+    // Evenly space longitudes: 360 / (totalCount + 1) spacing
+    // Start at 0° and space evenly
+    const spacing = 360 / (existingSSOCount + 1);
+    targetLon = (targetIndex * spacing) % 360;
+    if (targetLon > 180) targetLon -= 360; // Normalize to [-180, 180]
+  }
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Sample longitude uniformly
-    const lon = sampleLongitude();
+    // Use target longitude if provided, otherwise sample uniformly
+    const lon = targetLon !== null ? targetLon : sampleLongitude();
     
-    // Sample latitude using inclination constraint
-    // For SSO, latitude is constrained by inclination: lat ≈ asin(sin(inclination) * sin(random))
+    // For SSO dawn-dusk orbits, latitude is constrained by inclination
+    // Latitude varies as the satellite orbits: lat ≈ asin(sin(inclination) * sin(theta))
+    // For a snapshot, we want to sample the latitude range that SSO satellites can reach
+    // Maximum latitude = inclination - 90° (for 98° inclination, max lat ≈ 82°)
+    const maxLat = Math.abs(config.inclination - 90);
+    
+    // Sample latitude uniformly within the SSO latitude band
+    // SSO satellites can reach high latitudes (near-polar)
     const u = Math.random() * 2 - 1; // [-1, 1]
     const latRad = Math.asin(Math.sin(inclinationRad) * u);
     const lat = latRad * (180 / Math.PI);
     
+    // Clamp to valid SSO latitude range
+    const clampedLat = Math.max(-maxLat, Math.min(maxLat, lat));
+    
     // Check angular spacing
-    if (!violatesAngularSpacing(lat, lon, existingPositions, "SSO", config.minAngularSeparation)) {
-      // Sample altitude (fixed for SSO, but allow small variation)
+    if (!violatesAngularSpacing(clampedLat, lon, existingPositions, "SSO", config.minAngularSeparation)) {
+      // Sample altitude (600-800 km for SSO)
       const alt = config.altitudeRange[0] + Math.random() * (config.altitudeRange[1] - config.altitudeRange[0]);
       const radius = 1.0 + (alt / EARTH_RADIUS_KM);
       
-      const [x, y, z] = latLonToXYZ(lat, lon, radius);
+      const [x, y, z] = latLonToXYZ(clampedLat, lon, radius);
       
       return {
-        lat,
+        lat: clampedLat,
         lon,
         alt,
         x,
@@ -192,6 +219,13 @@ export function generateSSOPosition(
         z,
         shell: "SSO",
       };
+    }
+    
+    // If target longitude was used and it failed, try nearby longitudes
+    if (targetLon !== null && attempt < 10) {
+      const offset = (attempt + 1) * 5; // Try ±5°, ±10°, etc.
+      targetLon = ((targetLon + offset) % 360);
+      if (targetLon > 180) targetLon -= 360;
     }
   }
   
@@ -201,15 +235,21 @@ export function generateSSOPosition(
 /**
  * Generate a single satellite position for a given shell
  * Enforces all constraints: latitude band, angular spacing, altitude
+ * 
+ * @param shell Shell type
+ * @param existingPositions Array of existing positions to check spacing against
+ * @param maxAttempts Maximum attempts to find valid position
+ * @param targetIndex Optional index for even distribution (used for SSO)
  */
 export function generateSatellitePosition(
   shell: ShellType,
   existingPositions: Array<{ lat: number; lon: number; shell: ShellType }> = [],
-  maxAttempts: number = 100
+  maxAttempts: number = 100,
+  targetIndex?: number
 ): SatellitePosition | null {
-  // Special case: SSO uses different sampling
+  // Special case: SSO uses different sampling with even distribution
   if (shell === "SSO") {
-    return generateSSOPosition(existingPositions);
+    return generateSSOPosition(existingPositions, targetIndex);
   }
   
   const config = SHELL_CONFIG[shell];

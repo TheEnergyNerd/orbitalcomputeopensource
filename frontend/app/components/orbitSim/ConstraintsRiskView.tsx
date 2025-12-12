@@ -8,7 +8,6 @@ import {
   buildLaunchMassSeries,
 } from "../../lib/orbitSim/selectors/constraints";
 import type { ScenarioMode } from "../../lib/orbitSim/simulationConfig";
-import { ExportAllChartsButton } from "./ChartExportButton";
 import ConstraintUtilizationChart from "./ConstraintUtilizationChart";
 import ReliabilityChart from "./ReliabilityChart";
 import LaunchMassChart from "./LaunchMassChart";
@@ -42,9 +41,6 @@ export default function ConstraintsRiskView() {
         <div>
           <h1 className="text-lg sm:text-xl font-bold text-white mb-2">Constraints & Risk</h1>
           <p className="text-xs sm:text-sm text-slate-400">What can break? What's binding?</p>
-        </div>
-        <div className="flex-shrink-0">
-          <ExportAllChartsButton />
         </div>
       </div>
 

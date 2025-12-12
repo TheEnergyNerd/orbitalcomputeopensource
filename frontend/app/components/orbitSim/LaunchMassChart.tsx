@@ -42,10 +42,10 @@ export default function LaunchMassChart({
     // Set SVG dimensions explicitly to fill container
     svg.attr("width", width).attr("height", height);
     
-    // Match Futures charts margins
+    // Match Futures charts margins - increased bottom margin for axis labels
     const margin = isMobile 
-      ? { top: 20, right: 30, bottom: 40, left: 50 }
-      : { top: 20, right: 30, bottom: 40, left: 50 }; // Same margins as Futures charts
+      ? { top: 20, right: 30, bottom: 50, left: 50 }
+      : { top: 20, right: 30, bottom: 50, left: 50 }; // Increased bottom margin for axis labels
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
@@ -209,19 +209,11 @@ export default function LaunchMassChart({
 
   }, [data, currentYear]);
 
-  // Calculate responsive dimensions for viewBox
-  const containerWidth = typeof window !== 'undefined' ? Math.min(window.innerWidth - 64, 600) : 600;
-  const isMobile = containerWidth < 640;
-  const chartWidth = containerWidth;
-  const chartHeight = isMobile ? 250 : 300;
-
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" style={{ minHeight: '300px' }}>
       <svg 
         ref={svgRef} 
         className="w-full h-full"
-        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-        preserveAspectRatio="xMidYMid meet"
       />
       <div
         ref={tooltipRef}

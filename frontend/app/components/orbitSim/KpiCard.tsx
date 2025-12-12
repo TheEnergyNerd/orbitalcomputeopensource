@@ -274,14 +274,15 @@ export default function KpiCard({
       ctx.stroke();
     }
 
-    // Draw X-axis labels (year)
+    // Draw X-axis labels (year) - show whole years only
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     const yearStep = Math.max(1, Math.floor(chartData.length / 5)); // Show ~5 year labels
     chartData.forEach((d, idx) => {
       if (idx % yearStep === 0 || idx === chartData.length - 1) {
+        const year = Math.round(d.year); // Round to whole year
         const x = chartPadding.left + (plotWidth / (chartData.length - 1)) * idx;
-        ctx.fillText(String(d.year), x, chartPadding.top + plotHeight + 4);
+        ctx.fillText(String(year), x, chartPadding.top + plotHeight + 4);
       }
     });
 

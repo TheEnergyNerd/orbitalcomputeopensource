@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSimulationStore } from "../../store/simulationStore";
 import KpiCard from "./KpiCard";
 import { getDebugStateEntries } from "../../lib/orbitSim/debugState";
@@ -18,6 +18,23 @@ interface CostComputeChartProps {
 export default function CostComputeChart({ timeline, scenarioMode }: CostComputeChartProps) {
   // Use selectedScenarioKey from store (single source of truth)
   const selectedScenarioKey = useSimulationStore((s) => s.selectedScenarioKey);
+  const [sandboxActive, setSandboxActive] = useState(false);
+  
+  useEffect(() => {
+    const checkSandbox = () => {
+      if (typeof window !== 'undefined') {
+        const params = (window as { __physicsSandboxParams?: unknown }).__physicsSandboxParams;
+        setSandboxActive(!!params);
+      }
+    };
+    checkSandbox();
+    const interval = setInterval(checkSandbox, 100);
+    window.addEventListener('physics-sandbox-applied', checkSandbox);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('physics-sandbox-applied', checkSandbox);
+    };
+  }, []);
 
   const transformedTimeline = useMemo(() => {
     // Use selectedScenarioKey from store instead of prop
@@ -48,7 +65,12 @@ export default function CostComputeChart({ timeline, scenarioMode }: CostCompute
   }, [timeline, selectedScenarioKey]);
 
   return (
-    <div className="h-full">
+    <div className="h-full relative">
+      {sandboxActive && (
+        <div className="absolute top-2 right-2 z-10 px-2 py-1 bg-cyan-500/20 border border-cyan-500/50 rounded text-xs text-cyan-400 font-semibold">
+          Sandbox Active
+        </div>
+      )}
       <KpiCard
         title="Cost / Compute"
         timeline={transformedTimeline}

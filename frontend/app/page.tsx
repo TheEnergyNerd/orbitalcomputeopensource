@@ -22,6 +22,7 @@ import SystemOverviewView from "./components/orbitSim/SystemOverviewView";
 import EconomicsView from "./components/orbitSim/EconomicsView";
 import PhysicsEngineeringView from "./components/orbitSim/PhysicsEngineeringView";
 import ScenariosView from "./components/orbitSim/ScenariosView";
+import PhysicsSandbox from "./components/orbitSim/PhysicsSandbox";
 import DetailPanel from "./components/DetailPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import Toast from "./components/Toast";
@@ -37,7 +38,6 @@ import OrbitalScene from "./three/OrbitalScene";
 import DebugHud from "./components/DebugHud";
 import YearCounter from "./components/YearCounter";
 import TutorialSystem from "./components/TutorialSystem";
-import DebugExportPanel from "./components/DebugExportPanel";
 import { SatelliteCounters } from "./components/SatelliteCounters";
 import { PerformanceWarning } from "./components/PerformanceWarning";
 import { VisualGlossary } from "./components/VisualGlossary";
@@ -137,6 +137,13 @@ export default function Home() {
           <PhysicsEngineeringView />
         )}
         
+        {activeSurface === "calculator" && (
+          <div className="fixed top-14 left-0 right-0 bottom-0 overflow-y-auto z-30 pointer-events-auto bg-slate-950">
+            <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+              <PhysicsSandbox />
+            </div>
+          </div>
+        )}
         
         {/* Entity Detail Panel - shows when entity is selected (only in deployment section) */}
         <DetailPanel activeSurface={activeSurface} />
@@ -146,8 +153,6 @@ export default function Home() {
         
         {/* Integrity HUD - always visible */}
         
-        {/* Debug Export Panel - always visible */}
-        <DebugExportPanel />
         
         {/* Tutorial System */}
         <TutorialSystem activeSurface={activeSurface} onSurfaceChange={setActiveSurface} />

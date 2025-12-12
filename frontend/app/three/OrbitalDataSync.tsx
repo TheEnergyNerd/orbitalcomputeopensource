@@ -21,6 +21,8 @@ import {
   getShellFromAltitude,
   type ShellType
 } from "../lib/orbitSim/satellitePositioning";
+import { computePodSpec, calculateTechLevel } from "../lib/orbitSim/podSpecs";
+import { getCostPerTFLOP } from "../lib/orbitSim/orbitalCostModel";
 
 /**
  * Satellite naming schema: [CLASS]-[SHELL]-[DEPLOY_YEAR]-[SEQUENCE]
@@ -810,11 +812,26 @@ export function OrbitalDataSync() {
       });
       
       // Get current year and strategy for Class B assignment
-      const currentYear = useSimulationStore.getState().timeline.length > 0
-        ? useSimulationStore.getState().timeline[useSimulationStore.getState().timeline.length - 1]?.year || 2025
+      const simulationState = useSimulationStore.getState();
+      const currentYear = simulationState.timeline.length > 0
+        ? simulationState.timeline[simulationState.timeline.length - 1]?.year || 2025
         : 2025;
       // Get strategy from current plan or default to BALANCED
       const currentStrategy = "BALANCED"; // Default strategy
+      
+      // Get factory state and calculate tech level at deployment time
+      const factoryState = (simulationState.config as any)?.factoryState || null;
+      let deploymentTechLevel = 0.2; // Default baseline
+      if (factoryState) {
+        const siliconYield = factoryState.stages?.silicon?.breakthroughs?.find((b: any) => b.id === 'silicon_yield')?.level || 0;
+        const chipsDensity = factoryState.stages?.chips?.breakthroughs?.find((b: any) => b.id === 'chips_density')?.level || 0;
+        const racksMod = factoryState.stages?.racks?.breakthroughs?.find((b: any) => b.id === 'racks_modularity')?.level || 0;
+        deploymentTechLevel = calculateTechLevel(siliconYield, chipsDensity, racksMod);
+      }
+      
+      // Count existing SSO satellites for even distribution
+      const existingSSOCount = existingPositions.filter(p => p.shell === "SSO").length;
+      const existingClassBCount = orbitStoreSats.filter(s => (s as any).satelliteClass === "B").length;
       
       // Calculate Class B share based on strategy (from satelliteClasses.ts)
       const getClassBShare = (strategy: string, year: number): number => {
@@ -873,22 +890,40 @@ export function OrbitalDataSync() {
             shellType = "SSO";
           }
           
+          // For SSO (Class B), use even distribution index
+          // Count Class B satellites in this batch for even spacing
+          const classBInBatch = newSats.filter(s => (s as any).satelliteClass === "B").length;
+          const ssoIndex = shellType === "SSO" ? existingSSOCount + existingClassBCount + classBInBatch : undefined;
+          
           // Generate satellite position using physically coherent positioning
-          const position = generateSatellitePosition(shellType, existingPositions);
+          // For SSO, pass index for even distribution
+          const position = generateSatellitePosition(shellType, existingPositions, 100, ssoIndex);
           
           if (position) {
-            // Generate orbital state for this position
-            const orbitalState = generateOrbitalState(position.alt, getRandomInclination());
-            // Set theta based on longitude
-            orbitalState.theta = position.lon * (Math.PI / 180);
-            
             // Determine Class B: must be year >= 2030 AND (targeted as Class B OR in SSO shell)
             const isSSO = shellType === "SSO" || (position.alt >= 600 && position.alt <= 800); // SSO is 600-800km
             const satelliteClass = (currentYear >= 2030 && (targetClassB || isSSO)) ? "B" : "A";
             
+            // CRITICAL: Class B must always be in SSO
+            if (satelliteClass === "B" && shellType !== "SSO") {
+              console.warn(`[OrbitalDataSync] ⚠️ Class B satellite assigned to non-SSO shell ${shellType}, forcing SSO`);
+              // Regenerate with SSO shell
+              const ssoPosition = generateSatellitePosition("SSO", existingPositions, 100, ssoIndex);
+              if (ssoPosition) {
+                Object.assign(position, ssoPosition);
+              }
+            }
+            
+            // Generate orbital state for this position
+            // For SSO, use 98° inclination (sun-synchronous)
+            const inclination = shellType === "SSO" ? 98 * (Math.PI / 180) : getRandomInclination();
+            const orbitalState = generateOrbitalState(position.alt, inclination);
+            // Set theta based on longitude
+            orbitalState.theta = position.lon * (Math.PI / 180);
+            
             // Log Class B assignment only for first Class B satellite
             if (satelliteClass === "B" && !loggedClassB) {
-              console.log(`[OrbitalDataSync] 🛰️ Class B satellite created: year=${currentYear}, shellType=${shellType}, alt=${position.alt.toFixed(0)}km`);
+              console.log(`[OrbitalDataSync] 🛰️ Class B satellite created: year=${currentYear}, shellType=${shellType}, alt=${position.alt.toFixed(0)}km, lon=${position.lon.toFixed(1)}°`);
               loggedClassB = true;
             }
             
@@ -907,7 +942,20 @@ export function OrbitalDataSync() {
               false // not retired
             );
             
-            // Create SimSatellite object (without satelliteClass/orbitalState - those are added in updateSatellites)
+            // Calculate satellite properties from deployment-time technology state
+            const podSpec = computePodSpec({
+              techLevel: deploymentTechLevel,
+              orbitShellAltitudeKm: position.alt,
+              factoryState: factoryState,
+              deploymentYear: currentYear, // Use deployment year for efficiency curves
+            });
+            
+            // Calculate latency based on altitude (simplified)
+            const baseLatency = 20; // Base latency in ms
+            const altitudeLatency = (position.alt / 550) * 30; // ~30ms per 550km
+            const calculatedLatency = baseLatency + altitudeLatency;
+            
+            // Create SimSatellite object with deployment-time properties
             const simSat: SimSatellite = {
               id: newSatelliteId, // Use the new naming schema
               lat: position.lat,
@@ -915,13 +963,20 @@ export function OrbitalDataSync() {
               alt_km: position.alt,
               sunlit: true,
               utilization: 0.5,
-              capacityMw: 0.1, // 100kW = 0.1MW
+              capacityMw: podSpec.powerKW / 1000, // Convert kW to MW
               nearestGatewayId: "test_gateway",
-              latencyMs: 50,
+              latencyMs: calculatedLatency,
             };
-            // Store satelliteClass and orbitalState as extra properties that will be used in updateSatellites
+            
+            // Store deployment metadata and satellite class
             (simSat as any).satelliteClass = satelliteClass;
             (simSat as any).orbitalState = orbitalState;
+            (simSat as any).deploymentYear = currentYear;
+            (simSat as any).deploymentTechLevel = deploymentTechLevel;
+            (simSat as any).deploymentFactoryState = factoryState ? JSON.parse(JSON.stringify(factoryState)) : null; // Deep copy
+            (simSat as any).computeTFLOPs = podSpec.computeTFLOPs;
+            (simSat as any).powerKW = podSpec.powerKW;
+            
             newSats.push(simSat);
             
             // Add to existing positions for next satellite

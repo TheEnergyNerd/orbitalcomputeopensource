@@ -1,7 +1,7 @@
 "use client";
 
-import { InstancedMesh, Object3D, Vector3, Quaternion, SphereGeometry, OctahedronGeometry, MeshBasicMaterial } from "three";
-import { useRef, useEffect, useMemo, forwardRef } from "react";
+import { InstancedMesh, Object3D, Vector3, Quaternion, SphereGeometry, OctahedronGeometry, BoxGeometry, MeshBasicMaterial } from "three";
+import { useRef, useEffect, useMemo, useState, forwardRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useOrbitSim } from "../state/orbitStore";
 import { useSimulationStore } from "../store/simulationStore";
@@ -39,6 +39,9 @@ export function SatellitesGPUInstanced() {
   const timeline = useSimulationStore((s) => s.timeline);
   const activeStrategy = useSimulationStore((s) => s.activeStrategy);
   const selectedEntity = useSimStore((s) => s.selectedEntity);
+  
+  // Removed sandbox mode visual changes - keep normal satellite rendering
+  // Physics sandbox params are stored in window.__physicsSandboxParams for detail cards only
   
   // Track last update triggers
   const lastYearRef = useRef<number | null>(null);
@@ -273,7 +276,7 @@ export function SatellitesGPUInstanced() {
     }
   });
   
-  // Create geometries once
+  // Create geometries once - normal rendering (no sandbox visual changes)
   const classAGeometry = useMemo(() => {
     if (lodLevel === "full") {
       return new SphereGeometry(0.015, 12, 12);
@@ -412,11 +415,48 @@ export function SatellitesGPUInstanced() {
  * Breathing intensity based on sun alignment quality
  */
 const ClassBWithBreathing = forwardRef<InstancedMesh, {
-  geometry: OctahedronGeometry | SphereGeometry;
+  geometry: OctahedronGeometry | SphereGeometry | BoxGeometry;
   satellites: ReturnType<typeof useOrbitSim.getState>['satellites'];
 }>(({ geometry, satellites }, ref) => {
   const materialRef = useRef<MeshBasicMaterial | null>(null);
   const breathingPhaseRef = useRef(0);
+  
+  // Check for sandbox mode
+  const [sandboxMode, setSandboxMode] = useState<{ active: boolean; satelliteColor: string } | null>(null);
+  
+  useEffect(() => {
+    const checkSandboxMode = () => {
+      if (typeof window !== 'undefined' && (window as any).__physicsSandboxMode) {
+        const mode = (window as any).__physicsSandboxMode;
+        setSandboxMode({
+          active: mode.active || false,
+          satelliteColor: mode.satelliteColor || '#10b981',
+        });
+      } else {
+        setSandboxMode(null);
+      }
+    };
+    
+    checkSandboxMode();
+    const handleSandboxMode = (e: CustomEvent) => {
+      if (e.detail?.active) {
+        setSandboxMode({
+          active: true,
+          satelliteColor: e.detail.satelliteColor || '#10b981',
+        });
+      } else {
+        setSandboxMode(null);
+      }
+    };
+    
+    window.addEventListener('physics-sandbox-mode', handleSandboxMode as EventListener);
+    const interval = setInterval(checkSandboxMode, 500);
+    
+    return () => {
+      window.removeEventListener('physics-sandbox-mode', handleSandboxMode as EventListener);
+      clearInterval(interval);
+    };
+  }, []);
   
   // Calculate sun direction (simplified: fixed in +X direction)
   const sunDistanceNormalized = 150000000 / 6371;

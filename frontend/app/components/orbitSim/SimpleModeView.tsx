@@ -540,16 +540,6 @@ export default function SimpleModeView() {
         </div>
       )}
 
-      {/* Export Debug Data Button - Debug only */}
-      <div className="fixed top-12 sm:top-14 right-4 z-[60] pointer-events-auto">
-        <button
-          onClick={() => exportDebugData()}
-          className="px-3 py-1.5 bg-purple-600/80 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition shadow-lg border border-purple-500/50"
-          title="Export debug state as JSON"
-        >
-          📥 Export Debug
-        </button>
-      </div>
 
 
       {/* Top: Strategy + Utilization Controls - only content blocks events, hidden on mobile */}
