@@ -828,6 +828,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
         groundStations: params.groundStations,
         mooresLawDoublingYears: params.mooresLawDoublingYears,
         launchCostPerKg: params.launchCostPerKg,
+        launchCostImprovementRate: params.launchCostImprovementRate ?? 0.15,
         satelliteBaseCost: params.satelliteBaseCost,
         processNode: params.processNode,
         chipTdp: params.chipTdp,
