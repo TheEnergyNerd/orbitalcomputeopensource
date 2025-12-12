@@ -766,11 +766,61 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
   
   const workingDefaults = useMemo(() => calculateSafeDefaults(actualYear), [actualYear]);
   
-  const [params, setParams] = useState<PhysicsParams>(() => calculateSafeDefaults(actualYear));
+  // Initialize params from existing sandbox params if available, otherwise use defaults
+  const initializeParams = useCallback((): PhysicsParams => {
+    if (typeof window !== 'undefined') {
+      const existing = (window as { __physicsSandboxParams?: { params?: PhysicsParams } }).__physicsSandboxParams;
+      if (existing?.params) {
+        // Merge with defaults to ensure all required fields are present
+        const defaults = calculateSafeDefaults(actualYear);
+        return {
+          ...defaults,
+          ...existing.params,
+        };
+      }
+    }
+    return calculateSafeDefaults(actualYear);
+  }, [actualYear]);
   
+  const [params, setParams] = useState<PhysicsParams>(initializeParams);
+  
+  // Sync params when component mounts or when sandbox params change externally
   useEffect(() => {
-    const newDefaults = calculateSafeDefaults(actualYear);
-    setParams(newDefaults);
+    if (typeof window !== 'undefined') {
+      const existing = (window as { __physicsSandboxParams?: { params?: PhysicsParams } }).__physicsSandboxParams;
+      if (existing?.params) {
+        const defaults = calculateSafeDefaults(actualYear);
+        setParams({
+          ...defaults,
+          ...existing.params,
+        });
+      } else {
+        // Only reset to defaults if no existing params (don't overwrite user changes)
+        const newDefaults = calculateSafeDefaults(actualYear);
+        setParams(newDefaults);
+      }
+    }
+  }, [actualYear]);
+  
+  // Listen for external changes to sandbox params (e.g., when applied from another component)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleSandboxApplied = () => {
+      const existing = (window as { __physicsSandboxParams?: { params?: PhysicsParams } }).__physicsSandboxParams;
+      if (existing?.params) {
+        const defaults = calculateSafeDefaults(actualYear);
+        setParams({
+          ...defaults,
+          ...existing.params,
+        });
+      }
+    };
+    
+    window.addEventListener('physics-sandbox-applied', handleSandboxApplied);
+    return () => {
+      window.removeEventListener('physics-sandbox-applied', handleSandboxApplied);
+    };
   }, [actualYear]);
 
   const updateParam = useCallback((key: string, value: number) => {
