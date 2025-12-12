@@ -42,6 +42,7 @@ interface PhysicsParams {
   launchesPerYear: number;
   satsPerLaunch: number;
   launchCostPerKg: number;
+  launchCostImprovementRate?: number; // Annual improvement rate (e.g., 0.15 = 15% per year)
   satelliteBaseCost: number;
   processNode?: number;
   chipTdp?: number;
