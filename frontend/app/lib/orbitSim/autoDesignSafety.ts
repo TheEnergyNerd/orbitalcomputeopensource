@@ -71,18 +71,15 @@ function calculateSustainedComputeFromRadiators(
   eclipse_fraction: number,
   shadowing_loss: number
 ): number {
-  // Calculate heat rejection at target temperature
-  const heatReject_kw = calculateHeatRejection(
+  const heatRejectionResult = calculateHeatRejection(
     radiatorArea_m2,
     emissivity,
     targetTemp_C,
     eclipse_fraction,
     shadowing_loss
   );
+  const heatReject_kw = heatRejectionResult.heatReject_kw;
   
-  // Convert heat rejection to compute (assuming 95% heat generation efficiency)
-  // heatGen = compute * 0.95, so compute = heatGen / 0.95
-  // At equilibrium: heatGen = heatReject, so compute = heatReject / 0.95
   const compute_kw = heatReject_kw / 0.95;
   
   // Convert kW to FLOPS (rough approximation: 1 kW ≈ 100 PFLOPs)

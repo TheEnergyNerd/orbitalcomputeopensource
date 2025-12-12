@@ -17,6 +17,7 @@ import { OrbitalShells } from "./OrbitalShells";
 import { StaticOrbitalShells } from "./StaticOrbitalShells";
 import { TrafficFlows } from "./TrafficFlows";
 import { TrafficFlowsBatched } from "./TrafficFlowsBatched";
+import { RouteHover } from "./RouteHover";
 import { RoutingArrows } from "./RoutingArrows";
 import { FailureShockwave } from "./FailureShockwave";
 import { EnergyDeliveryOverlay } from "./EnergyDeliveryOverlay";
@@ -124,6 +125,9 @@ export default function OrbitalScene() {
         
         {/* 6. Traffic Flows (Batched GPU) */}
         <TrafficFlowsBatched />
+        
+        {/* 6.5. Route Hover Effects */}
+        <RouteHover />
         
         {/* 7. Routing Arrows */}
         <RoutingArrows />

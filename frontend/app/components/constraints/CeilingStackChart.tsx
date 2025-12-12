@@ -24,8 +24,13 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
     
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry) {
+      if (!entry || typeof entry !== 'object' || !('compute_raw_flops' in entry)) {
         console.warn(`[CeilingStackChart] No entry for year ${year}`);
+        return null;
+      }
+      
+      // Type guard: ensure it's a DebugStateEntry
+      if (!('year' in entry && typeof entry.year === 'number')) {
         return null;
       }
       
@@ -43,14 +48,18 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
       const heat = Number(entry.heatCeiling) || 0;
       const backhaul = Number(entry.backhaulCeiling) || 0;
       const autonomy = Number(entry.autonomyCeiling) || 0;
+      // RULE 2: Use compute_exportable_flops (the only real compute)
+      const exportableCompute = Number(entry.compute_exportable_flops) || 0;
       const effectiveCompute = Number(entry.compute_effective_flops) || 0;
+      // Prefer exportable, fallback to effective
+      const actualComputeFlops = exportableCompute > 0 ? exportableCompute : effectiveCompute;
       
       const launchCeiling = Math.min(launchMass, launchCost) * computePerSat;
       const heatCeiling = heat; // Already in PFLOPs
       const backhaulCeiling = backhaul; // Already in PFLOPs
       // Autonomy ceiling: convert satellite count to approximate compute
       const autonomyCeiling = autonomy * computePerSat;
-      const actualCompute = effectiveCompute / 1e15; // Convert FLOPS to PFLOPs
+      const actualCompute = actualComputeFlops / 1e15; // Convert FLOPS to PFLOPs
       
       // Validate all values are finite
       if (!isFinite(launchCeiling) || !isFinite(heatCeiling) || !isFinite(backhaulCeiling) || 
@@ -62,26 +71,7 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
         return null;
       }
       
-      // Debug logging for first year
-      if (year === years[0]) {
-        console.log(`[CeilingStackChart] Year ${year} data:`, {
-          launchMassCeiling: entry.launchMassCeiling,
-          launchCostCeiling: entry.launchCostCeiling,
-          heatCeiling: entry.heatCeiling,
-          backhaulCeiling: entry.backhaulCeiling,
-          autonomyCeiling: entry.autonomyCeiling,
-          compute_effective_flops: entry.compute_effective_flops,
-          satellitesTotal: entry.satellitesTotal,
-          computed: {
-            launchCeiling,
-            heatCeiling,
-            backhaulCeiling,
-            autonomyCeiling,
-            actualCompute,
-            computePerSat,
-          },
-        });
-      }
+      // Removed verbose logging
       
       return {
         year,
@@ -119,9 +109,9 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
     ? Math.min(fullScreen ? 1200 : window.innerWidth - 128, window.innerWidth - 64) 
     : fullScreen ? 1200 : 800;
   const height = typeof window !== 'undefined'
-    ? Math.min(fullScreen ? 600 : 400, (window.innerHeight - 200) * 0.6)
-    : fullScreen ? 600 : 400;
-  const padding = { top: 40, right: 60, bottom: 60, left: 80 };
+    ? Math.max(fullScreen ? 600 : 500, Math.min(fullScreen ? 800 : 700, (window.innerHeight - 200) * 0.8)) // CRITICAL: Increased height for desktop to fill panel
+    : fullScreen ? 600 : 500;
+  const padding = { top: 40, right: 60, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   
@@ -130,15 +120,30 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
   const yearRange = lastYear - firstYear || 1;
   
   // Find max value for scaling (ensure it's finite and > 0)
-  const allValues = chartData.flatMap(d => [
-    d.launchCeiling,
-    d.heatCeiling,
-    d.backhaulCeiling,
-    d.autonomyCeiling,
-    d.actualCompute
-  ]).filter(v => isFinite(v) && v > 0);
+  // Calculate total ceiling (stacked sum) and actual compute separately
+  const allCeilingValues = chartData.map(d => d.launchCeiling + d.heatCeiling + d.backhaulCeiling + d.autonomyCeiling)
+    .filter(v => isFinite(v) && v > 0);
+  const allActualValues = chartData.map(d => d.actualCompute)
+    .filter(v => isFinite(v) && v > 0);
   
-  const maxValue = allValues.length > 0 ? Math.max(...allValues) : 1;
+  const maxTotalCeiling = allCeilingValues.length > 0 ? Math.max(...allCeilingValues) : 1;
+  const maxActualCompute = allActualValues.length > 0 ? Math.max(...allActualValues) : 0;
+  
+  // Ensure actual compute is always visible
+  // If actual compute is very small (< 1% of max ceiling), scale up to make it visible
+  // Otherwise, use the larger of the two
+  let maxValue = Math.max(maxTotalCeiling, maxActualCompute, 1);
+  
+  if (maxActualCompute > 0 && maxTotalCeiling > 0) {
+    const ratio = maxActualCompute / maxTotalCeiling;
+    if (ratio < 0.01) {
+      // Actual compute is tiny - scale up to make it visible (at least 5% of chart height)
+      maxValue = Math.max(maxTotalCeiling, maxActualCompute * 20);
+    } else {
+      // Normal case - use the larger value
+      maxValue = Math.max(maxTotalCeiling, maxActualCompute * 1.1);
+    }
+  }
   
   const getX = (year: number) => {
     return padding.left + ((year - firstYear) / yearRange) * plotWidth;

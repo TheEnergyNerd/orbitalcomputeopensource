@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { SurfaceType } from "./SurfaceTabs";
 
 interface GlossaryItem {
   id: string;
@@ -10,8 +11,17 @@ interface GlossaryItem {
   color?: string;
 }
 
-export function VisualGlossary() {
+interface VisualGlossaryProps {
+  activeSurface?: SurfaceType;
+}
+
+export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Only show in overview/world view tab
+  if (activeSurface !== "overview") {
+    return null;
+  }
 
   const glossaryItems: GlossaryItem[] = [
     {
@@ -274,7 +284,7 @@ export function VisualGlossary() {
           console.log('[VisualGlossary] Button clicked, opening glossary');
           setIsOpen(true);
         }}
-        className="fixed bottom-6 right-6 z-[200] px-4 py-2 bg-gray-800/90 hover:bg-gray-700/90 border border-gray-600 rounded-lg text-sm text-white transition-colors shadow-lg pointer-events-auto"
+        className="fixed top-[180px] right-6 z-[85] px-4 py-2 bg-gray-800/90 hover:bg-gray-700/90 border border-gray-600 rounded-lg text-sm text-white transition-colors shadow-lg pointer-events-auto"
         aria-label="Open visual glossary"
       >
         📖 Visual Guide
@@ -283,7 +293,7 @@ export function VisualGlossary() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[200] w-96 max-w-[90vw] max-h-[85vh] overflow-y-auto panel-glass rounded-2xl p-5 shadow-2xl border border-white/10 pointer-events-auto">
+    <div className="fixed top-[180px] right-6 z-[85] w-96 max-w-[90vw] max-h-[85vh] overflow-y-auto panel-glass rounded-2xl p-5 shadow-2xl border border-white/10 pointer-events-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white">Visual Glossary</h2>
         <button

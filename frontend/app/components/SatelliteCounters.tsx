@@ -65,9 +65,6 @@ export function SatelliteCounters() {
     // Active routes
     const activeRoutes = routes.length;
     
-    // Calculate congestion index (simplified: routes per satellite)
-    const congestionIndex = totalSatellites > 0 ? activeRoutes / totalSatellites : 0;
-    
     // Count satellites per shell
     const satellitesPerShell = {
       LEO: 0,
@@ -88,7 +85,6 @@ export function SatelliteCounters() {
       totalOrbitalPowerGW,
       totalOrbitalComputePFLOPs,
       activeRoutes,
-      congestionIndex,
       satellitesPerShell,
     };
   }, [satellites, routes]);
@@ -144,18 +140,6 @@ export function SatelliteCounters() {
         <div className="flex justify-between items-center">
           <span className="text-gray-400">Active Routes:</span>
           <span className="text-white font-mono font-semibold">{metrics.activeRoutes.toLocaleString()}</span>
-        </div>
-        
-        {/* Congestion Index */}
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Congestion Index:</span>
-          <span className={`font-mono font-semibold ${
-            metrics.congestionIndex > 1 ? "text-red-400" :
-            metrics.congestionIndex > 0.5 ? "text-yellow-400" :
-            "text-green-400"
-          }`}>
-            {metrics.congestionIndex.toFixed(2)}
-          </span>
         </div>
         
         {/* Render Performance Indicator - Always show when in representative mode */}

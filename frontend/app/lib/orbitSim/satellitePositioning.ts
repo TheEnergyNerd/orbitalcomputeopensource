@@ -41,7 +41,7 @@ const SHELL_CONFIG = {
   },
   SSO: {
     latitudeBand: 98, // degrees (sun-synchronous, near-polar)
-    altitudeRange: [800, 1000] as [number, number], // km - more distinct from LEO
+    altitudeRange: [600, 800] as [number, number], // km - Class B satellites altitude range
     minAngularSeparation: 6.0, // degrees
     inclination: 98, // degrees (sun-synchronous)
   },
@@ -310,9 +310,9 @@ export function getShellFromAltitude(altKm: number): ShellType {
   // Updated to match extreme altitude ranges for visual distinction
   if (altKm >= 10000) {
     return "MEO"; // 10,000-15,000 km - much higher for visual distinction
-  } else if (altKm >= 800 && altKm <= 1000) {
-    return "SSO"; // 800-1000 km - more distinct from LEO
-  } else if (altKm >= 400 && altKm < 800) {
+  } else if (altKm >= 600 && altKm <= 800) {
+    return "SSO"; // 600-800 km - Class B satellites altitude range
+  } else if (altKm >= 400 && altKm < 600) {
     return "LEO"; // 400-600 km (MID-LEO) - more distinct from VLEO
   } else if (altKm >= 250 && altKm < 400) {
     return "LEO"; // 250-350 km (VLEO, but map to LEO for now)

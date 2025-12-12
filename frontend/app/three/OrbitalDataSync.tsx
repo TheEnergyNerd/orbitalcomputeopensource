@@ -178,7 +178,7 @@ export function OrbitalDataSync() {
   }, []);
   
   useEffect(() => {
-    console.log("[OrbitalDataSync] Component mounted - starting sync");
+    // Removed verbose logging
     let lastSatellites: string = "";
     let lastRouterPolicy: string = "";
     let updateTimeout: NodeJS.Timeout | null = null;
@@ -207,10 +207,10 @@ export function OrbitalDataSync() {
         // Only generate test satellites if we truly have none
         if (currentOrbitSats.length === 0) {
           // Generate a few test satellites to show something initially
-          console.log("[OrbitalDataSync] No real data, generating 20 test satellites");
+          // Removed verbose logging
           satellites = generateTestSatellites().slice(0, 20); // Generate 20 test satellites for initial view
         } else {
-          console.log(`[OrbitalDataSync] ⏭️ Skipping test satellite generation: ${currentOrbitSats.length} satellites already exist`);
+          // Removed verbose logging
           return;
         }
         
@@ -331,19 +331,12 @@ export function OrbitalDataSync() {
     initialSync();
     
     const timeoutId = setTimeout(() => {
-      console.log("[OrbitalDataSync] Running delayed initial sync");
+      // Removed verbose logging
       initialSync();
       
-      // Verify data is in store
+      // Verify data is in store (logging removed)
       setTimeout(() => {
-        const orbitState = useOrbitSim.getState();
-        console.log("[OrbitalDataSync] Final verification:", {
-          satelliteCount: orbitState.satellites.length,
-          routeCount: orbitState.routes.length,
-          simPaused: orbitState.simPaused,
-          simSpeed: orbitState.simSpeed,
-          simTime: orbitState.simTime,
-        });
+        // Removed verbose logging
       }, 200);
     }, 500);
     
@@ -596,7 +589,7 @@ export function OrbitalDataSync() {
     const forceGenerateRoutes = () => {
       const orbitState = useOrbitSim.getState();
       const { satellites, routes } = orbitState;
-      console.log(`[OrbitalDataSync] FORCE route gen: ${satellites.length} sats, ${routes.length} routes`);
+      // Removed verbose logging
       
       if (satellites.length > 0) {
         // Generate routes directly
@@ -618,13 +611,13 @@ export function OrbitalDataSync() {
           }
         }
         
-        console.log(`[OrbitalDataSync] FORCE generated ${testRoutes.length} routes`);
+        // Removed verbose logging
         useOrbitSim.setState({ routes: testRoutes });
         
         // Verify
         setTimeout(() => {
           const verify = useOrbitSim.getState();
-          console.log(`[OrbitalDataSync] VERIFY: ${verify.routes.length} routes now in store`);
+          // Removed verbose logging
         }, 50);
       } else {
         console.log(`[OrbitalDataSync] No satellites yet, will retry...`);
@@ -859,7 +852,7 @@ export function OrbitalDataSync() {
             const ssoShell = ORBIT_SHELLS.find(s => s.id === "SSO");
             if (ssoShell) {
               shell = ssoShell;
-              console.log(`[OrbitalDataSync] 🎯 Forcing SSO shell for Class B satellite ${unitIndex + 1}/${newDeployments.length}`);
+              // Removed verbose logging
             } else {
               // Fallback: use normal assignment but log warning
               shell = assignSatelliteToShell(currentCongestion, currentSatsPerShell);
@@ -890,7 +883,7 @@ export function OrbitalDataSync() {
             orbitalState.theta = position.lon * (Math.PI / 180);
             
             // Determine Class B: must be year >= 2030 AND (targeted as Class B OR in SSO shell)
-            const isSSO = shellType === "SSO" || (position.alt >= 800 && position.alt <= 1000); // SSO is 800-1000km
+            const isSSO = shellType === "SSO" || (position.alt >= 600 && position.alt <= 800); // SSO is 600-800km
             const satelliteClass = (currentYear >= 2030 && (targetClassB || isSSO)) ? "B" : "A";
             
             // Log Class B assignment only for first Class B satellite
@@ -963,7 +956,7 @@ export function OrbitalDataSync() {
       const trulyNewSats = newSats.filter(s => !existingSatIds.has(s.id));
       
       if (trulyNewSats.length > 0) {
-        console.log(`[OrbitalDataSync] 🚀 Adding ${trulyNewSats.length} satellites (Class B: ${trulyNewSats.filter(s => (s as any).satelliteClass === "B").length})`);
+        // Removed verbose logging
         
         // CRITICAL: Get fresh state RIGHT BEFORE updating to ensure we have all satellites
         const freshOrbitState = useOrbitSim.getState();
@@ -1061,7 +1054,7 @@ export function OrbitalDataSync() {
           return;
         }
         
-        console.log(`[OrbitalDataSync] ✅ Merging: ${freshOrbitSats.length} existing + ${uniqueNewSats.length} new = ${allSats.length} total`);
+        // Removed verbose logging
         
         // CRITICAL: Final verification before update
         const finalOrbitState = useOrbitSim.getState();
@@ -1103,7 +1096,7 @@ export function OrbitalDataSync() {
         // DO NOT update simStore - this prevents the subscription from overwriting our satellites
         const { updateSatellites } = useOrbitSim.getState();
         
-        console.log(`[OrbitalDataSync] 📤 Calling updateSatellites: ${preUpdateSats.length} → ${allSats.length} satellites`);
+        // Removed verbose logging
         updateSatellites(allSats);
         
         // CRITICAL: Verify after update to catch any loss
@@ -1165,7 +1158,7 @@ export function OrbitalDataSync() {
               }
             }
           } else {
-            console.log(`[OrbitalDataSync] ✅ Update verified: ${postUpdateSats.length} satellites in store (was ${preUpdateSats.length})`);
+            // Removed verbose logging
           }
         });
         
@@ -1215,7 +1208,7 @@ export function OrbitalDataSync() {
       unsubscribeSim();
       unsubscribeRouter();
       unsubscribeUnits();
-      console.log("[OrbitalDataSync] Component unmounting - cleaned up all subscriptions");
+      // Removed verbose logging
     };
   }, []);
 

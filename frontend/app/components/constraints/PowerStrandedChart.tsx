@@ -24,21 +24,29 @@ export default function PowerStrandedChart({ debugState }: PowerStrandedChartPro
     
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry) return null;
+      if (!entry || typeof entry !== 'object' || !('power_total_kw' in entry)) return null;
+      
+      // Type guard: ensure it's a DebugStateEntry
+      if (!('year' in entry && typeof entry.year === 'number')) return null;
       
       // Generated power (kW)
-      const generatedPower = entry.power_total_kw;
+      const generatedPower = entry.power_total_kw || 0;
       
-      // Utilized power = generated * utilization_overall
-      const utilizedPower = generatedPower * entry.utilization_overall;
+      // Utilized power = generated * utilization_overall (0-1)
+      const utilization_overall = Math.min(1.0, Math.max(0, entry.utilization_overall || 0));
+      const utilizedPower = generatedPower * utilization_overall;
       
       // Wasted power = generated - utilized
       const wastedPower = generatedPower - utilizedPower;
       
-      // Breakdown of waste by constraint
-      const heatWaste = generatedPower * (1 - entry.utilization_heat);
-      const backhaulWaste = generatedPower * entry.utilization_heat * (1 - entry.utilization_backhaul);
-      const maintenanceWaste = generatedPower * entry.utilization_heat * entry.utilization_backhaul * (1 - entry.utilization_autonomy);
+      // Breakdown of waste by constraint (0-1 scale)
+      const utilization_heat = Math.min(1.0, Math.max(0, entry.utilization_heat || 0));
+      const utilization_backhaul = Math.min(1.0, Math.max(0, entry.utilization_backhaul || 0));
+      const utilization_autonomy = Math.min(1.0, Math.max(0, entry.utilization_autonomy || 0));
+      
+      const heatWaste = generatedPower * (1 - utilization_heat);
+      const backhaulWaste = generatedPower * utilization_heat * (1 - utilization_backhaul);
+      const maintenanceWaste = generatedPower * utilization_heat * utilization_backhaul * (1 - utilization_autonomy);
       
       return {
         year,
@@ -73,8 +81,8 @@ export default function PowerStrandedChart({ debugState }: PowerStrandedChartPro
   }
   
   const width = typeof window !== 'undefined' ? Math.min(800, window.innerWidth - 64) : 800;
-  const height = 400;
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 };
+  const height = typeof window !== 'undefined' && window.innerWidth >= 640 ? 500 : 300; // CRITICAL: Increased desktop to 500px to fill panel, 300px mobile
+  const padding = { top: 40, right: 40, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   

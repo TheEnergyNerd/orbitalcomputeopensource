@@ -24,19 +24,19 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
   // Listen for tutorial button clicks
   useEffect(() => {
     const handleDeploy1Year = () => deployNextYear();
-    const handleDeploy5Years = () => extendYears(5);
+    const handleDeploy3Years = () => extendYears(2);
     const handleOpenAiRouter = () => {
       const event = new CustomEvent('open-ai-router');
       window.dispatchEvent(event);
     };
 
     window.addEventListener('tutorial-deploy-1-year', handleDeploy1Year);
-    window.addEventListener('tutorial-deploy-5-years', handleDeploy5Years);
+    window.addEventListener('tutorial-deploy-3-years', handleDeploy3Years);
     window.addEventListener('tutorial-open-ai-router', handleOpenAiRouter);
 
     return () => {
       window.removeEventListener('tutorial-deploy-1-year', handleDeploy1Year);
-      window.removeEventListener('tutorial-deploy-5-years', handleDeploy5Years);
+      window.removeEventListener('tutorial-deploy-3-years', handleDeploy3Years);
       window.removeEventListener('tutorial-open-ai-router', handleOpenAiRouter);
     };
   }, [deployNextYear, extendYears]);
@@ -47,7 +47,7 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
   }
 
   return (
-    <div className="fixed top-28 sm:top-24 right-2 sm:right-4 lg:right-6 pointer-events-none" style={{ zIndex: 200 }} data-tutorial-year-counter>
+    <div className="fixed top-28 sm:top-24 right-2 sm:right-4 lg:right-6 pointer-events-none" style={{ zIndex: 50 }} data-tutorial-year-counter>
       {/* Year counter */}
       <div className="panel-glass rounded-lg px-4 py-3 border border-cyan-500/50 shadow-lg backdrop-blur-sm">
         <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Year</div>
@@ -66,10 +66,10 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
           Deploy 1 year
         </button>
         <button
-          onClick={() => extendYears(5)}
+          onClick={() => extendYears(2)}
           className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition"
         >
-          +5 years
+          +2 years
         </button>
         <button
           onClick={() => {

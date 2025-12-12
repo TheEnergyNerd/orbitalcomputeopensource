@@ -61,6 +61,9 @@ export interface SimulationConfig {
   // Congestion and failures (optional)
   congestionFrame?: GlobalCongestionFrame | null;
   activeFailures?: FailureEvent[];
+  
+  // Scenario mode (assumptions about orbital tech/economics)
+  scenarioMode?: ScenarioMode;
 }
 
 /**
@@ -72,6 +75,11 @@ export type ComputeStrategy = "edge_heavy" | "bulk_heavy" | "green_heavy" | "bal
  * Launch Strategy - Discrete strategy for rocket mix
  */
 export type LaunchStrategy = "heavy" | "medium" | "light";
+
+/**
+ * Scenario Mode - Assumptions about orbital technology and economics
+ */
+export type ScenarioMode = "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
 
 /**
  * YearPlan - User's decision for a specific year
@@ -131,6 +139,16 @@ export interface YearStep {
 
   // For Factorio sparklines
   stageThroughputs: StageThroughput[];
+  
+  // Scenario diagnostics (optional, from debug state)
+  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
+  launch_cost_per_kg?: number;
+  tech_progress_factor?: number;
+  failure_rate_effective?: number;
+  orbit_carbon_intensity?: number;
+  orbit_cost_per_compute?: number;
+  orbit_compute_share?: number; // Patch 3: Actual orbit compute share
+  orbit_energy_share_twh?: number; // Patch 3: Orbit energy share
 }
 
 /**
@@ -175,5 +193,7 @@ export function createDefaultConfig(): SimulationConfig {
     aiControlPercent: 0.5,
     // Constellation defaults
     constellation: aiDesignConstellation("resilience"), // "balanced" not a valid ConstellationMode, use "resilience" instead
+    // Scenario mode defaults to BASELINE
+    scenarioMode: "BASELINE",
   };
 }

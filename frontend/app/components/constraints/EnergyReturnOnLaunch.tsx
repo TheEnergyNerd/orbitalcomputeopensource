@@ -31,10 +31,15 @@ export default function EnergyReturnOnLaunch({ debugState }: EnergyReturnOnLaunc
     
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry) return null;
+      if (!entry || typeof entry !== 'object' || !('massPerSatellite' in entry)) return null;
+      
+      // Type guard: ensure it's a DebugStateEntry
+      if (!('year' in entry && typeof entry.year === 'number')) return null;
       
       // Calculate total launch + manufacturing energy (MJ)
-      const totalMassKg = entry.satellitesTotal * (entry.massPerSatellite * 1000); // Convert tons to kg
+      // massPerSatellite is in tons, convert to kg
+      const massPerSatelliteKg = (entry.massPerSatellite || 0.5) * 1000; // Default to 0.5 tons if missing
+      const totalMassKg = entry.satellitesTotal * massPerSatelliteKg;
       const launchEnergy = totalMassKg * LAUNCH_ENERGY_PER_KG;
       const manufacturingEnergy = totalMassKg * MANUFACTURING_ENERGY_PER_KG;
       const totalEmbeddedEnergy = launchEnergy + manufacturingEnergy;
@@ -75,8 +80,8 @@ export default function EnergyReturnOnLaunch({ debugState }: EnergyReturnOnLaunc
   }
   
   const width = typeof window !== 'undefined' ? Math.min(800, window.innerWidth - 64) : 800;
-  const height = 400;
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 };
+  const height = typeof window !== 'undefined' && window.innerWidth >= 640 ? 500 : 300; // CRITICAL: Increased desktop to 500px to fill panel, 300px mobile
+  const padding = { top: 40, right: 40, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   

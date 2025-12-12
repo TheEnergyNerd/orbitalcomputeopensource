@@ -14,6 +14,8 @@ import { evalRouterPolicy, type JobDemand } from '../ai/routerEval';
 import { defaultPolicy } from '../ai/routerTypes';
 import { evalConstellation } from '../ai/constellationEval';
 import { mix } from '../util/math';
+import { runMultiYearDeployment } from './yearSteppedDeployment';
+import type { StrategyMode } from './satelliteClasses';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -77,6 +79,35 @@ export function runSimulationFromPlans(
 
   const timeline: YearStep[] = [];
   const totalYears = Math.max(yearPlans.length - 1, 1);
+
+  // CRITICAL: Run physics-based deployment simulation to populate debug state
+  // Map computeStrategy to StrategyMode
+  const strategyMap = new Map<number, StrategyMode>();
+  yearPlans.forEach((plan, index) => {
+    const year = baseConfig.startYear + index;
+    // Map computeStrategy string to StrategyMode
+    const strategyMode: StrategyMode = 
+      plan.computeStrategy === "bulk_heavy" ? "COST" :
+      plan.computeStrategy === "edge_heavy" ? "LATENCY" :
+      plan.computeStrategy === "green_heavy" ? "CARBON" :
+      "BALANCED";
+    strategyMap.set(year, strategyMode);
+  });
+
+  // CRITICAL FIX: Run ALL scenarios to populate debug state for each
+  // This ensures we have data for BASELINE, ORBITAL_BEAR, and ORBITAL_BULL
+  const startYear = baseConfig.startYear;
+  const endYear = baseConfig.startYear + yearPlans.length - 1;
+  const scenariosToRun: Array<"BASELINE" | "ORBITAL_BEAR" | "ORBITAL_BULL"> = ["BASELINE", "ORBITAL_BEAR", "ORBITAL_BULL"];
+  
+  // Run each scenario and populate debug state
+  scenariosToRun.forEach(scenarioMode => {
+    runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
+  });
+  
+  // Use the selected scenario for the timeline (for backward compatibility)
+  const scenarioMode = baseConfig.scenarioMode ?? "BASELINE";
+  const deploymentResults = runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
 
   // Logistic orbital share model - smooth growth, no hard cap
   let orbitalShare = 0; // fraction of world compute that *could* be orbital, 0–1
@@ -174,134 +205,211 @@ export function runSimulationFromPlans(
     const orbitalComputeTwh = totalDemandTwh * share;
     const netGroundComputeTwh = totalDemandTwh - orbitalComputeTwh;
 
-    // 5) Cost / Compute curves (explicit easing functions)
-    const baseGroundCost = baseConfig.groundCostPerTwh;
-    const baseOrbitCost = baseConfig.baseOrbitalCostPerTwh;
-
-    // Ground: ~15% cheaper over horizon, mild curve
-    const groundCostDrop = 0.15;
-    const costPerComputeGround =
-      baseGroundCost * (1 - groundCostDrop * easeOutCubic(progress));
-
-    // Orbit: starts 1.4× ground, ends at 0.4× ground, strongly curved
-    const orbitCostStartFactor = 1.4;
-    const orbitCostEndFactor = 0.4;
-    const orbitCostFactor =
-      orbitCostStartFactor +
-      (orbitCostEndFactor - orbitCostStartFactor) * easeOutCubic(progress);
-
-    const orbitalCostPerTwh =
-      baseGroundCost * orbitCostFactor * podProfile.costMultiplier;
-
-    // Mix cost uses nonlinear share
-    const alphaCost = 1.5;
-    const wOrbit = Math.pow(share, alphaCost);
-    const wGround = 1 - wOrbit;
-
-    const costPerComputeMix =
-      wGround * costPerComputeGround +
-      wOrbit * orbitalCostPerTwh;
-
-    // 6) Latency curves (explicit easing functions)
-    const baseGroundLatency = baseConfig.groundLatencyMs;
-    const baseOrbitLatency = baseConfig.baseOrbitalLatencyMs;
-
-    const groundLatencyDrop = 0.10; // 10% lower across horizon
-    const latencyGroundMs =
-      baseGroundLatency * (1 - groundLatencyDrop * easeOutCubic(progress));
-
-    // Orbit: from 0.9× ground to 0.4× ground, curved
-    const orbitLatStart = 0.9;
-    const orbitLatEnd = 0.4;
-    const orbitLatFactor =
-      orbitLatStart + (orbitLatEnd - orbitLatStart) * easeOutCubic(progress);
-
-    let baseOrbitalLatency = baseGroundLatency * orbitLatFactor * podProfile.latencyMultiplier;
+    // CRITICAL FIX: Use debug state values if available (single source of truth)
+    // Try to get all metrics from debug state (if simulation has run)
+    // This ensures timeline uses the same ground truth as the physics engine
+    let useDebugState = false;
+    let costPerComputeGround: number = 340; // Default fallback
+    let costPerComputeMix: number = 340; // Default fallback
+    let latencyGroundMs: number = 120; // Default fallback
+    let latencyMixMs: number = 120; // Default fallback
+    let opexGround: number = 0; // Default fallback
+    let opexMix: number = 0; // Default fallback
     
-    // Apply constellation latency if available
-    if (baseConfig.constellation) {
-      const constellationMetrics = evalConstellation(baseConfig.constellation);
-      // Blend constellation latency with base orbital latency
-      baseOrbitalLatency = mix(baseOrbitalLatency, constellationMetrics.latencyMs, 0.3);
+    if (typeof window !== 'undefined') {
+      try {
+        const { getDebugStateEntry } = require('./debugState');
+        const debugEntry = getDebugStateEntry(year, scenarioMode);
+        
+        if (debugEntry && 
+            debugEntry.cost_per_compute_ground !== undefined && 
+            debugEntry.cost_per_compute_mix !== undefined &&
+            debugEntry.latency_ground_ms !== undefined &&
+            debugEntry.latency_mix_ms !== undefined &&
+            debugEntry.annual_opex_ground !== undefined &&
+            debugEntry.annual_opex_mix !== undefined) {
+          // Use debug state values (single source of truth)
+          costPerComputeGround = debugEntry.cost_per_compute_ground;
+          costPerComputeMix = debugEntry.cost_per_compute_mix;
+          latencyGroundMs = debugEntry.latency_ground_ms;
+          latencyMixMs = debugEntry.latency_mix_ms;
+          // A. FIX: Use all-ground baseline for ground OPEX display
+          opexGround = debugEntry.annual_opex_ground_all_ground ?? debugEntry.annual_opex_ground;
+          opexMix = debugEntry.annual_opex_mix;
+          useDebugState = true;
+        }
+      } catch (e) {
+        // Debug state not available yet, use fallback
+      }
     }
+    
+    if (!useDebugState) {
+      // Fallback: calculate from formulas (for early years or when debug state not available)
+      // 5) Cost / Compute curves (explicit easing functions)
+      const baseGroundCost = baseConfig.groundCostPerTwh;
+      const baseOrbitCost = baseConfig.baseOrbitalCostPerTwh;
 
-    const orbitalLatencyMs = baseOrbitalLatency;
+      // Ground: ~15% cheaper over horizon, mild curve
+      const groundCostDrop = 0.15;
+      costPerComputeGround =
+        baseGroundCost * (1 - groundCostDrop * easeOutCubic(progress));
 
-    // Mix latency, nonlinear in share
-    const alphaLat = 1.3;
-    const wOrbitLat = Math.pow(share, alphaLat);
-    const wGroundLat = 1 - wOrbitLat;
+      // Orbit: starts 1.4× ground, ends at 0.4× ground, strongly curved
+      const orbitCostStartFactor = 1.4;
+      const orbitCostEndFactor = 0.4;
+      const orbitCostFactor =
+        orbitCostStartFactor +
+        (orbitCostEndFactor - orbitCostStartFactor) * easeOutCubic(progress);
 
-    const latencyMixMs =
-      wGroundLat * latencyGroundMs +
-      wOrbitLat * orbitalLatencyMs;
+      const orbitalCostPerTwh =
+        baseGroundCost * orbitCostFactor * podProfile.costMultiplier;
 
-    // 7) Annual OPEX curves (explicit easing functions)
-    const opexGround = totalDemandTwh * costPerComputeGround;
+      // Mix cost uses nonlinear share
+      const alphaCost = 1.5;
+      const wOrbit = Math.pow(share, alphaCost);
+      const wGround = 1 - wOrbit;
 
-    // Space: use the same orbitalCostPerTwh but apply an extra learning curve
-    const opexLearningFactor = 1 - 0.5 * easeOutCubic(progress); // 50% cheaper opex by end
+      costPerComputeMix =
+        wGround * costPerComputeGround +
+        wOrbit * orbitalCostPerTwh;
 
-    const orbitalOpexPerTwh = orbitalCostPerTwh * opexLearningFactor;
+      // 6) Latency curves (explicit easing functions)
+      const baseGroundLatency = baseConfig.groundLatencyMs;
+      const baseOrbitLatency = baseConfig.baseOrbitalLatencyMs;
 
-    const opexMix =
-      (totalDemandTwh * (1 - share)) * costPerComputeGround +
-      (totalDemandTwh * share) * orbitalOpexPerTwh;
+      const groundLatencyDrop = 0.10; // 10% lower across horizon
+      latencyGroundMs =
+        baseGroundLatency * (1 - groundLatencyDrop * easeOutCubic(progress));
+
+      // Orbit: from 0.9× ground to 0.4× ground, curved
+      const orbitLatStart = 0.9;
+      const orbitLatEnd = 0.4;
+      const orbitLatFactor =
+        orbitLatStart + (orbitLatEnd - orbitLatStart) * easeOutCubic(progress);
+
+      let baseOrbitalLatency = baseGroundLatency * orbitLatFactor * podProfile.latencyMultiplier;
+      
+      // Apply constellation latency if available
+      if (baseConfig.constellation) {
+        const constellationMetrics = evalConstellation(baseConfig.constellation);
+        // Blend constellation latency with base orbital latency
+        baseOrbitalLatency = mix(baseOrbitalLatency, constellationMetrics.latencyMs, 0.3);
+      }
+
+      const orbitalLatencyMs = baseOrbitalLatency;
+
+      // Mix latency, nonlinear in share
+      const alphaLat = 1.3;
+      const wOrbitLat = Math.pow(share, alphaLat);
+      const wGroundLat = 1 - wOrbitLat;
+
+      latencyMixMs =
+        wGroundLat * latencyGroundMs +
+        wOrbitLat * orbitalLatencyMs;
+
+      // 7) Annual OPEX curves (explicit easing functions)
+      opexGround = totalDemandTwh * costPerComputeGround;
+
+      // Space: use the same orbitalCostPerTwh but apply an extra learning curve
+      const opexLearningFactor = 1 - 0.5 * easeOutCubic(progress); // 50% cheaper opex by end
+
+      const orbitalOpexPerTwh = orbitalCostPerTwh * opexLearningFactor;
+
+      opexMix =
+        (totalDemandTwh * (1 - share)) * costPerComputeGround +
+        (totalDemandTwh * share) * orbitalOpexPerTwh;
+    }
 
     const opexSavings = opexGround - opexMix;
 
     // 8) Carbon curves (explicit easing functions)
-    // Force mix to be cleaner than ground, no U-shape
-    const baseGroundCarbonPerTwh = baseConfig.groundCarbonPerTwh;
+    // CRITICAL FIX: Use debug state carbon values if available (single source of truth)
+    // Use annual totals directly from debug (already converted from intensity)
+    let carbonMix: number = 0; // Default fallback
+    let carbonGround: number = 0; // Default fallback
+    
+    // Try to get carbon values from debug state (if simulation has run)
+    // This ensures timeline uses the same ground truth as the physics engine
+    let useDebugStateCarbon = false;
+    
+    if (typeof window !== 'undefined' && (window as any).getDebugState) {
+      try {
+        const { getDebugStateEntry } = require('./debugState');
+        const debugEntry = getDebugStateEntry(year, scenarioMode);
+        
+        if (debugEntry && 
+            debugEntry.annual_carbon_ground_all_ground !== undefined && 
+            debugEntry.annual_carbon_mix !== undefined) {
+          // Use annual totals directly from debug (already converted from intensity * baseDemandTWh)
+          carbonGround = debugEntry.annual_carbon_ground_all_ground;
+          carbonMix = debugEntry.annual_carbon_mix;
+          useDebugStateCarbon = true;
+        }
+      } catch (e) {
+        // Debug state not available yet, use fallback
+      }
+    }
+    
+    if (!useDebugStateCarbon) {
+      // Fallback: calculate with proper crossover behavior
+      // CRITICAL FIX: Orbital must start WORSE than ground, then cross over as it scales
+      const baseGroundCarbonPerTwh = baseConfig.groundCarbonPerTwh;
 
-    // Let grid decarb a bit over time
-    const groundDecarb = 0.25; // 25% cleaner over horizon
-    const groundCarbonPerTwh =
-      baseGroundCarbonPerTwh * (1 - groundDecarb * easeOutCubic(progress));
+      // Let grid decarb a bit over time
+      const groundDecarb = 0.25; // 25% cleaner over horizon
+      const carbonGroundPerTwh =
+        baseGroundCarbonPerTwh * (1 - groundDecarb * easeOutCubic(progress));
 
-    // Baseline: all-ground world (this is the "red" trajectory if we never used orbit)
-    const baselineAllGroundCarbon = totalDemandTwh * groundCarbonPerTwh;
+      // Baseline: all-ground world (this is the "red" trajectory if we never used orbit)
+      carbonGround = totalDemandTwh * carbonGroundPerTwh;
+      
+      // Orbital starts worse (5x ground carbon) when share is 0, then improves as it scales
+      const orbitalCarbonIntensityStart = carbonGroundPerTwh * 5; // 5x worse initially
+      const orbitalCarbonIntensityEnd = carbonGroundPerTwh * 0.2; // 80% better at scale
+      
+      // Orbital carbon intensity improves as share increases (learning curve)
+      const orbitalCarbonPerTwh_fallback = orbitalCarbonIntensityStart + 
+        (orbitalCarbonIntensityEnd - orbitalCarbonIntensityStart) * easeOutCubic(share);
+      
+      // Mix carbon: weighted average
+      const orbitalCarbonTotal = totalDemandTwh * share * orbitalCarbonPerTwh_fallback;
+      const groundCarbonInMix = totalDemandTwh * (1 - share) * carbonGroundPerTwh;
+      carbonMix = orbitalCarbonTotal + groundCarbonInMix;
+    }
 
-    // Max possible reduction vs all-ground if we somehow did 100% orbit.
-    // e.g. 80% lower emissions in the limit.
-    const maxCarbonReduction = 0.8;
-
-    // Make benefit grow smoothly with share: small at low share, big near 1.
-    const benefit = maxCarbonReduction * easeOutCubic(share); // 0 → maxCarbonReduction
-
-    // Actual mix carbon is baseline scaled down by (1 - benefit)
-    const carbonMix = baselineAllGroundCarbon * (1 - benefit);
-
-    // Ground curve is just the baseline (for the same demand)
-    const carbonGround = baselineAllGroundCarbon;
-
-    // Savings vs all-ground, always ≥ 0 with this model
+    // Savings vs all-ground (can be negative if orbital starts worse)
     const carbonSavings = carbonGround - carbonMix;
 
     // For backward compatibility: baseline values
-    const opexGroundBaseline = totalDemandTwh * costPerComputeGround;
-    const carbonGroundBaseline = baselineAllGroundCarbon; // same as carbonGround
+    // Use the same values as the ground lines (they're already the all-ground baselines)
+    const opexGroundBaseline = opexGround; // Already set from annual_opex_ground_all_ground
+    const carbonGroundBaseline = carbonGround; // Already set from annual_carbon_ground_all_ground
 
-    // Sanity log for final year
-    if (index === yearPlans.length - 1) {
-      console.log("FINAL YEAR CHECK", {
-        year,
-        progress,
-        share,
-        totalDemandTwh,
-        netGroundComputeTwh,
-        orbitalComputeTwh,
-        costPerComputeGround,
-        costPerComputeMix,
-        latencyGroundMs,
-        latencyMixMs,
-        opexGround,
-        opexMix,
-        carbonGround,
-        carbonMix,
-      });
+    // Removed verbose logging
+
+    // Get scenario diagnostics from debug state if available
+    let scenarioDiagnostics: Partial<YearStep> = {};
+    if (typeof window !== 'undefined' && (window as any).getDebugState) {
+      try {
+        const { getDebugStateEntry } = require('./debugState');
+        const debugEntry = getDebugStateEntry(year, scenarioMode);
+        if (debugEntry) {
+          scenarioDiagnostics = {
+            scenario_mode: debugEntry.scenario_mode,
+            launch_cost_per_kg: debugEntry.launch_cost_per_kg,
+            tech_progress_factor: debugEntry.tech_progress_factor,
+            failure_rate_effective: debugEntry.failure_rate_effective,
+            orbit_carbon_intensity: debugEntry.orbit_carbon_intensity,
+            orbit_cost_per_compute: debugEntry.orbit_cost_per_compute,
+            orbit_compute_share: debugEntry.orbit_compute_share, // Patch 3
+            orbit_energy_share_twh: debugEntry.orbit_energy_share_twh, // Patch 3
+          };
+        }
+      } catch (e) {
+        // Debug state not available
+      }
     }
-
+    
     timeline.push({
       year,
       deploymentsCompleted,
@@ -329,6 +437,8 @@ export function runSimulationFromPlans(
       carbonGroundBaseline, // for backward compatibility
       stageThroughputs, // Same structure for all years (sparklines will show this)
       ...routerMetrics, // Spread router metrics if present
+      // Scenario diagnostics (from debug state)
+      ...scenarioDiagnostics,
     });
   });
 

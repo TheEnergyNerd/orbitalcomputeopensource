@@ -12,9 +12,16 @@ interface YearComputeChartProps {
  * Shows ALL years and both curves clearly
  */
 export default function YearComputeChart({ series }: YearComputeChartProps) {
-  const width = 400; // Wider
-  const height = 120; // Taller
-  const padding = { top: 10, right: 20, bottom: 25, left: 40 };
+  // Responsive dimensions for mobile and desktop
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const containerWidth = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const width = isMobile 
+    ? Math.min(350, containerWidth - 32) 
+    : Math.min(containerWidth - 32, Math.max(400, containerWidth * 0.9)); // Use 90% of width on desktop
+  const height = isMobile ? 140 : 120; // Taller on mobile to prevent cutoff
+  const padding = isMobile 
+    ? { top: 10, right: 15, bottom: 50, left: 35 } // CRITICAL: Increased bottom padding on mobile to prevent cutoff
+    : { top: 10, right: 40, bottom: 150, left: 40 }; // CRITICAL: Increased bottom to 150px for desktop to prevent x-axis cutoff
 
   // Calculate max value for Y-axis scaling
   const maxValue = Math.max(

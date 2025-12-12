@@ -46,7 +46,8 @@ export default function AutoDesignSafetyControls({
         <select
           value={riskMode}
           onChange={(e) => onRiskModeChange(e.target.value as RiskMode)}
-          className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:border-accent-blue focus:outline-none"
+          className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:border-accent-blue focus:outline-none cursor-pointer pointer-events-auto z-50 relative"
+          style={{ pointerEvents: 'auto' }}
         >
           <option value="SAFE">SAFE - Conservative margins (70% thermal, 90% backhaul/maintenance)</option>
           <option value="AGGRESSIVE">AGGRESSIVE - Tight margins (95% thermal, 100% backhaul/maintenance)</option>

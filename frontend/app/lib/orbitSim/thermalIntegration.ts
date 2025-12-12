@@ -79,7 +79,9 @@ const STEFAN_BOLTZMANN = 5.67e-8; // W/(m²·K⁴)
 const SPACE_TEMP_K = 2.7; // Cosmic microwave background temperature (Kelvin)
 const MAX_OPERATING_TEMP_C = 85; // Maximum safe operating temperature (legacy, kept for compatibility)
 export const FLOPS_PER_TBPS = 1e15 / 1e12; // 1000 PFLOPs per TBps (approximate)
-const HEAT_GEN_EFFICIENCY = 0.95; // 95% of power becomes heat
+// CRITICAL: Electrical efficiency - fraction of power that does useful work
+// Waste heat = power * (1 - electrical_efficiency)
+const ELECTRICAL_EFFICIENCY = 0.85; // 85% electrical efficiency, 15% becomes waste heat
 const ACTIVE_COOLING_EFFICIENCY = 0.25; // 25% of net heat can be actively cooled
 const MAX_ACTIVE_COOLING_FRACTION = 0.15; // Max 15% of power for active cooling
 
@@ -100,11 +102,9 @@ export const MAINT_SAFETY_MARGIN_AGGRESSIVE = 1.0;
 
 export type RiskMode = "SAFE" | "AGGRESSIVE" | "YOLO";
 
-/**
- * Calculate heat generation from power
- */
 export function calculateHeatGeneration(power_kw: number): number {
-  return power_kw * HEAT_GEN_EFFICIENCY;
+  // FIX: 85% of bus power becomes heat (15% is electrical losses)
+  return power_kw * 0.85; // 85% of power becomes heat
 }
 
 /**
@@ -117,14 +117,21 @@ export function calculateHeatRejection(
   temp_radiator_C: number,
   eclipse_fraction: number,
   shadowing_loss: number
-): number {
+): { heatReject_kw: number; radiator_capacity_kw: number } {
   const temp_radiator_K = temp_radiator_C + 273.15;
-  const Q_rad_watts = radiatorArea_m2 * emissivity * STEFAN_BOLTZMANN * 
-    (Math.pow(temp_radiator_K, 4) - Math.pow(SPACE_TEMP_K, 4));
-  const Q_rad_kw = Q_rad_watts / 1000;
   
-  // Apply eclipse and shadowing losses
-  return Q_rad_kw * (1 - eclipse_fraction) * (1 - shadowing_loss);
+  // Maximum radiator capacity (no eclipse/shadowing)
+  const Q_rad_max_watts = radiatorArea_m2 * emissivity * STEFAN_BOLTZMANN * 
+    (Math.pow(temp_radiator_K, 4) - Math.pow(SPACE_TEMP_K, 4));
+  const radiator_capacity_kw = Q_rad_max_watts / 1000;
+  
+  // Actual heat rejection (with eclipse and shadowing losses)
+  const heatReject_kw = radiator_capacity_kw * (1 - eclipse_fraction) * (1 - shadowing_loss);
+  
+  return {
+    heatReject_kw: Math.max(0, heatReject_kw),
+    radiator_capacity_kw: Math.max(0, radiator_capacity_kw),
+  };
 }
 
 /**
@@ -209,25 +216,39 @@ export function updateThermalState(
   const pump_failure_multiplier = failureModes.pump_failure_active ? 1.3 : 1.0; // 30% more power needed
   const coolant_frozen = failureModes.coolant_frozen || false;
   
-  // 1. Calculate heat generation
   const heatGen_kw = calculateHeatGeneration(state.power_total_kw);
   
-  // 2. Calculate heat rejection (with damaged radiator)
-  const heatReject_kw = calculateHeatRejection(
+  // 2. Calculate heat rejection
+  const heatRejectionResult = calculateHeatRejection(
     effective_radiator_area,
     state.emissivity,
     state.temp_radiator_C,
     state.eclipse_fraction,
     state.shadowing_loss
   );
+  const heatReject_kw = heatRejectionResult.heatReject_kw;
+  const radiator_capacity_kw = heatRejectionResult.radiator_capacity_kw;
   
-  // 3. Calculate net heat flow
-  const net_heat_flow_kw = heatGen_kw - heatReject_kw;
+  let net_heat_flow_kw = heatGen_kw - heatReject_kw;
+  
+  const radiator_utilization_for_overdrive = radiator_capacity_kw > 1e-6
+    ? (heatGen_kw / radiator_capacity_kw) * 100
+    : 0;
+  let radiator_burnout_factor = state.radiator_burnout_factor || 1.0;
+  
+  if (radiator_utilization_for_overdrive > 100) {
+    net_heat_flow_kw *= 1.5;
+  }
+  if (radiator_utilization_for_overdrive > 110) {
+    radiator_burnout_factor *= 0.98;
+    state.emissivity *= 0.99;
+  }
   
   // 4. Calculate active cooling (power-cooling coupling)
   // Active cooling disabled if coolant is frozen
   let active_cooling_kw = 0;
-  if (!coolant_frozen) {
+  if (!coolant_frozen && net_heat_flow_kw > 0) {
+    // Only cool if we have excess heat (net_heat_flow > 0)
     active_cooling_kw = Math.min(
       net_heat_flow_kw * ACTIVE_COOLING_EFFICIENCY * pump_failure_multiplier,
       state.power_total_kw * MAX_ACTIVE_COOLING_FRACTION
@@ -238,13 +259,11 @@ export function updateThermalState(
   // 5. Calculate radiator utilization (BEFORE temperature update)
   const radiator_utilization_ratio = heatGen_kw > 0 ? heatReject_kw / heatGen_kw : 1.0;
   
-  // 6. Update temperature based on net heat flow
   const effective_net_heat = net_heat_flow_kw - active_cooling_kw_clamped;
-  let temp_change_C = (effective_net_heat * 3600 * dt_hours) / state.thermal_mass_J_per_C;
+  const thermal_mass_safe = Math.max(state.thermal_mass_J_per_C, 1e6);
+  let temp_change_C = (effective_net_heat * 3600 * dt_hours) / thermal_mass_safe;
   
-  // 6a. If radiator utilization > 1, temperature must rise SUPER-LINEARLY
-  // Also apply radiator overdrive penalty
-  let radiator_burnout_factor = state.radiator_burnout_factor || 1.0;
+  // 6a. If radiator utilization > 100%, temperature must rise SUPER-LINEARLY
   if (radiator_utilization_ratio < 1.0) {
     // Heat rejection insufficient - super-linear temperature rise
     const deficit = 1.0 - radiator_utilization_ratio;
@@ -252,21 +271,9 @@ export function updateThermalState(
     const superlinear_multiplier = Math.pow(deficit, 2.5) * 3.0; // Amplify by 3x
     temp_change_C *= (1.0 + superlinear_multiplier);
     
-    // Radiator overdrive penalty: if utilization > 1.0, temp rises faster
-    if (radiator_utilization_ratio < 1.0) {
-      const overdrive_factor = 1.0 + (1.0 - radiator_utilization_ratio) * 2.0; // Up to 3x faster
-      temp_change_C *= overdrive_factor;
-    }
-    
-    // If radiator utilization > 1.1 (ratio < 0.909), radiator burns out
-    if (radiator_utilization_ratio < 0.909) { // Less than 90.9% = over 110% utilization
-      // Radiator burnout: area and emissivity degrade
-      radiator_burnout_factor *= 0.98; // 2% degradation per year
-      const emissivity_degradation = 0.99; // 1% emissivity loss per year
-      state.emissivity *= emissivity_degradation;
-      // Micrometeoroid risk increases
-      // (handled in applyFailureModes)
-    }
+    // Additional overdrive penalty: temp rises faster when overdriven
+    const overdrive_factor = 1.0 + (1.0 - radiator_utilization_ratio) * 2.0; // Up to 3x faster
+    temp_change_C *= overdrive_factor;
   }
   
   // 6b. Eclipse-induced thermal oscillation
@@ -279,8 +286,6 @@ export function updateThermalState(
   }
   
   const new_temp_core_C = state.temp_core_C + temp_change_C;
-  
-  // 6c. HARD PHYSICAL DEATH (UNCONDITIONAL)
   let lost_fraction = state.lost_fraction || 0;
   let thermal_overstress_term = 0;
   
@@ -352,30 +357,35 @@ export function updateThermalState(
   const backhaul_capacity_tbps = state.backhaul_tbps; // TBps
   const backhaul_compute_capacity = backhaul_capacity_tbps * FLOPS_PER_TBPS;
   
-  // Calculate backhaul used (based on compute_effective)
-  const backhaul_used_tbps = compute_effective_flops > 0
-    ? compute_effective_flops / FLOPS_PER_TBPS
-    : 0;
-  
   // REAL COMPETITION: compute_exportable = min(compute_effective, backhaul_capacity)
   let compute_exportable_flops = Math.min(
     compute_effective_flops,
     backhaul_compute_capacity
   );
   
+  // Calculate backhaul used from flows: backhaul_used_tbps = compute_exportable_flops / flops_per_tbps
+  // CRITICAL: Use compute_exportable_flops, not compute_effective_flops
+  const backhaul_used_tbps_from_flows = compute_exportable_flops > 0
+    ? compute_exportable_flops / FLOPS_PER_TBPS
+    : 0;
+  
   // SUSTAINED COMPUTE MUST GATE: compute_effective cannot exceed sustained_compute
   // (sustained_compute calculated below, but we need to gate here)
   // This will be applied after sustained_compute is calculated
   
   // 10. Maintenance debt loop (MUST dominate survival) - Calculate FIRST before using in utilization metrics
+  // CRITICAL: Maintenance capacity is consumed by repairs, not just available
   const pods_repaired = Math.min(state.degraded_pods, state.maintenance_capacity_pods);
   const totalPods = state.power_total_kw > 0 ? Math.floor(state.power_total_kw / 10) : 0; // Rough estimate
   const new_failures = new_failure_rate * totalPods * (dt_hours / 8760);
   const new_degraded_pods = Math.max(0, state.degraded_pods + new_failures - pods_repaired);
   
   // 11. Calculate maintenance utilization ratio and global efficiency (needed for power utilization)
+  // CRITICAL: Utilization = (degraded_pods + repairs_this_year) / capacity
+  // This ensures repairs consume capacity
+  const maintenance_used_pods = new_degraded_pods + pods_repaired; // Total maintenance work (failures + repairs)
   const maintenance_utilization_ratio = state.maintenance_capacity_pods > 0
-    ? new_degraded_pods / state.maintenance_capacity_pods
+    ? maintenance_used_pods / state.maintenance_capacity_pods
     : 0;
   
   let new_global_efficiency = state.global_efficiency || 1.0;
@@ -383,13 +393,28 @@ export function updateThermalState(
   let survival_fraction = totalPods > 0 ? (totalPods - new_degraded_pods) / totalPods : 1.0;
   
   // If maintenance_utilization > 1, failures_unrecovered MUST grow, survival_fraction MUST fall, global_efficiency MUST decay
+  // ALSO: power and compute MUST be reduced
+  let power_scale_from_maintenance = 1.0;
+  let compute_scale_from_maintenance = 1.0;
   if (maintenance_utilization_ratio > 1.0) {
-    // Failures exceed recovery capacity
+    // Failures exceed recovery capacity - maintenance is overloaded
+    const overload_factor = maintenance_utilization_ratio; // e.g., 2.0 = 200% utilization
+    
+    // Unrecovered failures grow with overload
     failures_unrecovered = Math.max(failures_unrecovered, (maintenance_utilization_ratio - 1.0) * state.maintenance_capacity_pods);
-    survival_fraction = Math.max(0.5, survival_fraction - (maintenance_utilization_ratio - 1.0) * 0.1); // Decay by 10% per unit over capacity
+    
+    // Survival fraction MUST decay when maintenance is overloaded
+    // More overload = more failures pile up = lower survival
+    const survival_decay = Math.pow(0.9, maintenance_utilization_ratio - 1.0); // 10% decay per unit over capacity
+    survival_fraction = Math.max(0.1, survival_fraction * survival_decay);
+    
     // Global efficiency decays exponentially with maintenance overload
     const efficiency_decay = Math.pow(0.95, maintenance_utilization_ratio - 1.0); // 5% decay per unit over capacity
     new_global_efficiency *= efficiency_decay;
+    
+    // REDUCE POWER AND COMPUTE when maintenance is overloaded
+    power_scale_from_maintenance = survival_fraction;
+    compute_scale_from_maintenance = survival_fraction;
   }
   
   // 12. Calculate sustained compute EARLY (needed for power utilization check)
@@ -440,23 +465,24 @@ export function updateThermalState(
   
   const thermal_drift_C_per_hr = temp_change_C / dt_hours;
   
-  // Radiator utilization: heat rejection / heat generation (can exceed 100%)
-  const radiator_utilization_percent = heatGen_kw > 0
-    ? (heatReject_kw / heatGen_kw) * 100
-    : 100;
+  const radiator_utilization_percent = radiator_capacity_kw > 1e-6
+    ? Math.max(0, Math.min(200, (heatGen_kw / radiator_capacity_kw) * 100))
+    : (heatGen_kw > 0 ? 200 : 0);
   
-  // Backhaul utilization: backhaul_used / backhaul_capacity
-  const backhaul_utilization_percent = backhaul_capacity_tbps > 0
-    ? (backhaul_used_tbps / backhaul_capacity_tbps) * 100
+  const backhaul_utilization_percent = backhaul_capacity_tbps > 1e-9
+    ? Math.max(0, Math.min(100, (backhaul_used_tbps_from_flows / backhaul_capacity_tbps) * 100))
+    : (backhaul_used_tbps_from_flows > 0 ? 100 : 0);
+  
+  const manufacturing_utilization_percent = state.manufacturing_rate_pods_per_year > 1e-9
+    ? Math.max(0, Math.min(100, 100)) // Assume always at capacity for now
     : 0;
   
-  const manufacturing_utilization_percent = state.manufacturing_rate_pods_per_year > 0
-    ? 100 // Assume always at capacity for now
-    : 0;
+  const maintenance_used_pods_from_debt = failures_unrecovered + new_failures;
+  const repairCapacity = state.maintenance_capacity_pods;
   
-  const maintenance_utilization_percent = state.maintenance_capacity_pods > 0
-    ? (new_degraded_pods / state.maintenance_capacity_pods) * 100
-    : 0;
+  const maintenance_utilization_percent = repairCapacity > 1e-6
+    ? Math.max(0, Math.min(300, (maintenance_used_pods_from_debt / repairCapacity) * 100))
+    : (maintenance_used_pods_from_debt > 0 ? 300 : 0);
   
   const maintenance_debt = failures_unrecovered;
   
@@ -494,9 +520,9 @@ export function updateThermalState(
     risk_mode: state.risk_mode ?? "SAFE",
     lost_fraction,
     radiator_burnout_factor,
-    // Apply lost fraction to power and compute
-    power_total_kw: state.power_total_kw * (1.0 - lost_fraction),
-    compute_raw_flops: state.compute_raw_flops * (1.0 - lost_fraction),
+    // Apply lost fraction and maintenance scaling to power and compute
+    power_total_kw: state.power_total_kw * (1.0 - lost_fraction) * power_scale_from_maintenance,
+    compute_raw_flops: state.compute_raw_flops * (1.0 - lost_fraction) * compute_scale_from_maintenance,
     radiatorArea_m2: state.radiatorArea_m2 * radiator_burnout_factor * (1.0 - lost_fraction),
   };
 }

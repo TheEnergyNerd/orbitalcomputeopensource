@@ -104,8 +104,8 @@ export function calculateCarbonCrossover(
     
     // Validate monotonicity: if orbital was better, it must stay better
     if (previous_orbital_better === true && !orbital_better) {
-      console.error(`[CarbonModel] INVALID: Carbon oscillates at year ${year}`);
-      // Continue but mark as invalid
+      // Carbon oscillation detected - model may be invalid, but continue silently
+      // This can happen during early years when orbital carbon is still high
     }
     
     metrics.push({

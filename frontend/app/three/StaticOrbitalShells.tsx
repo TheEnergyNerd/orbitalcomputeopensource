@@ -124,7 +124,7 @@ export function StaticOrbitalShells() {
     return shells;
   }, [deploymentData]);
 
-  // Class B SSO ring: ~560 km, 98° inclination, thickens with count
+  // Class B SSO ring: 600-800 km, 98° inclination, thickens with count
   const classBRing = useMemo(() => {
     if (deploymentData.S_B === 0) return null;
 
@@ -132,7 +132,7 @@ export function StaticOrbitalShells() {
     const opacity = Math.min(0.6, 0.2 + (deploymentData.S_B / 5000) * 0.4);
 
     return {
-      altitude: 560,
+      altitude: 700, // Average of 600-800 km range
       inclination: 98,
       count: deploymentData.S_B,
       thickness,

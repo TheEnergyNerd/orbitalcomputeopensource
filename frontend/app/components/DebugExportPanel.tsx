@@ -7,6 +7,24 @@ import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { calculateComputeFromPower } from "../lib/orbitSim/computeEfficiency";
 import { getOrbitalCostPerTFLOP } from "../lib/orbitSim/orbitalCostModel";
 import { usePathname } from "next/navigation";
+import { getDebugState, type DebugStateEntry } from "../lib/orbitSim/debugState";
+import {
+  buildComputeDensitySeries,
+  buildMassFractionsSeries,
+  buildRadiatorAreaSeries,
+  buildSolarAreaSeries,
+  buildRadiationDeratingSeries,
+  buildFleetComputeSeries,
+  buildLaunchSeries,
+  buildCostDecompositionSeries,
+  buildThermalCeilingSeries,
+  buildNetworkingSeries,
+  buildBottleneckSeries,
+  buildPhysicsVsGroundSeries,
+} from "../lib/orbitSim/selectors/orbitalPhysics";
+import { buildRadiatorComputeSeries } from "../lib/orbitSim/selectors/physics";
+import { SCENARIOS } from "../lib/orbitSim/scenarioParams";
+import { getEfficiencyCurveData } from "../lib/orbitSim/computeEfficiency";
 
 export default function DebugExportPanel() {
   const pathname = usePathname();
@@ -21,10 +39,21 @@ export default function DebugExportPanel() {
   const { getDeployedUnits } = useOrbitalUnitsStore();
 
   const handleExport = () => {
-    // Get current year
-    const currentYear = timeline.length > 0 
-      ? timeline[timeline.length - 1]?.year || config.startYear
-      : config.startYear;
+    // Get debug state (single source of truth)
+    const debugState = getDebugState();
+    
+    // Get all years from debug state
+    const debugYears = Object.keys(debugState)
+      .filter(key => key !== 'errors' && !isNaN(Number(key)))
+      .map(Number)
+      .sort((a, b) => a - b);
+    
+    // Get current year from debug state or timeline
+    const currentYear = debugYears.length > 0 
+      ? debugYears[debugYears.length - 1]
+      : (timeline.length > 0 
+        ? timeline[timeline.length - 1]?.year || config.startYear
+        : config.startYear);
 
     // Count satellites per shell
     const satellitesPerShell: Record<string, number> = {
@@ -58,20 +87,35 @@ export default function DebugExportPanel() {
     const utilizationMultiplier = 0.82; // Cost strategy default
     const effectiveComputeAfterUtilization = totalOrbitalComputePFLOPs * utilizationMultiplier;
 
-    // Ground compute from timeline (convert TWh to PFLOPs)
-    const lastStep = timeline.length > 0 ? timeline[timeline.length - 1] : null;
-    const totalGroundComputePFLOPs = lastStep?.netGroundComputeTwh 
-      ? lastStep.netGroundComputeTwh * 1e3 // Convert TWh to PFLOPs (1 TWh = 1000 PFLOPs)
-      : 0;
+    // Get current debug entry (single source of truth)
+    const currentDebugEntryRaw = debugState[currentYear];
+    // Type guard: ensure it's a DebugStateEntry
+    const currentDebugEntry = (currentDebugEntryRaw && 
+      typeof currentDebugEntryRaw === 'object' && 
+      'year' in currentDebugEntryRaw && 
+      typeof currentDebugEntryRaw.year === 'number'
+    ) ? currentDebugEntryRaw : undefined;
+    
+    // Ground compute from debug state or timeline (convert TWh to PFLOPs)
+    const totalGroundComputePFLOPs = currentDebugEntry?.compute_effective_flops 
+      ? currentDebugEntry.compute_effective_flops / 1e15 // Convert FLOPS to PFLOPs
+      : (timeline.length > 0 && timeline[timeline.length - 1]?.netGroundComputeTwh
+        ? timeline[timeline.length - 1].netGroundComputeTwh * 1e3
+        : 0);
 
-    // Costs from timeline or calculate from cost per TFLOP
-    const orbitCostPerTFLOP = getOrbitalCostPerTFLOP(currentYear);
-    const orbitTotalCost = totalOrbitalComputePFLOPs * orbitCostPerTFLOP * 1e3; // Convert PFLOPs to TFLOPs
-    const groundTotalCost = lastStep?.opexGround || 0;
+    // Costs from debug state (single source of truth)
+    const orbitTotalCost = currentDebugEntry?.annual_opex_orbit || 0;
+    const groundTotalCost = currentDebugEntry?.annual_opex_ground_all_ground || 
+                           currentDebugEntry?.annual_opex_ground || 
+                           (timeline.length > 0 ? timeline[timeline.length - 1]?.opexGround : 0) || 0;
 
-    // Carbon (amortized launch carbon per satellite)
-    const carbonOrbit = satellites.length * 1.19; // tons/year per satellite (amortized launch)
-    const carbonGround = lastStep?.carbonGround || 0;
+    // Carbon from debug state (single source of truth)
+    const carbonOrbit = currentDebugEntry?.carbon_orbit 
+      ? (currentDebugEntry.carbon_orbit / 1000) // Convert kg to tons
+      : (satellites.length * 1.19); // Fallback: amortized launch carbon
+    const carbonGround = currentDebugEntry?.carbon_ground 
+      ? (currentDebugEntry.carbon_ground / 1000) // Convert kg to tons
+      : (timeline.length > 0 ? timeline[timeline.length - 1]?.carbonGround : 0) || 0;
 
     // Latency (calculate average from satellites or use default)
     const avgOrbitLatency = satellites.length > 0 
@@ -96,6 +140,20 @@ export default function DebugExportPanel() {
       orbit_pct: orbitCount / totalRoutes,
     };
 
+    // Scenario diagnostics from debug state (already retrieved above)
+    const scenarioDiagnostics = currentDebugEntry ? {
+      scenario_mode: currentDebugEntry.scenario_mode,
+      launch_cost_per_kg: currentDebugEntry.launch_cost_per_kg,
+      tech_progress_factor: currentDebugEntry.tech_progress_factor,
+      failure_rate_effective: currentDebugEntry.failure_rate_effective,
+      maintenance_utilization_percent: currentDebugEntry.maintenance_utilization_percent,
+      backhaul_utilization_percent: currentDebugEntry.backhaul_utilization_percent,
+      orbit_carbon_intensity: currentDebugEntry.orbit_carbon_intensity,
+      orbit_cost_per_compute: currentDebugEntry.orbit_cost_per_compute,
+      orbit_compute_share: currentDebugEntry.orbit_compute_share,
+      orbit_energy_share_twh: currentDebugEntry.orbit_energy_share_twh,
+    } : null;
+
     // Snapshot data
     const snapshot = {
       year: currentYear,
@@ -113,6 +171,7 @@ export default function DebugExportPanel() {
       avg_ground_latency: avgGroundLatency,
       congestion_index: congestionIndex,
       routing_distribution: routingDistribution,
+      scenario_diagnostics: scenarioDiagnostics,
     };
 
     // Time-series data
@@ -127,21 +186,113 @@ export default function DebugExportPanel() {
     const orbitCarbon: number[] = [];
     const groundCarbon: number[] = [];
     const satelliteCounts: number[] = [];
+    // Scenario diagnostics time-series
+    const scenarioModes: string[] = [];
+    const launchCostsPerKg: (number | null)[] = [];
+    const techProgressFactors: (number | null)[] = [];
+    const failureRates: (number | null)[] = [];
+    const maintenanceUtils: (number | null)[] = [];
+    const backhaulUtils: (number | null)[] = [];
+    const orbitCarbonIntensities: (number | null)[] = [];
+    const orbitCostsPerCompute: (number | null)[] = [];
+    const orbitComputeShares: (number | null)[] = [];
+    const orbitEnergyShares: (number | null)[] = [];
 
-    timeline.forEach((step) => {
-      years.push(step.year);
-      // Convert TWh to PFLOPs (1 TWh = 1000 PFLOPs)
-      orbitalCompute.push((step.orbitalComputeTwh || 0) * 1e3);
-      groundCompute.push((step.netGroundComputeTwh || 0) * 1e3);
-      orbitalPower.push((step.podsTotal || 0) * 0.1); // 0.1 MW per pod
-      // Use OPEX as cost proxy
-      orbitCost.push((step.opexMix || 0) - (step.opexGround || 0)); // Orbital cost = mix - ground
-      groundCost.push(step.opexGround || 0);
-      orbitLatency.push(step.latencyMixMs || 65); // Use mix latency as proxy
-      groundLatency.push(step.latencyGroundMs || 5);
-      orbitCarbon.push((step.podsTotal || 0) * 1.19); // Amortized launch carbon
-      groundCarbon.push(step.carbonGround || 0);
-      satelliteCounts.push(step.podsTotal || 0);
+    // Build time-series from debug state (single source of truth)
+    // Use debug state years, fallback to timeline if debug state is empty
+    const yearsToProcess = debugYears.length > 0 ? debugYears : timeline.map(s => s.year);
+    
+    yearsToProcess.forEach((year) => {
+      const debugEntryRaw = debugState[year];
+      const timelineStep = timeline.find(s => s.year === year);
+      
+      // Type guard: ensure it's a DebugStateEntry
+      const debugEntry = (debugEntryRaw && 
+        typeof debugEntryRaw === 'object' && 
+        'year' in debugEntryRaw && 
+        typeof debugEntryRaw.year === 'number'
+      ) ? debugEntryRaw : undefined;
+      
+      years.push(year);
+      
+      // Prefer debug state, fallback to timeline
+      if (debugEntry) {
+        // Compute from debug state (convert FLOPS to PFLOPs)
+        orbitalCompute.push((debugEntry.compute_exportable_flops || 0) / 1e15);
+        groundCompute.push((debugEntry.compute_effective_flops || 0) / 1e15); // Use effective as ground proxy
+        // Power from debug state (convert kW to MW)
+        orbitalPower.push((debugEntry.power_total_kw || 0) / 1000);
+        // Costs from debug state
+        orbitCost.push(debugEntry.annual_opex_orbit || 0);
+        groundCost.push(debugEntry.annual_opex_ground_all_ground || debugEntry.annual_opex_ground || 0);
+        // Latency from debug state
+        orbitLatency.push(debugEntry.latency_orbit_ms || 65);
+        groundLatency.push(debugEntry.latency_ground_ms || 5);
+        // Carbon from debug state (convert kg to tons)
+        orbitCarbon.push((debugEntry.carbon_orbit || 0) / 1000);
+        groundCarbon.push((debugEntry.carbon_ground || 0) / 1000);
+        // Satellite counts from debug state
+        satelliteCounts.push(debugEntry.satellitesTotal || 0);
+        
+        // Scenario diagnostics from debug state
+        scenarioModes.push(debugEntry.scenario_mode || config.scenarioMode || "BASELINE");
+        launchCostsPerKg.push(debugEntry.launch_cost_per_kg ?? null);
+        techProgressFactors.push(debugEntry.tech_progress_factor ?? null);
+        failureRates.push(debugEntry.failure_rate_effective ?? null);
+        maintenanceUtils.push(debugEntry.maintenance_utilization_percent ?? null);
+        backhaulUtils.push(debugEntry.backhaul_utilization_percent ?? null);
+        orbitCarbonIntensities.push(debugEntry.orbit_carbon_intensity ?? null);
+        orbitCostsPerCompute.push(debugEntry.orbit_cost_per_compute ?? null);
+        orbitComputeShares.push(debugEntry.orbit_compute_share ?? null);
+        orbitEnergyShares.push(debugEntry.orbit_energy_share_twh ?? null);
+      } else if (timelineStep) {
+        // Fallback to timeline data
+        orbitalCompute.push((timelineStep.orbitalComputeTwh || 0) * 1e3);
+        groundCompute.push((timelineStep.netGroundComputeTwh || 0) * 1e3);
+        orbitalPower.push((timelineStep.podsTotal || 0) * 0.1);
+        orbitCost.push((timelineStep.opexMix || 0) - (timelineStep.opexGround || 0));
+        groundCost.push(timelineStep.opexGround || 0);
+        orbitLatency.push(timelineStep.latencyMixMs || 65);
+        groundLatency.push(timelineStep.latencyGroundMs || 5);
+        orbitCarbon.push((timelineStep.podsTotal || 0) * 1.19);
+        groundCarbon.push(timelineStep.carbonGround || 0);
+        satelliteCounts.push(timelineStep.podsTotal || 0);
+        
+        // Scenario diagnostics from timeline
+        const stepAny = timelineStep as any;
+        scenarioModes.push(stepAny.scenario_mode || config.scenarioMode || "BASELINE");
+        launchCostsPerKg.push(stepAny.launch_cost_per_kg ?? null);
+        techProgressFactors.push(stepAny.tech_progress_factor ?? null);
+        failureRates.push(stepAny.failure_rate_effective ?? null);
+        maintenanceUtils.push(stepAny.maintenance_utilization_percent ?? null);
+        backhaulUtils.push(stepAny.backhaul_utilization_percent ?? null);
+        orbitCarbonIntensities.push(stepAny.orbit_carbon_intensity ?? null);
+        orbitCostsPerCompute.push(stepAny.orbit_cost_per_compute ?? null);
+        orbitComputeShares.push(stepAny.orbit_compute_share ?? null);
+        orbitEnergyShares.push(stepAny.orbit_energy_share_twh ?? null);
+      } else {
+        // No data available for this year
+        orbitalCompute.push(0);
+        groundCompute.push(0);
+        orbitalPower.push(0);
+        orbitCost.push(0);
+        groundCost.push(0);
+        orbitLatency.push(65);
+        groundLatency.push(5);
+        orbitCarbon.push(0);
+        groundCarbon.push(0);
+        satelliteCounts.push(0);
+        scenarioModes.push(config.scenarioMode || "BASELINE");
+        launchCostsPerKg.push(null);
+        techProgressFactors.push(null);
+        failureRates.push(null);
+        maintenanceUtils.push(null);
+        backhaulUtils.push(null);
+        orbitCarbonIntensities.push(null);
+        orbitCostsPerCompute.push(null);
+        orbitComputeShares.push(null);
+        orbitEnergyShares.push(null);
+      }
     });
 
     const timeSeries = {
@@ -156,12 +307,173 @@ export default function DebugExportPanel() {
       orbit_carbon: orbitCarbon,
       ground_carbon: groundCarbon,
       satellite_counts: satelliteCounts,
+      // Scenario diagnostics time-series
+      scenario_diagnostics: {
+        scenario_mode: scenarioModes,
+        launch_cost_per_kg: launchCostsPerKg,
+        tech_progress_factor: techProgressFactors,
+        failure_rate_effective: failureRates,
+        maintenance_utilization_percent: maintenanceUtils,
+        backhaul_utilization_percent: backhaulUtils,
+        orbit_carbon_intensity: orbitCarbonIntensities,
+        orbit_cost_per_compute: orbitCostsPerCompute,
+        orbit_compute_share: orbitComputeShares,
+        orbit_energy_share_twh: orbitEnergyShares,
+      },
     };
 
-    // Combine snapshot and time-series
+    // Build physics series from debug state
+    const physicsDebugYears = Object.keys(debugState)
+      .filter(key => key !== 'errors' && !isNaN(Number(key)))
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map(year => debugState[year] as DebugStateEntry)
+      .filter((entry): entry is DebugStateEntry => entry !== undefined);
+
+    const physicsSeries = {
+      computeDensity: buildComputeDensitySeries(physicsDebugYears),
+      massFractions: buildMassFractionsSeries(physicsDebugYears),
+      radiatorArea: buildRadiatorAreaSeries(physicsDebugYears),
+      radiatorCompute: buildRadiatorComputeSeries(), // Add radiator vs compute series
+      solarArea: buildSolarAreaSeries(physicsDebugYears),
+      radiationDerating: buildRadiationDeratingSeries(physicsDebugYears),
+      fleetCompute: buildFleetComputeSeries(physicsDebugYears),
+      launch: buildLaunchSeries(physicsDebugYears),
+      costDecomposition: buildCostDecompositionSeries(physicsDebugYears),
+      thermalCeiling: buildThermalCeilingSeries(physicsDebugYears, 500),
+      networking: buildNetworkingSeries(physicsDebugYears),
+      bottlenecks: buildBottleneckSeries(physicsDebugYears),
+      physicsVsGround: buildPhysicsVsGroundSeries(physicsDebugYears),
+    };
+
+    // Add algorithms and configuration
+    // CRITICAL: All algorithms are physics-based and derived from actual simulation calculations
+    const algorithms = {
+      scenarioParams: SCENARIOS,
+      computeEfficiencyCurve: getEfficiencyCurveData(config.startYear, config.startYear + config.totalDeployments),
+      physicsConstants: {
+        TARGET_TEMP_C: 70,
+        MAX_TEMP_C: 100,
+        BASE_POD_POWER_KW: 100,
+        FLOPS_PER_TBPS: 1000, // PFLOPs per TBps
+        BACKHAUL_PER_SATELLITE_TBPS: 0.5,
+        RADIATOR_KW_PER_M2: 0.5,
+        ELECTRICAL_EFFICIENCY: 0.85,
+        EMISSIVITY: 0.9,
+      },
+      costModel: {
+        groundCostPerTwh: config.groundCostPerTwh,
+        groundCarbonPerTwh: config.groundCarbonPerTwh,
+        baseOrbitalCostPerTwh: config.baseOrbitalCostPerTwh,
+        baseOrbitalCarbonPerTwh: config.baseOrbitalCarbonPerTwh,
+      },
+      // CRITICAL: Cost/Compute algorithms (physics-based)
+      costPerCompute: {
+        description: "Cost per compute unit ($/PFLOP) derived from physics-based satellite costs",
+        ground: {
+          formula: "baseGroundCostPerCompute * (1 - groundLearningRate)^yearIndex",
+          baseGroundCostPerCompute: 340, // $/unit in 2025
+          groundLearningRate: "scenario-dependent (0.02-0.05)",
+          notes: "Ground cost declines with tech progress, scenario-dependent learning rate",
+        },
+        orbit: {
+          formula: "cumulativeOrbitalCostUSD / cumulativeExportedPFLOPs * orbitScale * (1 - orbitLearningRate)^yearIndex",
+          cumulativeOrbitalCostUSD: "sum of (launchCost + replacementCost) * radiatorCostMultiplier per year",
+          cumulativeExportedPFLOPs: "sum of fleetTotalComputePFLOPsDerated per year",
+          orbitScale: "calibration factor to match initialOrbitCostMultiple × ground cost in first year",
+          orbitLearningRate: "scenario-dependent (0.03-0.08)",
+          notes: "Orbit cost = cumulative capex amortized over cumulative compute exported, with learning curve",
+        },
+        mix: {
+          formula: "groundComputeShare * cost_per_compute_ground + orbitComputeShare * cost_per_compute_orbit",
+          notes: "Weighted average based on compute share",
+        },
+      },
+      // CRITICAL: Latency algorithms (physics-based)
+      latency: {
+        description: "Latency (ms) based on physical distance and network topology",
+        ground: {
+          value: 120, // ms baseline
+          formula: "BASE_GROUND_LATENCY * (1 + groundEnergyStress * 0.2)",
+          notes: "Ground latency increases with energy stress (congestion)",
+        },
+        orbit: {
+          value: 90, // ms baseline
+          formula: "BASE_GROUND_LATENCY - 40 * orbitComputeShare + 5 * backlogFactor",
+          notes: "Orbit latency improves with share (better routing), degrades with backlog",
+        },
+        mix: {
+          formula: "groundComputeShare * latency_ground_ms + orbitComputeShare * latency_orbit_ms",
+          notes: "Weighted average based on compute share",
+        },
+      },
+      // CRITICAL: Annual OPEX algorithms (physics-based)
+      annualOpex: {
+        description: "Annual operational expenditure derived from physics-based power and costs",
+        ground: {
+          formula: "groundComputeShare * baseDemandTWh * groundCostPerTwh",
+          baseDemandTWh: "baseDemandTWh0 * demandGrowthFactor",
+          baseDemandTWh0: 10000, // TWh baseline
+          groundCostPerTwh: 340, // $/TWh
+          notes: "Ground OPEX = ground compute share × demand × cost per TWh",
+        },
+        orbit: {
+          formula: "totalOrbitalCostThisYearUSD",
+          totalOrbitalCostThisYearUSD: "(launchCostThisYearUSD + replacementCostUSD) * radiatorCostMultiplier",
+          launchCostThisYearUSD: "launchMassThisYearKg * cost_per_kg_to_leo",
+          replacementCostUSD: "replacementCadence * avgCostPerSatelliteUSD",
+          radiatorCostMultiplier: "1.0 + totalRadiatorMassKg / 1_000_000",
+          notes: "Orbit OPEX = launch costs + replacement costs, scaled by radiator mass",
+        },
+        mix: {
+          formula: "annual_opex_ground + annual_opex_orbit",
+          notes: "Sum of ground and orbital OPEX",
+        },
+      },
+      // CRITICAL: Carbon algorithms (physics-based)
+      carbon: {
+        description: "Carbon emissions (kg CO2) derived from physics-based mass and energy",
+        ground: {
+          formula: "groundCarbonPerTwh",
+          groundCarbonPerTwh: 400, // kg CO2 per TWh
+          notes: "Ground carbon intensity (grid electricity)",
+        },
+        orbit: {
+          formula: "totalOrbitalCarbonKgThisYear = launchCarbonKgThisYear + replacementCarbonKgThisYear",
+          launchCarbonKgThisYear: "launchMassThisYearKg * launch_carbon_per_kg",
+          replacementCarbonKgThisYear: "replacementCadence * avgMassPerSatelliteKg * launch_carbon_per_kg",
+          launch_carbon_per_kg: "scenario-dependent (150-600 kg CO2/kg)",
+          notes: "Orbit carbon = launch carbon (new + replacement), scenario-dependent intensity",
+        },
+        carbonIntensity: {
+          formula: "cumulativeOrbitalCarbonKg * 1000 / cumulativeOrbitEnergyTwh",
+          cumulativeOrbitalCarbonKg: "sum of totalOrbitalCarbonKgThisYear",
+          cumulativeOrbitEnergyTwh: "sum of orbitEnergyServedTwhThisYear",
+          orbitEnergyServedTwhThisYear: "(power_total_kw * 8760 hours) / 10^9",
+          notes: "Carbon intensity = total carbon / total energy served (kg CO2/kWh)",
+        },
+        mix: {
+          formula: "groundComputeShare * carbon_ground + orbitComputeShare * carbon_orbit",
+          notes: "Weighted average based on compute share",
+        },
+      },
+      config: {
+        startYear: config.startYear,
+        totalDeployments: config.totalDeployments,
+        groundBaseTwh: config.groundBaseTwh,
+        groundDemandGrowthRate: config.groundDemandGrowthRate,
+        groundEfficiencyGainRate: config.groundEfficiencyGainRate,
+        maxOffloadShare: config.maxOffloadShare,
+        scenarioMode: config.scenarioMode,
+      },
+    };
+
+    // Combine snapshot, time-series, physics series, and algorithms
     const exportData = {
       snapshot,
       time_series: timeSeries,
+      physics: physicsSeries,
+      algorithms,
     };
 
     // Export as JSON
@@ -201,11 +513,27 @@ export default function DebugExportPanel() {
     
     // Time-series CSV
     csvRows.push("");
-    csvRows.push("TimeSeries,year,orbital_compute,ground_compute,orbital_power,orbit_cost,ground_cost,orbit_latency,ground_latency,orbit_carbon,ground_carbon,satellite_counts");
+    csvRows.push("TimeSeries,year,orbital_compute,ground_compute,orbital_power,orbit_cost,ground_cost,orbit_latency,ground_latency,orbit_carbon,ground_carbon,satellite_counts,scenario_mode,launch_cost_per_kg,tech_progress_factor,failure_rate_effective,maintenance_utilization_percent,backhaul_utilization_percent,orbit_carbon_intensity,orbit_cost_per_compute,orbit_compute_share,orbit_energy_share_twh");
     for (let i = 0; i < years.length; i++) {
       csvRows.push(
-        `TimeSeries,${years[i]},${orbitalCompute[i]},${groundCompute[i]},${orbitalPower[i]},${orbitCost[i]},${groundCost[i]},${orbitLatency[i]},${groundLatency[i]},${orbitCarbon[i]},${groundCarbon[i]},${satelliteCounts[i]}`
+        `TimeSeries,${years[i]},${orbitalCompute[i]},${groundCompute[i]},${orbitalPower[i]},${orbitCost[i]},${groundCost[i]},${orbitLatency[i]},${groundLatency[i]},${orbitCarbon[i]},${groundCarbon[i]},${satelliteCounts[i]},${scenarioModes[i] || ""},${launchCostsPerKg[i] ?? ""},${techProgressFactors[i] ?? ""},${failureRates[i] ?? ""},${maintenanceUtils[i] ?? ""},${backhaulUtils[i] ?? ""},${orbitCarbonIntensities[i] ?? ""},${orbitCostsPerCompute[i] ?? ""},${orbitComputeShares[i] ?? ""},${orbitEnergyShares[i] ?? ""}`
       );
+    }
+    
+    // Add scenario diagnostics to snapshot CSV
+    if (scenarioDiagnostics) {
+      csvRows.push("");
+      csvRows.push("ScenarioDiagnostics,field,value");
+      csvRows.push(`ScenarioDiagnostics,scenario_mode,${scenarioDiagnostics.scenario_mode || ""}`);
+      csvRows.push(`ScenarioDiagnostics,launch_cost_per_kg,${scenarioDiagnostics.launch_cost_per_kg ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,tech_progress_factor,${scenarioDiagnostics.tech_progress_factor ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,failure_rate_effective,${scenarioDiagnostics.failure_rate_effective ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,maintenance_utilization_percent,${scenarioDiagnostics.maintenance_utilization_percent ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,backhaul_utilization_percent,${scenarioDiagnostics.backhaul_utilization_percent ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,orbit_carbon_intensity,${scenarioDiagnostics.orbit_carbon_intensity ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,orbit_cost_per_compute,${scenarioDiagnostics.orbit_cost_per_compute ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,orbit_compute_share,${scenarioDiagnostics.orbit_compute_share ?? ""}`);
+      csvRows.push(`ScenarioDiagnostics,orbit_energy_share_twh,${scenarioDiagnostics.orbit_energy_share_twh ?? ""}`);
     }
 
     const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });

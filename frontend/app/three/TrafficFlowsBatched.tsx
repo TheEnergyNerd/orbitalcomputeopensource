@@ -12,6 +12,7 @@ import { Vector3, BufferGeometry, BufferAttribute, LineBasicMaterial, PointsMate
 import { useOrbitSim } from "../state/orbitStore";
 import { useSimulationStore } from "../store/simulationStore";
 import { createGeodesicArc } from "../lib/three/coordinateUtils";
+import { getHoveredRoute, setHoveredRoute } from "./RouteHover";
 
 interface RouteData {
   id: string;
@@ -340,15 +341,22 @@ export function TrafficFlowsBatched() {
           routeData.color.b * congestionFade
         );
         
-        // Particle size based on traffic (larger for high traffic) - 50% smaller on average
-        const baseSize = 0.04; // 50% of 0.08
-        const sizeVariation = 0.06; // 50% of 0.12
-        const size = baseSize + (thicknessNormalized * sizeVariation); // 0.04 to 0.10 (50% smaller)
+        // Particle size based on traffic (larger for high traffic) - 50% smaller on average, but with MORE variation
+        const baseSize = 0.02; // Smaller base
+        const sizeVariation = 0.12; // Much larger variation (3x) for visible differences
+        // Use trafficMbps directly for more dramatic size differences
+        const trafficNormalized = Math.min(1.0, Math.max(0.0, (trafficMbps - 10) / 490)); // Normalize 10-500 Mbps to 0-1
+        const size = baseSize + (trafficNormalized * sizeVariation); // 0.02 to 0.14 (much more variation)
         pulseSizes.push(size);
       }
       
       // Reverse direction particles (fewer, dimmer)
       const numReverseParticles = Math.min(4, Math.max(1, Math.floor(numParticles / 2)));
+      // Use same traffic-based sizing for reverse particles
+      const reverseTrafficNormalized = Math.min(1.0, Math.max(0.0, (trafficMbps - 10) / 490));
+      const reverseBaseSize = 0.02;
+      const reverseSizeVariation = 0.12;
+      const reverseSize = reverseBaseSize + (reverseTrafficNormalized * reverseSizeVariation);
       for (let i = 0; i < numReverseParticles; i++) {
         const reverseOffset = (1 - routeData.progress + (i * congestionSpacing)) % 1.0;
         const reverseIdx = Math.floor(reverseOffset * (routeData.points.length - 1));
@@ -358,7 +366,7 @@ export function TrafficFlowsBatched() {
         
         pulsePositions.push(reversePoint.x, reversePoint.y, reversePoint.z);
         pulseColors.push(routeData.color.r * 0.6, routeData.color.g * 0.6, routeData.color.b * 0.6);
-          pulseSizes.push(0.0125); // 50% smaller (0.025 * 0.5)
+        pulseSizes.push(reverseSize); // Same traffic-based size variation
         }
       });
       
@@ -504,6 +512,7 @@ export function TrafficFlowsBatched() {
           opacity={0.9}
           depthTest={true}
           depthWrite={false}
+          linewidth={2} // Base line width
         />
       </lineSegments>
       

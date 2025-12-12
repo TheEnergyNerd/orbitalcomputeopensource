@@ -18,11 +18,16 @@ import V1DeploymentSurface from "./components/v1/V1DeploymentSurface";
 import OrbitSimRoot from "./components/orbitSim/OrbitSimRoot";
 import SimpleModeView from "./components/orbitSim/SimpleModeView";
 import SurfaceTabs, { type SurfaceType } from "./components/SurfaceTabs";
+import SystemOverviewView from "./components/orbitSim/SystemOverviewView";
+import EconomicsView from "./components/orbitSim/EconomicsView";
+import PhysicsEngineeringView from "./components/orbitSim/PhysicsEngineeringView";
+import ScenariosView from "./components/orbitSim/ScenariosView";
 import DetailPanel from "./components/DetailPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import Toast from "./components/Toast";
 import FuturesMarketView from "./components/futures/FuturesMarketView";
-import ConstraintsRiskView from "./components/constraints/ConstraintsRiskView";
+import ConstraintsRiskView from "./components/orbitSim/ConstraintsRiskView";
+import PhysicsLimitsTab from "./components/PhysicsLimitsTab";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";
 import ErrorPanel from "./components/ErrorPanel";
@@ -49,6 +54,8 @@ export default function Home() {
 
   // Listen for navigation events from SimpleModeView tabs
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     const handleNavigate = (e: CustomEvent<{ surface: SurfaceType }>) => {
       setActiveSurface(e.detail.surface);
       // Also dispatch to update other components
@@ -69,15 +76,13 @@ export default function Home() {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, overflow: 'auto' }}>
-      {/* Globe container - only show on overview and deployment tabs */}
-      {(activeSurface === "overview" || activeSurface === "deployment") && (
-        typeof window !== 'undefined' && (
-          <div className="fixed inset-0 w-full h-full" style={{ pointerEvents: 'auto', zIndex: 0 }}>
-            <OrbitalScene />
-            <SatelliteCounters />
-            <PerformanceWarning />
-          </div>
-        )
+      {/* Globe container - only show on overview and world tabs */}
+      {(activeSurface === "overview" || activeSurface === "world") && (
+        <div className="fixed inset-0 w-full h-full" style={{ pointerEvents: 'auto', zIndex: 0 }}>
+          <OrbitalScene />
+          <SatelliteCounters />
+          <PerformanceWarning />
+        </div>
       )}
       
       <main className="relative w-full" style={{ minHeight: '200vh', position: 'relative', zIndex: 2, pointerEvents: 'none', overflowY: 'auto' }}>
@@ -110,20 +115,28 @@ export default function Home() {
         {/* Main Content - Surface-specific views */}
         {/* Globe is always visible as background */}
         {activeSurface === "overview" && (
-          <SimpleModeView />
+          <>
+            <SimpleModeView />
+            <SystemOverviewView />
+          </>
         )}
         
-        {activeSurface === "deployment" && (
+        {activeSurface === "world" && (
           <V1DeploymentSurface />
         )}
         
         {activeSurface === "futures" && (
-          <FuturesMarketView />
+          <ScenariosView />
         )}
         
         {activeSurface === "constraints" && (
           <ConstraintsRiskView />
         )}
+        
+        {activeSurface === "physics" && (
+          <PhysicsEngineeringView />
+        )}
+        
         
         {/* Entity Detail Panel - shows when entity is selected (only in deployment section) */}
         <DetailPanel activeSurface={activeSurface} />
@@ -139,8 +152,8 @@ export default function Home() {
         {/* Tutorial System */}
         <TutorialSystem activeSurface={activeSurface} onSurfaceChange={setActiveSurface} />
         
-        {/* Visual Glossary - interactive legend - hidden in futures tab */}
-        {activeSurface !== "futures" && <VisualGlossary />}
+        {/* Visual Glossary - show in world view */}
+        {activeSurface === "world" && <VisualGlossary activeSurface={activeSurface} />}
       </>
       </main>
     </div>

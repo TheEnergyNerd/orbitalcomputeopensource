@@ -17,8 +17,10 @@ interface TutorialStepConfig {
   action?: string; // What action the user should take
   globeTarget?: { lat: number; lon: number; zoom?: number }; // For globe zooming
   panelInstructions?: string; // Instructions for what to do inside a panel (steps 6 and 7)
-  requiresDeploymentTab?: boolean; // Whether this step requires switching to deployment tab
-  requiresOverviewTab?: boolean; // Whether this step requires switching to overview tab
+  requiresWorldTab?: boolean; // Whether this step requires switching to world tab
+  requiresFuturesTab?: boolean; // Whether this step requires switching to futures tab
+  requiresConstraintsTab?: boolean; // Whether this step requires switching to constraints tab
+  requiresPhysicsTab?: boolean; // Whether this step requires switching to physics tab
   interactionTime?: number; // Time in ms to allow user interaction before auto-advancing
   allowGlobeClicks?: boolean; // Allow clicks on globe elements during this step
 }
@@ -26,7 +28,7 @@ interface TutorialStepConfig {
 const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   1: {
     title: "Welcome",
-    description: "Explore orbital computing economics. Use the tabs above to navigate.",
+    description: "Explore orbital computing economics. Use the tabs above to navigate between Overview, World View, Futures, Constraints & Risk, and Physics & Limits.",
     // No highlight for step 1
   },
   2: {
@@ -37,43 +39,44 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   },
   3: {
     title: "Choose Strategy",
-    description: "Select a strategy (Latency, Cost, Carbon, or Balanced) to affect outcomes.",
+    description: "Open the menu (☰) and select a strategy: Latency-first, Cost-first, Carbon-first, or Balanced. Also choose a scenario: Baseline, Bear, or Bull.",
     highlight: "[data-tutorial-mobile-menu-button]",
     action: "Open menu to select strategy",
   },
   4: {
     title: "View Metrics",
-    description: "The metrics panel shows cost, latency, carbon, and orbit share.",
+    description: "The System Overview tab shows cost, latency, carbon, and orbit share. Click 'Expand Charts' to see detailed visualizations.",
     highlight: "[data-tutorial-metrics-panel]",
-    action: "Expand metrics panel",
+    action: "View metrics in System Overview",
   },
   5: {
-    title: "Explore Globe",
-    description: "Switch to World View. Click satellites and data centers to see details.",
-    highlight: "[data-tutorial-deployment-tab]",
-    requiresDeploymentTab: true,
+    title: "Explore World View",
+    description: "Switch to World View tab to see the global deployment map. Click satellites and data centers to see details.",
+    highlight: "[data-tutorial-world-tab]",
+    requiresWorldTab: true,
     interactionTime: 5000,
     allowGlobeClicks: true,
   },
   6: {
-    title: "AI Router",
-    description: "The AI Router optimizes job routing. Adjust weights for cost, latency, and carbon.",
-    highlight: "[data-tutorial-ai-router-button]",
-    action: "Open AI Router panel",
-    requiresOverviewTab: true,
-  },
-  7: {
-    title: "Futures",
-    description: "The Futures tab shows cost forecasts. Watch for crossover alerts.",
+    title: "Compare Scenarios",
+    description: "Switch to Futures tab to compare Baseline, Bear, and Bull scenarios. See how different assumptions affect cost, carbon, and adoption.",
     highlight: "[data-tutorial-futures-tab]",
     action: "Switch to Futures tab",
+    requiresFuturesTab: true,
+  },
+  7: {
+    title: "Check Constraints",
+    description: "Switch to Constraints & Risk tab to see what limits the system: thermal, backhaul, launch capacity, and reliability.",
+    highlight: "[data-tutorial-constraints-tab]",
+    action: "Switch to Constraints & Risk tab",
+    requiresConstraintsTab: true,
   },
   8: {
-    title: "Satellite Types",
-    description: "Class A (teal) = networking. Class B (white) = high-power compute. Class B faces the sun.",
-    highlight: "[data-tutorial-deployment-tab]",
-    action: "Switch to World View",
-    requiresDeploymentTab: true,
+    title: "Explore Physics",
+    description: "Switch to Physics & Limits tab to see the underlying physics: power-to-compute frontier, mass breakdown, thermal limits, and solar uptime.",
+    highlight: "[data-tutorial-physics-tab]",
+    action: "Switch to Physics & Limits tab",
+    requiresPhysicsTab: true,
   },
 };
 
@@ -86,11 +89,10 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   // Track required interactions for each step
   const [step2Deployed, setStep2Deployed] = useState(false);
   const [step3MenuOpened, setStep3MenuOpened] = useState(false);
-  const [step5DeploymentTabClicked, setStep5DeploymentTabClicked] = useState(false);
-  const [step6MenuOpened, setStep6MenuOpened] = useState(false);
-  const [step6AiRouterOpened, setStep6AiRouterOpened] = useState(false);
-  const [step7FuturesTabClicked, setStep7FuturesTabClicked] = useState(false);
-  const [step8DeploymentTabClicked, setStep8DeploymentTabClicked] = useState(false);
+  const [step5WorldTabClicked, setStep5WorldTabClicked] = useState(false);
+  const [step6FuturesTabClicked, setStep6FuturesTabClicked] = useState(false);
+  const [step7ConstraintsTabClicked, setStep7ConstraintsTabClicked] = useState(false);
+  const [step8PhysicsTabClicked, setStep8PhysicsTabClicked] = useState(false);
   
   // Track if tutorial should be temporarily hidden (for step 2)
   const [tutorialHidden, setTutorialHidden] = useState(false);
@@ -114,16 +116,8 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [showTutorialOnVisit, isActive, activeSurface, startTutorial]);
 
-  // Determine current highlight based on step progression (for steps 6 and 7)
+  // Determine current highlight based on step progression
   const getCurrentHighlight = () => {
-    if (typeof currentStep !== "number") return stepConfig?.highlight;
-    if (currentStep === 6) {
-      const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-      if (isMobile && !step6MenuOpened) {
-        return "[data-tutorial-mobile-menu-button]";
-      }
-      return "[data-tutorial-ai-router-button]";
-    }
     return stepConfig?.highlight;
   };
 
@@ -138,14 +132,10 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
       const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
       return isMobile ? step3MenuOpened : true;
     }
-    if (currentStep === 5) return step5DeploymentTabClicked;
-    if (currentStep === 6) {
-      // On mobile, require menu then AI Router; on desktop, just AI Router
-      const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-      return isMobile ? (step6MenuOpened && step6AiRouterOpened) : step6AiRouterOpened;
-    }
-    if (currentStep === 7) return step7FuturesTabClicked;
-    if (currentStep === 8) return step8DeploymentTabClicked;
+    if (currentStep === 5) return step5WorldTabClicked;
+    if (currentStep === 6) return step6FuturesTabClicked;
+    if (currentStep === 7) return step7ConstraintsTabClicked;
+    if (currentStep === 8) return step8PhysicsTabClicked;
     return true;
   })();
 
@@ -158,14 +148,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
 
     // Calculate current highlight inside useEffect to ensure it has access to latest state
     const getCurrentHighlightForEffect = () => {
-      if (typeof currentStep !== "number") return stepConfig?.highlight;
-      if (currentStep === 6) {
-        const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
-        if (isMobile && !step6MenuOpened) {
-          return "[data-tutorial-mobile-menu-button]";
-        }
-        return "[data-tutorial-ai-router-button]";
-      }
       return stepConfig?.highlight;
     };
 
@@ -193,46 +175,68 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     updateHighlight();
     const interval = setInterval(updateHighlight, 100);
     return () => clearInterval(interval);
-  }, [isActive, currentStep, stepConfig, step6MenuOpened]);
+  }, [isActive, currentStep, stepConfig]);
 
-  // Handle step 5 and 8 - switch to deployment tab and allow interaction
+  // Handle step 5 - switch to world tab and allow interaction
   useEffect(() => {
-    if ((currentStep === 5 || currentStep === 8) && isActive) {
-      const stepConfig = TUTORIAL_STEPS[currentStep];
+    if (currentStep === 5 && isActive) {
+      const stepConfig = TUTORIAL_STEPS[5];
       
-      // Switch to deployment tab if required
-      if (stepConfig?.requiresDeploymentTab && activeSurface !== "deployment") {
-        onSurfaceChange("deployment");
-        // Also mark as clicked since we auto-switched
-        if (currentStep === 5) {
-          setStep5DeploymentTabClicked(true);
-        } else if (currentStep === 8) {
-          setStep8DeploymentTabClicked(true);
-        }
+      // Switch to world tab if required
+      if (stepConfig?.requiresWorldTab && activeSurface !== "world") {
+        onSurfaceChange("world");
+        setTimeout(() => setStep5WorldTabClicked(true), 100);
+      } else if (activeSurface === "world") {
+        setStep5WorldTabClicked(true);
       }
-      
-      // Give users time to interact (scroll, click data centers, satellites, constellations)
-      // Don't auto-advance - let user click next when ready
     }
   }, [currentStep, isActive, activeSurface, onSurfaceChange]);
 
-  // Handle step 6 - switch back to overview tab (but don't auto-open AI Router)
+  // Handle step 6 - switch to futures tab
   useEffect(() => {
     if (currentStep === 6 && isActive) {
       const stepConfig = TUTORIAL_STEPS[6];
       
-      // Switch to overview tab if required
-      if (stepConfig.requiresOverviewTab && activeSurface !== "overview") {
-        onSurfaceChange("overview");
+      // Switch to futures tab if required
+      if (stepConfig?.requiresFuturesTab && activeSurface !== "futures") {
+        onSurfaceChange("futures");
+        setTimeout(() => setStep6FuturesTabClicked(true), 100);
+      } else if (activeSurface === "futures") {
+        setStep6FuturesTabClicked(true);
       }
-      
-      // Don't auto-open AI Router - user must click the button themselves
     }
   }, [currentStep, isActive, activeSurface, onSurfaceChange]);
 
-  // Don't auto-switch to futures tab - let user click it themselves
+  // Handle step 7 - switch to constraints tab
+  useEffect(() => {
+    if (currentStep === 7 && isActive) {
+      const stepConfig = TUTORIAL_STEPS[7];
+      
+      // Switch to constraints tab if required
+      if (stepConfig?.requiresConstraintsTab && activeSurface !== "constraints") {
+        onSurfaceChange("constraints");
+        setTimeout(() => setStep7ConstraintsTabClicked(true), 100);
+      } else if (activeSurface === "constraints") {
+        setStep7ConstraintsTabClicked(true);
+      }
+    }
+  }, [currentStep, isActive, activeSurface, onSurfaceChange]);
 
-  // Don't auto-open panels - user must click buttons themselves
+  // Handle step 8 - switch to physics tab
+  useEffect(() => {
+    if (currentStep === 8 && isActive) {
+      const stepConfig = TUTORIAL_STEPS[8];
+      
+      // Switch to physics tab if required
+      if (stepConfig?.requiresPhysicsTab && activeSurface !== "physics") {
+        onSurfaceChange("physics");
+        setTimeout(() => setStep8PhysicsTabClicked(true), 100);
+      } else if (activeSurface === "physics") {
+        setStep8PhysicsTabClicked(true);
+      }
+    }
+  }, [currentStep, isActive, activeSurface, onSurfaceChange]);
+
 
   // Track when tutorial is closed to prevent auto-reopening
   useEffect(() => {
@@ -246,13 +250,10 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   useEffect(() => {
     if (currentStep !== 2) setStep2Deployed(false);
     if (currentStep !== 3) setStep3MenuOpened(false);
-    if (currentStep !== 5) setStep5DeploymentTabClicked(false);
-    if (currentStep !== 6) {
-      setStep6MenuOpened(false);
-      setStep6AiRouterOpened(false);
-    }
-    if (currentStep !== 7) setStep7FuturesTabClicked(false);
-    if (currentStep !== 8) setStep8DeploymentTabClicked(false);
+    if (currentStep !== 5) setStep5WorldTabClicked(false);
+    if (currentStep !== 6) setStep6FuturesTabClicked(false);
+    if (currentStep !== 7) setStep7ConstraintsTabClicked(false);
+    if (currentStep !== 8) setStep8PhysicsTabClicked(false);
     setTutorialHidden(false);
   }, [currentStep]);
 
@@ -301,77 +302,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive]);
 
-  // Track step 5 and 8: Deployment tab clicked
-  useEffect(() => {
-    if ((currentStep === 5 || currentStep === 8) && isActive) {
-      // Listen for tab clicks
-      const handleTabClick = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('[data-tutorial-deployment-tab]')) {
-          if (currentStep === 5) {
-            setStep5DeploymentTabClicked(true);
-          } else if (currentStep === 8) {
-            setStep8DeploymentTabClicked(true);
-          }
-        }
-      };
-      document.addEventListener('click', handleTabClick, true);
-      
-      // Also check if we're already on deployment tab
-      if (activeSurface === "deployment") {
-        if (currentStep === 5) {
-          setStep5DeploymentTabClicked(true);
-        } else if (currentStep === 8) {
-          setStep8DeploymentTabClicked(true);
-        }
-      }
-      
-      return () => {
-        document.removeEventListener('click', handleTabClick, true);
-      };
-    }
-  }, [currentStep, isActive, activeSurface]);
-
-  // Track step 6: Menu opened then AI Router opened
-  useEffect(() => {
-    if (currentStep === 6 && isActive) {
-      // Listen for AI Router open events
-      const handleAiRouterOpen = () => {
-        setStep6AiRouterOpened(true);
-      };
-      
-      // Check menu state periodically (for mobile)
-      const checkMenu = () => {
-        const menu = document.querySelector('[data-tutorial-mobile-menu]');
-        if (menu) {
-          // Menu is open when it has translate-x-0 class (Tailwind class when isOpen=true)
-          const hasTranslateX0 = menu.classList.contains('translate-x-0');
-          if (hasTranslateX0) {
-            setStep6MenuOpened(true);
-          }
-        }
-      };
-      
-      // Check AI Router panel state
-      const checkAiRouter = () => {
-        const panel = document.querySelector('[data-tutorial-ai-router-panel]');
-        if (panel && window.getComputedStyle(panel as HTMLElement).display !== 'none') {
-          setStep6AiRouterOpened(true);
-        }
-      };
-      
-      window.addEventListener('open-ai-router', handleAiRouterOpen);
-      const interval = setInterval(() => {
-        checkMenu();
-        checkAiRouter();
-      }, 100);
-      
-      return () => {
-        window.removeEventListener('open-ai-router', handleAiRouterOpen);
-        clearInterval(interval);
-      };
-    }
-  }, [currentStep, isActive]);
 
   // Track step 4: Auto-close menu if open to see charts clearly
   useEffect(() => {
@@ -395,26 +325,116 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
     }
   }, [currentStep, isActive]);
 
-  // Track step 7: Futures tab clicked
+  // Track step 5: World tab clicked - check both click and surface change
   useEffect(() => {
-    if (currentStep === 7 && isActive) {
-      // Listen for tab clicks
+    if (currentStep === 5 && isActive) {
       const handleTabClick = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        if (target.closest('[data-tutorial-futures-tab]')) {
-          setStep7FuturesTabClicked(true);
+        if (target.closest('[data-tutorial-world-tab]')) {
+          setStep5WorldTabClicked(true);
         }
       };
       document.addEventListener('click', handleTabClick, true);
       
-      // Also check if we're already on futures tab
-      if (activeSurface === "futures") {
-        setStep7FuturesTabClicked(true);
+      // Also check surface change directly
+      if (activeSurface === "world") {
+        setStep5WorldTabClicked(true);
       }
       
       return () => {
         document.removeEventListener('click', handleTabClick, true);
       };
+    }
+  }, [currentStep, isActive, activeSurface]);
+  
+  // Also track when activeSurface changes to "world" during step 5
+  useEffect(() => {
+    if (currentStep === 5 && isActive && activeSurface === "world") {
+      setStep5WorldTabClicked(true);
+    }
+  }, [currentStep, isActive, activeSurface]);
+
+  // Track step 6: Futures tab clicked
+  useEffect(() => {
+    if (currentStep === 6 && isActive) {
+      const handleTabClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-tutorial-futures-tab]')) {
+          setStep6FuturesTabClicked(true);
+        }
+      };
+      document.addEventListener('click', handleTabClick, true);
+      
+      if (activeSurface === "futures") {
+        setStep6FuturesTabClicked(true);
+      }
+      
+      return () => {
+        document.removeEventListener('click', handleTabClick, true);
+      };
+    }
+  }, [currentStep, isActive, activeSurface]);
+  
+  // Track when activeSurface changes to "futures" during step 6
+  useEffect(() => {
+    if (currentStep === 6 && isActive && activeSurface === "futures") {
+      setStep6FuturesTabClicked(true);
+    }
+  }, [currentStep, isActive, activeSurface]);
+
+  // Track step 7: Constraints tab clicked
+  useEffect(() => {
+    if (currentStep === 7 && isActive) {
+      const handleTabClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-tutorial-constraints-tab]')) {
+          setStep7ConstraintsTabClicked(true);
+        }
+      };
+      document.addEventListener('click', handleTabClick, true);
+      
+      if (activeSurface === "constraints") {
+        setStep7ConstraintsTabClicked(true);
+      }
+      
+      return () => {
+        document.removeEventListener('click', handleTabClick, true);
+      };
+    }
+  }, [currentStep, isActive, activeSurface]);
+  
+  // Track when activeSurface changes to "constraints" during step 7
+  useEffect(() => {
+    if (currentStep === 7 && isActive && activeSurface === "constraints") {
+      setStep7ConstraintsTabClicked(true);
+    }
+  }, [currentStep, isActive, activeSurface]);
+
+  // Track step 8: Physics tab clicked
+  useEffect(() => {
+    if (currentStep === 8 && isActive) {
+      const handleTabClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-tutorial-physics-tab]')) {
+          setStep8PhysicsTabClicked(true);
+        }
+      };
+      document.addEventListener('click', handleTabClick, true);
+      
+      if (activeSurface === "physics") {
+        setStep8PhysicsTabClicked(true);
+      }
+      
+      return () => {
+        document.removeEventListener('click', handleTabClick, true);
+      };
+    }
+  }, [currentStep, isActive, activeSurface]);
+  
+  // Track when activeSurface changes to "physics" during step 8
+  useEffect(() => {
+    if (currentStep === 8 && isActive && activeSurface === "physics") {
+      setStep8PhysicsTabClicked(true);
     }
   }, [currentStep, isActive, activeSurface]);
 
@@ -429,19 +449,20 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
   return (
     <>
       {/* Dark overlay with cutout for highlighted element - blocks clicks except on highlighted areas */}
-      {/* For step 5 (deployment tab), allow clicks through to globe elements */}
-      {/* For step 6, allow clicks on AI Router button */}
+      {/* For interactive steps, allow clicks through */}
+      {/* CRITICAL FIX: For step 5, ensure tabs are clickable by either hiding overlay or ensuring pointer-events-none */}
       <div
         className="fixed inset-0 z-[150] pointer-events-auto"
         style={{
           background: highlightRect
             ? `radial-gradient(ellipse ${highlightRect.width}px ${highlightRect.height}px at ${highlightRect.left + highlightRect.width / 2}px ${highlightRect.top + highlightRect.height / 2}px, transparent 40%, rgba(0, 0, 0, 0.85) 70%)`
             : "rgba(0, 0, 0, 0.85)",
-          pointerEvents: (currentStep === 5 || currentStep === 6 || currentStep === 7) ? 'none' : 'auto', // Allow clicks through during step 5, 6, and 7
+          pointerEvents: (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8) ? 'none' : 'auto', // Allow clicks through during interactive steps
+          display: currentStep === 5 ? 'none' : 'block', // CRITICAL: Hide overlay completely for step 5 to ensure tabs are clickable
         }}
         onClick={(e) => {
-          // For step 5, don't block any clicks - let them pass through to globe
-          if (currentStep === 5) {
+          // For interactive steps, don't block clicks - let them pass through
+          if (currentStep === 2 || currentStep === 5 || currentStep === 6 || currentStep === 7 || currentStep === 8) {
             return;
           }
           // Allow clicks to pass through to highlighted elements
@@ -522,14 +543,6 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
                 → {stepConfig.action}
               </div>
             )}
-            {currentStep === 6 && step6AiRouterOpened && (
-              <div className="mt-3 p-3 bg-cyan-900/30 border border-cyan-500/50 rounded-lg">
-                <div className="text-xs text-green-400 mb-2">✓ AI Router opened!</div>
-                {stepConfig.panelInstructions && (
-                  <div className="text-xs text-gray-300">{stepConfig.panelInstructions}</div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Footer with buttons - always visible, sticky on mobile */}
@@ -551,7 +564,7 @@ export default function TutorialSystem({ activeSurface, onSurfaceChange }: Tutor
                 !canProceed ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {currentStep === 7 ? "Finish" : "Next"}
+              {currentStep === 8 ? "Finish" : "Next"}
             </button>
           </div>
         </div>

@@ -2,10 +2,15 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useSimulationStore } from "../../store/simulationStore";
-import KpiCard from "./KpiCard";
+import SimulationMetrics from "./SimulationMetrics";
 import DeploymentTimelineChart from "./DeploymentTimelineChart";
 import DualClassStackChart from "./DualClassStackChart";
 import PowerComputeScatter from "./PowerComputeScatter";
+import PowerComputeFrontier from "./PowerComputeFrontier";
+import OpexStreamgraph from "./OpexStreamgraph";
+import CarbonRiver from "./CarbonRiver";
+import ConstraintDial from "./ConstraintDial";
+import StoryPanel from "./StoryPanel";
 import StrategyPhaseDiagram from "./StrategyPhaseDiagram";
 import SolarAvailabilityChart from "./SolarAvailabilityChart";
 import GlobalKPIStrip from "./GlobalKPIStrip";
@@ -13,15 +18,43 @@ import OrbitLayer from "./OrbitLayer";
 import AiRouterPanelV2 from "./AiRouterPanelV2";
 import YearCounter from "../YearCounter";
 import MobileMenu from "../MobileMenu";
+import ScenarioMenu from "./ScenarioMenu";
+import { checkAutomaticEvents } from "../../lib/orbitSim/automaticEvents";
 import type { SurfaceType } from "../SurfaceTabs";
-import type { ComputeStrategy, LaunchStrategy } from "../../lib/orbitSim/simulationConfig";
+import type { ComputeStrategy, LaunchStrategy, ScenarioMode } from "../../lib/orbitSim/simulationConfig";
 import type { YearStep } from "../../lib/orbitSim/simulationConfig";
 import type { StrategyMode } from "../../lib/orbitSim/satelliteClasses";
 import { formatDecimal } from "../../lib/utils/formatNumber";
+import { exportDebugData, getDebugState, getDebugStateEntry, scenarioModeToKey } from "../../lib/orbitSim/debugState";
+import { useTutorialStore } from "../../store/tutorialStore";
 
 // Simple cn utility for className merging
 function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
+}
+
+// Help button component for mobile menu
+function HelpButtonInMenu({ onClose }: { onClose: () => void }) {
+  const { startTutorial } = useTutorialStore();
+  
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startTutorial();
+        onClose();
+      }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition pointer-events-auto relative z-[201]"
+      style={{ zIndex: 201 }}
+    >
+      Help / Tutorial
+    </button>
+  );
 }
 
 /**
@@ -37,15 +70,29 @@ function mapComputeStrategyToStrategyMode(strategy: ComputeStrategy): StrategyMo
   }
 }
 
-/**
- * Build strategy map from timeline
- */
-function getStrategyByYear(timeline: YearStep[]): Map<number, StrategyMode> {
+export function getStrategyByYear(timeline: YearStep[], yearPlans?: Array<{ computeStrategy: ComputeStrategy; launchStrategy: LaunchStrategy; deploymentIntensity: number }>): Map<number, StrategyMode> {
   const strategyMap = new Map<number, StrategyMode>();
-  timeline.forEach(step => {
-    // Try to infer from yearPlan if available, otherwise default to BALANCED
-    strategyMap.set(step.year, "BALANCED");
+  
+  if (!yearPlans || yearPlans.length === 0) {
+    timeline.forEach(step => {
+      strategyMap.set(step.year, "BALANCED");
+    });
+    return strategyMap;
+  }
+  
+  timeline.forEach((step, index) => {
+    if (yearPlans[index]) {
+      const strategy = mapComputeStrategyToStrategyMode(yearPlans[index].computeStrategy);
+      strategyMap.set(step.year, strategy);
+    } else if (yearPlans.length > 0) {
+      const lastPlan = yearPlans[yearPlans.length - 1];
+      const strategy = mapComputeStrategyToStrategyMode(lastPlan.computeStrategy);
+      strategyMap.set(step.year, strategy);
+    } else {
+      strategyMap.set(step.year, "BALANCED");
+    }
   });
+  
   return strategyMap;
 }
 
@@ -121,6 +168,11 @@ function TopRow({
             </button>
           ))}
         </div>
+
+        {/* Scenario Menu - Inside strategy card, at the bottom */}
+        <div className="mt-3 pt-3 border-t border-slate-800">
+          <ScenarioMenu />
+        </div>
       </div>
 
       {/* Right: buttons moved to YearCounter component */}
@@ -130,82 +182,19 @@ function TopRow({
 }
 
 /**
- * Metrics Grid - 2x2 KPI cards (left) + tall Compute over time chart (right)
+ * Metrics Grid - Clean sparkline cards for key metrics
+ * Uses new SimulationMetrics component with SVG sparklines
  */
-function MetricsGrid({ timeline }: { timeline: YearStep[] }) {
-  const forecastBands = useSimulationStore((s) => s.forecastBands);
+function MetricsGrid({ timeline, yearPlans, config }: { timeline: YearStep[]; yearPlans?: Array<{ computeStrategy: ComputeStrategy; launchStrategy: LaunchStrategy; deploymentIntensity: number }>; config: { scenarioMode?: string } }) {
+  const currentYear = timeline.length > 0 ? timeline[timeline.length - 1].year : 2025;
   
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)] gap-3 sm:gap-4">
-      {/* Left: 4 small cards in 2x2 grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 auto-rows-[180px] sm:auto-rows-[210px]">
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2">
-          <KpiCard
-            title="Cost / Compute"
-            timeline={timeline}
-            groundKey="costPerComputeGround"
-            mixKey="costPerComputeMix"
-            unitsFormatter={(v) => `$${v.toFixed(0)}`}
-            isLowerBetter={true}
-            forecastBands={forecastBands || undefined}
-            forecastKey="costPerCompute"
-          />
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2">
-          <KpiCard
-            title="Latency"
-            timeline={timeline}
-            groundKey="latencyGroundMs"
-            mixKey="latencyMixMs"
-            unitsFormatter={(v) => `${v.toFixed(1)} ms`}
-            isLowerBetter={true}
-            forecastBands={forecastBands || undefined}
-            forecastKey="latency"
-          />
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2">
-              <KpiCard
-                title="Annual OPEX"
-                timeline={timeline}
-                groundKey="opexGround"
-                mixKey="opexMix"
-                unitsFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`}
-                isLowerBetter={true}
-                showBothCurves={true}
-                savingsKey="opexSavings"
-              />
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2">
-              <KpiCard
-                title="Carbon"
-                timeline={timeline}
-                groundKey="carbonGround"
-                mixKey="carbonMix"
-                unitsFormatter={(v) => `${(v / 1000).toFixed(0)}k tCO₂`}
-                isLowerBetter={true}
-                showBothCurves={true}
-                savingsKey="carbonSavings"
-                forecastBands={forecastBands || undefined}
-                forecastKey="carbon"
-              />
-        </div>
-      </div>
-
-      {/* Right: tall horizon card */}
-      <div className="h-full min-h-[300px] sm:min-h-[360px] rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
-        <div className="text-xs font-semibold text-slate-100 mb-1">
-          Compute over time (Class A + Class B)
-        </div>
-        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-          Stacked area: Class A (teal, bottom) + Class B (cyan, top)
-        </div>
-        <div className="h-[250px] sm:h-[300px] md:h-[360px]">
-          <DualClassStackChart timeline={timeline} strategyByYear={getStrategyByYear(timeline)} />
-        </div>
-      </div>
+    <div className="w-full">
+      <SimulationMetrics 
+        timeline={timeline}
+        scenarioMode={config.scenarioMode}
+        currentYear={currentYear}
+      />
     </div>
   );
 }
@@ -232,10 +221,10 @@ function DeploymentProgressCard({ timeline }: { timeline: YearStep[] }) {
         How the last launches changed orbit vs a pure-ground world.
       </div>
       <div className="mt-2 text-[11px] text-slate-300 flex flex-wrap gap-4">
-        <span>Year: {last.year}</span>
-        <span>Orbital share: {(last.orbitalShare * 100).toFixed(0)}%</span>
-        <span>Cost savings vs all-ground: ${formatMillions(opexSavings)}M/yr</span>
-        <span>tCO₂ avoided: {formatThousands(carbonSavings)}k tCO₂/yr</span>
+        <span suppressHydrationWarning>Year: {last.year}</span>
+        <span suppressHydrationWarning>Orbital share: {(last.orbitalShare * 100).toFixed(0)}%</span>
+        <span suppressHydrationWarning>Cost savings vs all-ground: ${formatMillions(opexSavings)}M/yr</span>
+        <span suppressHydrationWarning>tCO₂ avoided: {formatThousands(carbonSavings)}k tCO₂/yr</span>
       </div>
     </div>
   );
@@ -255,6 +244,7 @@ export default function SimpleModeView() {
     deployNextYear,
     extendYears,
     updateCurrentPlan,
+    updateConfig,
     setForecastBands,
   } = useSimulationStore();
   
@@ -273,6 +263,43 @@ export default function SimpleModeView() {
   const currentYear = selectedStep?.year || config.startYear;
   const prevOrbitalShare = useRef<number>(0);
   const [newPodsThisStep, setNewPodsThisStep] = useState(0);
+  const [isClient, setIsClient] = useState(false);
+  const [highlightedYear, setHighlightedYear] = useState<number | undefined>(currentYear);
+  
+  // Only render scenario diagnostics on client to avoid hydration errors
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Listen for jumpToYear events from StoryPanel
+  useEffect(() => {
+    const handleJumpToYear = (event: CustomEvent<{ year: number }>) => {
+      const targetYear = event.detail.year;
+      setHighlightedYear(targetYear);
+      // Try to find and update selected year index if possible
+      const yearIndex = timeline.findIndex(step => step.year === targetYear);
+      if (yearIndex !== -1) {
+        // Note: We can't directly set selectedYearIndex from here,
+        // but the highlightedYear state will update the charts
+      }
+    };
+
+    window.addEventListener('jumpToYear', handleJumpToYear as EventListener);
+    return () => {
+      window.removeEventListener('jumpToYear', handleJumpToYear as EventListener);
+    };
+  }, [timeline]);
+
+  // Check automatic events when year advances
+  useEffect(() => {
+    if (timeline && timeline.length > 0) {
+      const currentStep = timeline[timeline.length - 1];
+      const year = currentStep.year;
+      
+      // Check and trigger automatic events
+      checkAutomaticEvents(timeline, year);
+    }
+  }, [timeline]);
 
   // Calculate new pods deployed this step and trigger launch animations ONLY on deploy
   useEffect(() => {
@@ -309,7 +336,7 @@ export default function SimpleModeView() {
   }, []);
 
   const currentOrbitalShare = selectedStep?.orbitalShare || 0;
-  const [chartsCollapsed, setChartsCollapsed] = useState(false);
+  const [chartsCollapsed, setChartsCollapsed] = useState(true); // Auto-collapsed by default
 
   // Expose simulation state to window for SandboxGlobe to detect launches
   useEffect(() => {
@@ -379,7 +406,6 @@ export default function SimpleModeView() {
       {/* Mobile Menu Button - visible on mobile, hidden on desktop (strategy card is always visible on desktop) */}
       <button
         onClick={() => {
-          console.log('[SimpleModeView] Menu button clicked, opening menu');
           setMobileMenuOpen(true);
         }}
         className="fixed top-[104px] sm:top-[112px] left-4 z-[160] p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 shadow-lg pointer-events-auto lg:hidden"
@@ -467,6 +493,16 @@ export default function SimpleModeView() {
               </button>
             ))}
           </div>
+
+          {/* Scenario Menu - Inside mobile strategy card */}
+          <div className="mt-3 pt-3 border-t border-slate-800">
+            <ScenarioMenu />
+          </div>
+        </div>
+
+        {/* Help Button - Below strategy card in mobile menu */}
+        <div className="mt-4 pt-4 border-t border-slate-800">
+          <HelpButtonInMenu onClose={() => setMobileMenuOpen(false)} />
         </div>
 
       </MobileMenu>
@@ -504,9 +540,20 @@ export default function SimpleModeView() {
         </div>
       )}
 
+      {/* Export Debug Data Button - Debug only */}
+      <div className="fixed top-12 sm:top-14 right-4 z-[60] pointer-events-auto">
+        <button
+          onClick={() => exportDebugData()}
+          className="px-3 py-1.5 bg-purple-600/80 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition shadow-lg border border-purple-500/50"
+          title="Export debug state as JSON"
+        >
+          📥 Export Debug
+        </button>
+      </div>
+
 
       {/* Top: Strategy + Utilization Controls - only content blocks events, hidden on mobile */}
-      <div className="fixed top-[104px] sm:top-[112px] left-0 right-0 z-30 pointer-events-none hidden lg:block">
+      <div className="fixed top-[104px] sm:top-[112px] left-0 right-0 z-20 pointer-events-none hidden lg:block">
         <div className="px-2 sm:px-4 md:px-6 pointer-events-auto w-full max-w-full overflow-x-auto">
           <TopRow
             currentYear={currentYear}
@@ -516,71 +563,119 @@ export default function SimpleModeView() {
         </div>
       </div>
 
+
       {/* Globe area - full screen */}
       <div className="h-screen" style={{ pointerEvents: 'none' }} />
 
       {/* Charts - collapsible bottom panel */}
-      <div className={`fixed bottom-0 left-0 right-0 pointer-events-auto bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 transition-all duration-300 ${chartsCollapsed ? 'max-h-[60px] overflow-hidden' : 'max-h-[50vh] overflow-y-auto'}`} style={{ zIndex: 35 }} data-tutorial-metrics-panel>
-        <div className="flex flex-col gap-4 sm:gap-6 px-3 sm:px-6 pb-8 sm:pb-6 pt-4 overflow-x-auto">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Simulation Metrics</h3>
+      <div className={`fixed bottom-0 left-0 right-0 pointer-events-auto bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 transition-all duration-300 ${chartsCollapsed ? 'max-h-[60px] overflow-hidden' : 'max-h-[70vh] overflow-y-auto'}`} style={{ zIndex: 1000 }} data-tutorial-metrics-panel>
+        {/* Header with collapse button - absolutely positioned at top right, always clickable */}
+        <div className="absolute top-0 left-0 right-0 bg-slate-950/95 backdrop-blur-sm flex items-center justify-between px-3 sm:px-6 py-3 border-b border-slate-800/50" style={{ zIndex: 1001, pointerEvents: 'auto' }}>
+          <h3 className="text-sm font-semibold text-white">Simulation Metrics</h3>
+          <div className="flex items-center gap-3" style={{ pointerEvents: 'auto' }}>
             <button 
-              onClick={() => setChartsCollapsed(!chartsCollapsed)}
-              className="text-xs text-slate-400 hover:text-white transition"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                e.nativeEvent.stopImmediatePropagation();
+                setChartsCollapsed(!chartsCollapsed);
+              }}
+              className="text-xs text-slate-400 hover:text-white transition px-4 py-2 rounded-md hover:bg-slate-800 border border-slate-700 hover:border-slate-600 bg-slate-900/80"
+              style={{ zIndex: 1002, pointerEvents: 'auto', position: 'relative' }}
+              type="button"
+              aria-label={chartsCollapsed ? 'Expand metrics panel' : 'Collapse metrics panel'}
             >
               {chartsCollapsed ? '▼ Expand' : '▲ Collapse'}
             </button>
           </div>
-          {/* Metrics grid */}
+        </div>
+        <div className="flex flex-col gap-4 sm:gap-6 px-3 sm:px-6 pb-8 sm:pb-6 pt-16 overflow-x-auto">
+          {/* Metrics Grid - Only show when not collapsed */}
           {!chartsCollapsed && timeline && timeline.length > 0 && (
             <>
-              <MetricsGrid timeline={timeline} />
+              <MetricsGrid timeline={timeline} yearPlans={yearPlans} config={config} />
               
-              {/* Power vs Compute Frontier */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
-                <div className="text-xs font-semibold text-slate-100 mb-1">
-                  Power → Compute Frontier
-                </div>
-                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-                  Animated scatter: Teal = Class A dominated, Cyan = Class B dominated
-                </div>
-                <div className="h-[250px] sm:h-[300px]">
-                  <PowerComputeScatter 
-                    timeline={timeline} 
-                    currentYear={currentYear}
-                    strategyByYear={getStrategyByYear(timeline)}
-                  />
-                </div>
-              </div>
-
-              {/* Solar Availability Dominance Chart */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
-                <div className="text-xs font-semibold text-slate-100 mb-1">
-                  Solar Availability Dominance
-                </div>
-                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-                  % Full-Power Uptime: Ground Solar (red), Solar+Storage (orange), Space-Based Solar (green)
-                </div>
-                <div className="h-[300px] sm:h-[360px]">
-                  <SolarAvailabilityChart timeline={timeline} />
-                </div>
-              </div>
-
-              {/* Strategy Phase Diagram */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
-                <div className="text-xs font-semibold text-slate-100 mb-1">
-                  Strategy Phase Diagram
-                </div>
-                <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-                  Timeline with Cost/Compute, Carbon/Compute, Latency/Compute derivatives
-                </div>
-                <div className="h-[320px]">
-                  <StrategyPhaseDiagram 
-                    timeline={timeline} 
-                    strategyByYear={getStrategyByYear(timeline)}
-                  />
-                </div>
-              </div>
+              {/* Scenario Diagnostics */}
+              {isClient && (() => {
+                const lastStep = timeline[timeline.length - 1];
+                if (!lastStep) return null;
+                
+                const scenarioMode = (lastStep as any).scenario_mode || config.scenarioMode || "BASELINE";
+                const launchCostPerKg = (lastStep as any).launch_cost_per_kg;
+                const failureRate = (lastStep as any).failure_rate_effective;
+                const maintenanceUtil = (lastStep as any).maintenance_utilization_percent;
+                const backhaulUtil = (lastStep as any).backhaul_utilization_percent;
+                const orbitCarbon = (lastStep as any).orbit_carbon_intensity;
+                const orbitCost = (lastStep as any).orbit_cost_per_compute;
+                const orbitComputeShare = (lastStep as any).orbit_compute_share;
+                const orbitEnergyShare = (lastStep as any).orbit_energy_share_twh;
+                
+                if (scenarioMode && (launchCostPerKg !== undefined || failureRate !== undefined)) {
+                  return (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3">
+                      <div className="text-xs font-semibold text-slate-100 mb-2">
+                        Scenario Diagnostics: {scenarioMode === "ORBITAL_BEAR" ? "Orbital Bear" : scenarioMode === "ORBITAL_BULL" ? "Orbital Bull" : "Baseline"}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] sm:text-[11px]">
+                        {launchCostPerKg !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Launch $/kg</div>
+                            <div className="text-slate-100 font-medium">${launchCostPerKg.toFixed(0)}</div>
+                          </div>
+                        )}
+                        {failureRate !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Failure rate</div>
+                            <div className="text-slate-100 font-medium">{(failureRate * 100).toFixed(1)}% / yr</div>
+                          </div>
+                        )}
+                        {maintenanceUtil !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Maintenance load</div>
+                            <div className="text-slate-100 font-medium">{maintenanceUtil.toFixed(0)}% of capacity</div>
+                          </div>
+                        )}
+                        {backhaulUtil !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Backhaul utilization</div>
+                            <div className="text-slate-100 font-medium">{(backhaulUtil * 100).toFixed(0)}%</div>
+                          </div>
+                        )}
+                        {orbitCarbon !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Orbit carbon intensity</div>
+                            <div className="text-slate-100 font-medium">{orbitCarbon.toFixed(0)} kg CO₂/TWh</div>
+                          </div>
+                        )}
+                        {orbitCost !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Orbit cost/compute</div>
+                            <div className="text-slate-100 font-medium">${orbitCost.toFixed(0)}</div>
+                          </div>
+                        )}
+                        {orbitComputeShare !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Orbit compute share</div>
+                            <div className="text-slate-100 font-medium">{(orbitComputeShare * 100).toFixed(1)}%</div>
+                          </div>
+                        )}
+                        {orbitEnergyShare !== undefined && (
+                          <div>
+                            <div className="text-slate-400">Orbit energy share</div>
+                            <div className="text-slate-100 font-medium">{(orbitEnergyShare * 100).toFixed(1)}%</div>
+                          </div>
+                        )}
+                      </div>
+                      {scenarioMode === "ORBITAL_BEAR" && (
+                        <div className="mt-2 text-[10px] text-slate-500 italic">
+                          Scenario: Orbital bear (high launch costs, high failure, weak autonomy)
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </>
           )}
 

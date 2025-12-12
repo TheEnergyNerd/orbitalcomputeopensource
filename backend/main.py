@@ -27,26 +27,34 @@ app = FastAPI(title="Orbital Compute Control Room API")
 # CORS middleware - MUST be added before other middleware
 # Allow all origins in production (you can restrict this to specific domains)
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = None  # Initialize for exception handler
+
 if ALLOWED_ORIGINS_STR == "*":
     # Allow all origins (for production/public APIs)
+    # Explicitly include localhost for development
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["*"],  # Allow all origins
         allow_credentials=False,  # Must be False when allow_origins=["*"]
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         allow_headers=["*"],
         expose_headers=["*"],
+        max_age=3600,  # Cache preflight requests for 1 hour
     )
 else:
     # Allow specific origins
     ALLOWED_ORIGINS = ALLOWED_ORIGINS_STR.split(",")
+    # Always include localhost:3000 for local development
+    if "http://localhost:3000" not in ALLOWED_ORIGINS:
+        ALLOWED_ORIGINS.append("http://localhost:3000")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         allow_headers=["*"],
         expose_headers=["*"],
+        max_age=3600,  # Cache preflight requests for 1 hour
     )
 
 # Exception handler to ensure CORS headers are added even on errors
@@ -62,7 +70,7 @@ async def global_exception_handler(request, exc):
         headers["Access-Control-Allow-Origin"] = "*"
     else:
         origin = request.headers.get("origin")
-        if origin in ALLOWED_ORIGINS:
+        if ALLOWED_ORIGINS and origin in ALLOWED_ORIGINS:
             headers["Access-Control-Allow-Origin"] = origin
             headers["Access-Control-Allow-Credentials"] = "true"
     headers["Access-Control-Allow-Methods"] = "*"
@@ -1328,8 +1336,11 @@ async def get_state(mode: str = "simulator"):
             headers["Access-Control-Allow-Origin"] = "*"
         else:
             # For CORS, we'll use the global ALLOWED_ORIGINS setting
-            headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
-            headers["Access-Control-Allow-Credentials"] = "true"
+            if ALLOWED_ORIGINS and len(ALLOWED_ORIGINS) > 0:
+                headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGINS[0]
+                headers["Access-Control-Allow-Credentials"] = "true"
+            else:
+                headers["Access-Control-Allow-Origin"] = "*"
         headers["Access-Control-Allow-Methods"] = "*"
         headers["Access-Control-Allow-Headers"] = "*"
         return JSONResponse(

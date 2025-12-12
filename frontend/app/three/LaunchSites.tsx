@@ -96,7 +96,7 @@ export function LaunchSites() {
   });
 
   useEffect(() => {
-    console.log(`[LaunchSites] Rendering ${LAUNCH_SITES.length} launch sites`);
+    // Removed verbose logging
   }, []);
 
   return (
@@ -108,7 +108,7 @@ export function LaunchSites() {
         const [x, y, z] = latLngToVec3(site.lat, site.lon, globeRadius + markerOffset);
         
         // Debug: log ALL launch sites for verification
-        console.log(`[LaunchSites] ${site.name}: lat=${site.lat.toFixed(2)}°, lon=${site.lon.toFixed(2)}° -> xyz=[${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}]`);
+        // Removed verbose logging
         const state = statesRef.current.get(site.id);
         // All launch sites use the same color (orange)
         const color = state?.isFailed ? "#ff0000" : "#ff8800"; // Orange for all launch sites

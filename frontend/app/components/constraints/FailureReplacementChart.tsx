@@ -26,7 +26,7 @@ export default function FailureReplacementChart({ debugState }: FailureReplaceme
     
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { top: 40, right: 40, bottom: 60, left: 80 };
+    const padding = { top: 40, right: 40, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -38,7 +38,11 @@ export default function FailureReplacementChart({ debugState }: FailureReplaceme
     // Get data
     const data = years.map(year => {
       const entry = debugState[year];
-      if (!entry) return null;
+      if (!entry || typeof entry !== 'object' || !('satellitesFailed' in entry)) return null;
+      
+      // Type guard: ensure it's a DebugStateEntry
+      if (!('year' in entry && typeof entry.year === 'number')) return null;
+      
       return {
         year,
         failures: entry.satellitesFailed,
@@ -155,7 +159,7 @@ export default function FailureReplacementChart({ debugState }: FailureReplaceme
       <canvas
         ref={canvasRef}
         width={600}
-        height={400}
+        height={typeof window !== 'undefined' && window.innerWidth >= 640 ? 500 : 300} // CRITICAL: Increased desktop to 500px to fill panel, 300px mobile
         className="w-full h-auto bg-gray-900 rounded"
       />
     </div>

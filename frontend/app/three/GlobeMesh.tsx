@@ -18,7 +18,7 @@ function GlobeWithTexture() {
   const [tintIntensity, setTintIntensity] = useState(0); // -1 (red) to +1 (green)
   const hasCrossedRef = useRef(false);
 
-  // Carbon-weighted world tint - ONLY apply green AFTER carbon crossover
+  // Cost-weighted world tint - ONLY apply green AFTER cost crossover
   useEffect(() => {
     if (!timeline || timeline.length === 0) {
       // No timeline = no tint
@@ -27,19 +27,21 @@ function GlobeWithTexture() {
     }
     
     const currentStep = timeline[timeline.length - 1];
-    const orbitalCarbon = currentStep.carbonMix || 0;
-    const groundCarbon = currentStep.carbonGround || 0;
+    // CRITICAL FIX: Use cost crossover instead of carbon crossover
+    // Check if orbital cost is cheaper than ground cost
+    const orbitalCost = (currentStep as any).costPerComputeOrbit || currentStep.costPerComputeMix || 0;
+    const groundCost = currentStep.costPerComputeGround || 0;
 
-    // CRITICAL: Only apply tint if we have valid carbon data AND we've actually crossed over
-    // Check if carbon crossover has happened
-    if (groundCarbon > 0 && orbitalCarbon > 0) {
-      // Calculate if orbital is better (lower carbon)
-      const isOrbitalBetter = orbitalCarbon < groundCarbon;
+    // CRITICAL: Only apply tint if we have valid cost data
+    // Check if cost crossover has happened (orbital cheaper than ground)
+    if (groundCost > 0 && orbitalCost > 0) {
+      // Calculate if orbital is better (lower cost)
+      const isOrbitalBetter = orbitalCost < groundCost;
       
       // Only apply green tint if orbital is actually better (crossover happened)
       // Start with no tint (0), only change when crossover occurs
       if (isOrbitalBetter && !hasCrossedRef.current) {
-        // Carbon crossover just happened - apply green tint
+        // Cost crossover just happened - apply green tint
         setTintIntensity(1.0);
         hasCrossedRef.current = true;
       } else if (!isOrbitalBetter) {
@@ -49,7 +51,7 @@ function GlobeWithTexture() {
       }
       // If isOrbitalBetter && hasCrossedRef.current, keep green tint (already crossed)
     } else {
-      // No valid carbon data yet - no tint
+      // No valid cost data yet - no tint
       setTintIntensity(0);
     }
   }, [timeline]);
@@ -73,13 +75,13 @@ function GlobeWithTexture() {
         // Red tint (orbital worse than ground)
         materialRef.current.emissive = new THREE.Color(redTint * tintAmount, 0, 0);
         if (tintChanged && Math.abs(tintIntensity) > 0.5) {
-          console.log(`[GlobeMesh] 🔴 Red tint applied: intensity=${tintIntensity.toFixed(2)}, amount=${tintAmount.toFixed(3)}`);
+          // Removed verbose logging
         }
       } else if (tintIntensity > 0) {
         // Green-cyan tint (orbital better than ground)
         materialRef.current.emissive = new THREE.Color(0, greenTint * tintAmount * 0.8, greenTint * tintAmount * 0.6);
         if (tintChanged && Math.abs(tintIntensity) > 0.5) {
-          console.log(`[GlobeMesh] 🟢 Green tint applied: intensity=${tintIntensity.toFixed(2)}, amount=${tintAmount.toFixed(3)}`);
+          // Removed verbose logging
         }
       } else {
         materialRef.current.emissive = new THREE.Color(0, 0, 0);
@@ -105,11 +107,7 @@ function GlobeWithTexture() {
 
     // STEP 3: Force non-mirrored texture
     if (map) {
-      console.log("[GlobeMesh] Texture state:", {
-        repeat: map.repeat,
-        offset: map.offset,
-        flipY: map.flipY,
-      });
+      // Removed verbose logging
 
       // FIX THE EARTH TEXTURE ORIENTATION - World is upside down, so flip Y
       map.flipY = true; // Changed to true to fix upside-down world

@@ -5,6 +5,7 @@ import { useRef, useEffect, useMemo, forwardRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useOrbitSim } from "../state/orbitStore";
 import { useSimulationStore } from "../store/simulationStore";
+import { useSimStore } from "../store/simStore";
 
 // LOD thresholds - more aggressive for better performance at high counts
 const LOD_THRESHOLDS = {
@@ -37,11 +38,15 @@ export function SatellitesGPUInstanced() {
   const satellites = useOrbitSim((s) => s.satellites);
   const timeline = useSimulationStore((s) => s.timeline);
   const activeStrategy = useSimulationStore((s) => s.activeStrategy);
+  const selectedEntity = useSimStore((s) => s.selectedEntity);
   
   // Track last update triggers
   const lastYearRef = useRef<number | null>(null);
   const lastStrategyRef = useRef<string | null>(null);
   const lastSatelliteCountRef = useRef<number>(0);
+  
+  // Pulse animation state
+  const pulseStateRef = useRef<{ id: string; progress: number; scale: number } | null>(null);
   
   // InstancedMesh refs - one per class/shell
   const classAVLEORef = useRef<InstancedMesh>(null!);
@@ -185,8 +190,13 @@ export function SatellitesGPUInstanced() {
           scale = 0.8;
         }
         
+        // Apply pulse scale if this satellite is selected
+        const pulseScale = (pulseStateRef.current && sat.id === pulseStateRef.current.id) 
+          ? pulseStateRef.current.scale 
+          : 1.0;
+        
         dummy.current.position.copy(position);
-        dummy.current.scale.set(scale, scale, scale);
+        dummy.current.scale.set(scale * pulseScale, scale * pulseScale, scale * pulseScale);
         dummy.current.updateMatrix();
         
         // Update instance matrix
@@ -207,7 +217,61 @@ export function SatellitesGPUInstanced() {
     updateGroup(satellitesByGroup.classAGEO, classAGEORef, false);
     updateGroup(satellitesByGroup.classBSSO, classBSSORef, true);
     
-  }, [needsUpdate, satellitesByGroup, timeline, activeStrategy, useRepresentative]);
+  }, [needsUpdate, satellitesByGroup, timeline, activeStrategy, useRepresentative, selectedEntity]);
+  
+  // Pulse animation on click
+  useEffect(() => {
+    if (selectedEntity?.type === "satellite" && selectedEntity.id !== pulseStateRef.current?.id) {
+      pulseStateRef.current = { id: selectedEntity.id, progress: 0, scale: 1.0 };
+      // Haptic feedback on mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
+    }
+  }, [selectedEntity]);
+  
+  // Animate pulse in useFrame
+  useFrame((state, delta) => {
+    if (pulseStateRef.current) {
+      pulseStateRef.current.progress += delta * 3; // 3x speed
+      if (pulseStateRef.current.progress >= 1.0) {
+        pulseStateRef.current = null;
+      } else {
+        const t = pulseStateRef.current.progress;
+        pulseStateRef.current.scale = 1.0 + 0.2 * Math.sin(t * Math.PI);
+      }
+      
+      // Update matrices for pulsing satellite
+      if (pulseStateRef.current) {
+        const pulseId = pulseStateRef.current.id;
+        const pulseScale = pulseStateRef.current.scale;
+        
+        // Find and update the pulsing satellite in all groups
+        const allGroups = [
+          { group: satellitesByGroup.classAVLEO, ref: classAVLEORef },
+          { group: satellitesByGroup.classAMIDLEO, ref: classAMIDLEORef },
+          { group: satellitesByGroup.classASSO, ref: classASSORef },
+          { group: satellitesByGroup.classAMEO, ref: classAMEORef },
+          { group: satellitesByGroup.classAGEO, ref: classAGEORef },
+          { group: satellitesByGroup.classBSSO, ref: classBSSORef },
+        ];
+        
+        allGroups.forEach(({ group, ref }) => {
+          if (!ref.current) return;
+          const satIndex = group.findIndex(s => s.id === pulseId);
+          if (satIndex >= 0 && satIndex < ref.current.count) {
+            const dummy = new Object3D();
+            ref.current.getMatrixAt(satIndex, dummy.matrix);
+            dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+            dummy.scale.multiplyScalar(pulseScale);
+            dummy.updateMatrix();
+            ref.current.setMatrixAt(satIndex, dummy.matrix);
+            ref.current.instanceMatrix.needsUpdate = true;
+          }
+        });
+      }
+    }
+  });
   
   // Create geometries once
   const classAGeometry = useMemo(() => {

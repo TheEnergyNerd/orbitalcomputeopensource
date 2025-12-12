@@ -36,7 +36,7 @@ export const ORBIT_SHELLS: OrbitShell[] = [
   },
   {
     id: "SSO",
-    altitude_km: [800, 1000], // More distinct from MID-LEO
+    altitude_km: [600, 800], // Class B satellites altitude range
     latency_ms: 110,
     stability_rating: 1.3,
     solar_efficiency: 1.4,

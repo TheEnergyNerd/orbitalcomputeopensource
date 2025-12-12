@@ -220,11 +220,12 @@ export function calculateScenarioMetrics(
   const costPerComputeDeltaPct = ((finalOrbitMixCostPerCompute / groundCostPerTFLOP) - 1) * 100;
   const opexDeltaPct = ((mixOpex / groundBaselineOpex) - 1) * 100;
 
-  // Debug: Only log in development and only once per unique input
-  if (process.env.NODE_ENV === 'development') {
+  // Debug: Only log in development and only once per unique input (client-side only)
+  if (process.env.NODE_ENV === 'development' && typeof window !== "undefined") {
     // Throttle logging to avoid spam
     const logKey = `${inputs.podsDeployed}-${inputs.baselineComputeDemandTflopYr}-${inputs.groundEnergyPrice}`;
-    if (!(window as any).__lastCalcLog || (window as any).__lastCalcLog !== logKey) {
+    const lastLog = (window as any).__lastCalcLog;
+    if (!lastLog || lastLog !== logKey) {
       (window as any).__lastCalcLog = logKey;
       console.log('[scenarioCalculator] Calculation:', {
         podsDeployed: inputs.podsDeployed,

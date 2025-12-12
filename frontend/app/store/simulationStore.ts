@@ -4,7 +4,7 @@
  */
 
 import { create } from "zustand";
-import type { SimulationConfig, YearStep, YearPlan } from "../lib/orbitSim/simulationConfig";
+import type { SimulationConfig, YearStep, YearPlan, ScenarioMode } from "../lib/orbitSim/simulationConfig";
 import { createDefaultConfig } from "../lib/orbitSim/simulationConfig";
 import { runSimulationFromPlans } from "../lib/orbitSim/simulationRunner";
 import type { ForecastBands } from "../lib/orbitSim/forecast";
@@ -12,6 +12,7 @@ import { defaultPolicy } from "../lib/ai/routerTypes";
 import { aiDesignConstellation } from "../lib/ai/constellationEval";
 import type { ForecastResult, SentimentSnapshot, StrategyId, StrategyConfig, WorldState, WorldParams } from "../lib/futures/types";
 import { runFuturesMonteCarlo } from "../lib/futures/monteCarlo";
+import type { ScenarioKey } from "../lib/orbitSim/debugState";
 
 type YearTransition = {
   fromYear: number;
@@ -25,6 +26,9 @@ interface SimulationStore {
   selectedYearIndex: number;
   yearTransition: YearTransition;
   forecastBands: ForecastBands | null;
+  
+  // Scenario selection - single source of truth
+  selectedScenarioKey: ScenarioKey; // 'BASELINE' by default
   
   // Futures state
   activeStrategy: StrategyId;
@@ -44,6 +48,7 @@ interface SimulationStore {
   recompute: (configOverride?: Partial<SimulationConfig>) => void;
   recomputeWithPlans: (nextPlans: YearPlan[]) => void;
   setForecastBands: (bands: ForecastBands | null) => void;
+  setSelectedScenarioKey: (key: ScenarioKey) => void; // New action to change scenario
   
   // Futures actions
   runFutures: (nSims?: number) => Promise<void>;
@@ -95,6 +100,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     yearTransition: null,
     forecastBands: null,
     
+    // Scenario selection - single source of truth
+    selectedScenarioKey: "BASELINE" as ScenarioKey,
+    
     // Futures state
     activeStrategy: "balanced",
     strategies: initialStrategies,
@@ -107,6 +115,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     updateConfig: (updates: Partial<SimulationConfig>) => {
       set((state) => {
         const newConfig = { ...state.config, ...updates };
+        
+        // CRITICAL: Don't clear debug state when scenario changes - we now store by scenario key
+        // This allows us to keep data for all scenarios and switch between them
+        // The old scenario data will be overwritten when we re-run, but that's OK
+        
         const result = runSimulationFromPlans(newConfig, state.yearPlans);
         return {
           config: newConfig,
@@ -356,6 +369,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     
     setForecastBands: (bands: ForecastBands | null) => {
       set({ forecastBands: bands });
+    },
+    
+    setSelectedScenarioKey: (key: ScenarioKey) => {
+      set({ selectedScenarioKey: key });
+      // Note: This does NOT trigger a recompute - it only changes which scenario data is displayed
+      // The scenario buttons should call this, not updateConfig
     },
   };
 });

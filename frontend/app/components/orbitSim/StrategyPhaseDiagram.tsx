@@ -196,24 +196,35 @@ function buildStrategyTimeline(
   
   if (timeline.length === 0) return segments;
 
-  const strategyMap = strategyByYear || new Map<number, StrategyMode>();
+  const strategyMap = new Map<number, StrategyMode>();
+  
+  if (strategyByYear && strategyByYear.size > 0) {
+    strategyByYear.forEach((strategy, year) => {
+      strategyMap.set(year, strategy);
+    });
+  }
+  
   timeline.forEach(step => {
     if (!strategyMap.has(step.year)) {
-      strategyMap.set(step.year, "BALANCED");
+      const prevYear = step.year - 1;
+      const prevStrategy = strategyMap.get(prevYear) || "BALANCED";
+      strategyMap.set(step.year, prevStrategy);
     }
   });
 
-  let currentStrategy: StrategyMode | null = null;
-  let segmentStart = timeline[0].year;
+  const sortedYears = Array.from(strategyMap.keys()).sort((a, b) => a - b);
+  
+  if (sortedYears.length === 0) return segments;
 
-  for (let i = 0; i < timeline.length; i++) {
-    const year = timeline[i].year;
+  let currentStrategy: StrategyMode | null = null;
+  let segmentStart = sortedYears[0];
+
+  for (const year of sortedYears) {
     const strategy = strategyMap.get(year) || "BALANCED";
 
     if (currentStrategy === null) {
       currentStrategy = strategy;
     } else if (strategy !== currentStrategy) {
-      // End current segment, start new one
       segments.push({
         startYear: segmentStart,
         endYear: year - 1,
@@ -224,11 +235,10 @@ function buildStrategyTimeline(
     }
   }
 
-  // Add final segment
   if (currentStrategy !== null) {
     segments.push({
       startYear: segmentStart,
-      endYear: timeline[timeline.length - 1].year,
+      endYear: sortedYears[sortedYears.length - 1],
       strategy: currentStrategy,
     });
   }

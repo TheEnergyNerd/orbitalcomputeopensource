@@ -20,25 +20,29 @@ export default function AutonomyMaturityCurve({ debugState }: AutonomyMaturityCu
     
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry) return null;
+      if (!entry || typeof entry !== 'object' || !('autonomyLevel' in entry)) return null;
       
-      // Calculate % autonomous operations from autonomy level
-      // Autonomy level grows from 1.0 to ~3.0 over time
-      // Map to 0-100% with zones: <40% = Human-Dependent, 40-80% = Hybrid, >80% = True Infrastructure
-      const autonomyPercent = Math.min(100, Math.max(0, (entry.autonomyLevel / 3.0) * 100));
+      // Type guard: ensure it's a DebugStateEntry
+      if ('year' in entry && typeof entry.year === 'number') {
+        // Calculate % autonomous operations from autonomy level
+        // Autonomy level grows from 1.0 to ~3.0 over time
+        // Map to 0-100% with zones: <40% = Human-Dependent, 40-80% = Hybrid, >80% = True Infrastructure
+        const autonomyPercent = Math.min(100, Math.max(0, (entry.autonomyLevel / 3.0) * 100));
       
-      // Calculate zone breakdowns
-      const trueInfrastructure = Math.min(20, autonomyPercent); // Bottom 20% = True Infrastructure
-      const hybridOps = Math.max(0, Math.min(40, autonomyPercent - 20)); // 20-60% = Hybrid Ops
-      const humanDependent = Math.max(0, 100 - autonomyPercent); // Top portion = Human-Dependent
-      
-      return {
-        year,
-        autonomyPercent,
-        trueInfrastructure,
-        hybridOps,
-        humanDependent,
-      };
+        // Calculate zone breakdowns
+        const trueInfrastructure = Math.min(20, autonomyPercent); // Bottom 20% = True Infrastructure
+        const hybridOps = Math.max(0, Math.min(40, autonomyPercent - 20)); // 20-60% = Hybrid Ops
+        const humanDependent = Math.max(0, 100 - autonomyPercent); // Top portion = Human-Dependent
+        
+        return {
+          year,
+          autonomyPercent,
+          trueInfrastructure,
+          hybridOps,
+          humanDependent,
+        };
+      }
+      return null;
     }).filter(Boolean) as Array<{
       year: number;
       autonomyPercent: number;
@@ -61,13 +65,11 @@ export default function AutonomyMaturityCurve({ debugState }: AutonomyMaturityCu
   }
   
   // Responsive dimensions - full width
-  const width = typeof window !== 'undefined' 
+  const width = typeof window !== 'undefined'
     ? Math.min(window.innerWidth - 128, window.innerWidth - 64) 
     : 800;
-  const height = typeof window !== 'undefined'
-    ? Math.min(400, (window.innerHeight - 200) * 0.6)
-    : 400;
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 };
+  const height = typeof window !== 'undefined' && window.innerWidth >= 640 ? 500 : 300; // CRITICAL: Increased desktop to 500px to fill panel, 300px mobile
+  const padding = { top: 40, right: 40, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   

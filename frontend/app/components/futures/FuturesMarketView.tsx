@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import FuturesConeVisualization from './FuturesConeVisualization';
 import { useSimulationStore } from '@/app/store/simulationStore';
 import type { StrategyId } from '@/app/lib/futures/types';
+import { ExportAllChartsButton } from '../orbitSim/ChartExportButton';
 
 export default function FuturesMarketView() {
   const [activeType, setActiveType] = useState<'orbit' | 'ground' | 'both'>('both');
@@ -100,7 +101,7 @@ export default function FuturesMarketView() {
           </p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           {/* Strategy selector */}
           <div className="flex gap-2 bg-gray-800 rounded-lg p-1">
             {(Object.keys(strategies) as StrategyId[]).map((strategyId) => (
@@ -118,11 +119,16 @@ export default function FuturesMarketView() {
             ))}
           </div>
           
+          {/* Export all charts button */}
+          <div className="flex-shrink-0">
+            <ExportAllChartsButton />
+          </div>
+          
           {/* Run futures button */}
           <button
             onClick={() => runFutures(1000)}
             disabled={isRunningFutures}
-            className={`px-4 py-2 text-xs rounded transition ${
+            className={`px-4 py-2 text-xs rounded transition flex-shrink-0 ${
               isRunningFutures
                 ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                 : 'bg-cyan-500 text-white hover:bg-cyan-600'
@@ -213,7 +219,7 @@ export default function FuturesMarketView() {
                 forecast={futuresForecast}
                 type="orbit"
                 width={800}
-                height={400}
+                height={500} // Increased height for desktop
                 onHover={(point) => setHoveredPoint(point ? { type: 'orbit', point } : null)}
                 animated={true}
               />
@@ -229,7 +235,7 @@ export default function FuturesMarketView() {
                 forecast={futuresForecast}
                 type="ground"
                 width={800}
-                height={400}
+                height={500} // Increased height for desktop
                 onHover={(point) => setHoveredPoint(point ? { type: 'ground', point } : null)}
                 animated={true}
               />

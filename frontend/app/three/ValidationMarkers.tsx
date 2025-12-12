@@ -24,7 +24,7 @@ export function ValidationMarkers() {
         // Use FINAL coordinate system with surface radius 1.002
         const [x, y, z] = latLngToVec3(marker.lat, marker.lng, 1.002);
         
-        console.log(`[ValidationMarkers] ${marker.name}: lat=${marker.lat.toFixed(2)}°, lng=${marker.lng.toFixed(2)}° -> xyz=[${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}]`);
+        // Removed verbose logging
 
         return (
           <mesh

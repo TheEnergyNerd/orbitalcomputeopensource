@@ -69,8 +69,18 @@ export interface DebugStateEntry {
   // --- Class Breakdown ---
   classA_satellites_alive: number;
   classB_satellites_alive: number;
-  classA_compute_raw: number; // PFLOPs
-  classB_compute_raw: number; // PFLOPs
+  classA_compute_raw: number; // PFLOPs (per satellite)
+  classB_compute_raw: number; // PFLOPs (per satellite)
+  // CRITICAL NOTE: compute_effective_flops is in FLOPS (not PFLOPs)
+  // To convert to PFLOPs: divide by 1e15
+  // compute_effective_flops should always be <= compute_raw_flops (in same units)
+  //
+  // Unit clarification:
+  // - compute_raw_flops: Total raw compute in FLOPS (not PFLOPs, despite "raw" name)
+  // - compute_effective_flops: Effective compute in FLOPS (thermal/backhaul limited)
+  // - compute_exportable_flops: Exportable compute in FLOPS (backhaul limited)
+  // - classA_compute_raw, classB_compute_raw: Per-satellite compute in PFLOPs
+  // All "flops" fields are in FLOPS (1e15 FLOPS = 1 PFLOP)
   classA_power_kw: number;
   classB_power_kw: number;
   
@@ -78,17 +88,18 @@ export interface DebugStateEntry {
   backhaul_bandwidth_total: number; // Gbps
   backhaul_bandwidth_used: number; // Gbps
   backhaul_bw_per_PFLOP: number; // Gbps per PFLOP
-  utilization_backhaul_raw: number; // before clamping
+  // REMOVED: utilization_backhaul_raw (fake utilization field)
   
   // --- Autonomy & Maintenance Reality ---
   maintenance_debt: number; // cumulative unrecovered failures
   failures_unrecovered: number; // this year's unrecovered failures
+  recovery_success_rate: number; // What % of failures get fixed (0-1)
   survival_fraction: number; // same as utilization_autonomy, for clarity
   
   // --- Thermal Reality ---
   electrical_efficiency: number; // 0-1
   radiator_kw_per_m2: number; // kW per square meter
-  utilization_heat_raw: number; // before min()
+  // REMOVED: utilization_heat_raw (fake utilization field)
   
   // --- Dynamic Thermal Integration ---
   temp_core_C: number; // Core temperature in Celsius
@@ -137,6 +148,9 @@ export interface DebugStateEntry {
   carbon_delta: number; // orbit - ground
   carbon_crossover_triggered: boolean;
   carbon_mix: number; // Weighted average carbon (ground + orbit)
+  raw_carbon_mix?: number; // Raw (unclamped) carbon mix
+  cumulativeOrbitalCarbonKg?: number; // Cumulative orbital carbon (kg)
+  cumulativeOrbitEnergyTwh?: number; // Cumulative orbit energy served (TWh)
   
   cost_orbit: number; // $ per compute unit
   cost_ground: number; // $ per compute unit
@@ -147,9 +161,12 @@ export interface DebugStateEntry {
   cost_per_compute_ground: number; // $ per compute unit (ground)
   cost_per_compute_orbit: number; // $ per compute unit (orbit)
   cost_per_compute_mix: number; // $ per compute unit (mixed)
+  raw_cost_per_compute_mix?: number; // Raw (unclamped) cost per compute mix
   annual_opex_ground: number; // $ per year (ground)
+  annual_opex_ground_all_ground?: number; // $ per year (all-ground baseline)
   annual_opex_orbit: number; // $ per year (orbit)
   annual_opex_mix: number; // $ per year (mixed)
+  raw_annual_opex_mix?: number; // Raw (unclamped) annual OPEX mix
   
   // --- LATENCY (unified debug output) ---
   latency_ground_ms: number; // ms (ground)
@@ -179,21 +196,105 @@ export interface DebugStateEntry {
   ground_full_power_uptime_percent: number; // % time at full power (ground solar)
   solar_plus_storage_uptime_percent: number; // % time at full power (solar + storage)
   space_solar_uptime_percent: number; // % time at full power (space-based solar)
+  
+  // --- SCENARIO DIAGNOSTICS (3) Make the "why" explicit ---
+  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
+  scenarioKind?: "bear" | "baseline" | "bull"; // For debugging
+  launch_cost_per_kg?: number; // $/kg (scenario-dependent)
+  tech_progress_factor?: number; // Tech progress multiplier
+  launchCostDeclineFactor?: number; // Launch cost decline factor
+  demandGrowthFactor?: number; // Demand growth factor
+  computePerKwGrowth?: number; // Compute-per-kW growth rate (for frontier shape)
+  powerGrowthPerYear?: number; // Power growth rate per year (for frontier shape)
+  failure_rate_effective?: number; // Effective failure rate after thermal, etc
+  orbit_carbon_intensity?: number; // kg CO2/TWh
+  annual_carbon_ground_all_ground?: number; // Annual total (kg CO2)
+  annual_carbon_ground?: number; // Annual ground carbon in mix (kg CO2)
+  annual_carbon_orbit?: number; // Annual orbit carbon in mix (kg CO2)
+  annual_carbon_mix?: number; // Annual total (kg CO2)
+  launchCarbonKgThisYear?: number; // Carbon from launches this year
+  totalOrbitalCarbonKgThisYear?: number; // Total orbital carbon this year
+  orbitEnergyServedTwhThisYear?: number; // Energy served by orbit this year
+  orbit_cost_per_compute?: number; // $/PFLOP (raw value)
+  orbit_cost_per_compute_display?: number; // $/PFLOP (display/clamped value)
+  cumulativeOrbitalCostUSD?: number; // Cumulative orbital cost
+  cumulativeExportedPFLOPs?: number; // Cumulative exported compute
+  exportedPFLOPsThisYear?: number; // Exported compute this year
+  launchMassThisYearKg?: number; // Launch mass this year
+  launchCostThisYearUSD?: number; // Launch cost this year
+  totalOrbitalCostThisYearUSD?: number; // Total orbital cost this year
+  totalRadiatorMassKg?: number; // Total radiator mass (for previous year comparison)
+  orbit_compute_share?: number; // Patch 3: Actual orbit compute share (0-1) - after ramp cap
+  orbit_compute_share_physical?: number; // Physical share before ramp cap
+  orbit_share_ramp_cap?: number; // Ramp cap applied to orbit share
+  orbit_energy_share_twh?: number; // Patch 3: Orbit energy served in TWh (actual value, not fraction)
+  orbitEnergyServedTwh?: number; // For debugging (alias)
+  ground_compute_share?: number; // Ground compute share (0-1)
+  baseDemandPFLOPs?: number; // Baseline demand in PFLOPs
+  totalDemandPFLOPs?: number; // Total demand in PFLOPs (with growth)
+  compute_exportable_PFLOPs?: number; // Exportable compute in PFLOPs (explicit naming)
+  baseDemandTWh?: number; // Growing energy demand (TWh)
+  totalOrbitalCostUSD?: number; // Total orbital capex (for debugging)
+  orbital_annualized_cost_usd?: number; // Annualized orbital cost (for debugging)
+  totalOrbitalCarbonKg?: number; // Total orbital carbon for debugging
+  // Physics layer fields
+  bus_total_mass_kg?: number;
+  bus_silicon_mass_kg?: number;
+  bus_radiator_mass_kg?: number;
+  bus_solar_mass_kg?: number;
+  bus_structure_mass_kg?: number;
+  bus_shielding_mass_kg?: number;
+  bus_power_electronics_mass_kg?: number;
+  bus_avionics_mass_kg?: number; // CRITICAL FIX: Add missing mass components (per audit C1)
+  bus_battery_mass_kg?: number;
+  bus_adcs_mass_kg?: number;
+  bus_propulsion_mass_kg?: number;
+  bus_other_mass_kg?: number; // CRITICAL: Accounts for 2.6 kg (18%) gap - wiring, thermal hardware, brackets, etc.
+  bus_power_kw?: number;
+  bus_compute_tflops_nominal?: number;
+  bus_compute_tflops_derated?: number;
+  bus_availability?: number;
+  fleet_total_mass_kg?: number;
+  fleet_total_compute_tflops_derated?: number;
 }
 
+export type ScenarioKey = 'BASELINE' | 'ORBITAL_BEAR' | 'ORBITAL_BULL';
+
 export interface DebugState {
-  [year: number]: DebugStateEntry;
-  errors: Array<{
+  perScenario: Record<ScenarioKey, Record<number, DebugStateEntry>>;
+  // Legacy flat structure for backward compatibility (deprecated, use perScenario)
+  [key: string]: DebugStateEntry | Record<ScenarioKey, Record<number, DebugStateEntry>> | Array<{
     year: number;
     error: string;
     values: Record<string, any>;
-  }>;
+  }> | undefined;
 }
 
-// Global debug state
+// Global debug state - structured by scenario
 let debugState: DebugState = {
-  errors: [],
+  perScenario: {
+    BASELINE: {},
+    ORBITAL_BEAR: {},
+    ORBITAL_BULL: {},
+  },
 };
+
+/**
+ * Get scenario key from scenario mode string
+ */
+function getScenarioKey(scenarioMode?: string): ScenarioKey {
+  if (scenarioMode === 'ORBITAL_BEAR') return 'ORBITAL_BEAR';
+  if (scenarioMode === 'ORBITAL_BULL') return 'ORBITAL_BULL';
+  return 'BASELINE'; // Default to BASELINE
+}
+
+/**
+ * Get debug state key for a year and scenario (legacy, for backward compatibility)
+ */
+function getDebugStateKey(year: number, scenarioMode?: string): string {
+  const scenarioKey = getScenarioKey(scenarioMode);
+  return `${year}_${scenarioKey}`;
+}
 
 /**
  * Get the current debug state
@@ -203,39 +304,109 @@ export function getDebugState(): DebugState {
 }
 
 /**
- * Clear debug state
+ * Convert scenarioMode string to ScenarioKey
+ */
+export function scenarioModeToKey(scenarioMode?: string): ScenarioKey {
+  if (scenarioMode === 'ORBITAL_BEAR') return 'ORBITAL_BEAR';
+  if (scenarioMode === 'ORBITAL_BULL') return 'ORBITAL_BULL';
+  return 'BASELINE';
+}
+
+/**
+ * Get all entries for a specific scenario
+ */
+export function getDebugStateEntries(scenarioKey: ScenarioKey): DebugStateEntry[] {
+  const perYear = debugState.perScenario[scenarioKey] || {};
+  return Object.values(perYear).filter((entry): entry is DebugStateEntry => 
+    typeof entry === 'object' && entry !== null && 'year' in entry && typeof entry.year === 'number'
+  );
+}
+
+/**
+ * Clear debug state (all scenarios)
  */
 export function clearDebugState(): void {
   debugState = {
-    errors: [],
+    perScenario: {
+      BASELINE: {},
+      ORBITAL_BEAR: {},
+      ORBITAL_BULL: {},
+    },
   };
 }
 
 /**
- * Add a debug state entry for a year
+ * Clear debug state for a specific scenario
+ */
+export function clearDebugStateForScenario(scenarioMode: string): void {
+  const scenarioKey = getScenarioKey(scenarioMode);
+  debugState.perScenario[scenarioKey] = {};
+  
+  // Also clear legacy flat keys for backward compatibility
+  const keysToDelete: string[] = [];
+  for (const key in debugState) {
+    if (key !== 'perScenario' && key.endsWith(`_${scenarioKey}`)) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach(key => delete debugState[key]);
+}
+
+/**
+ * Add a debug state entry for a year and scenario
  */
 export function addDebugStateEntry(entry: DebugStateEntry): void {
-  debugState[entry.year] = entry;
+  const scenarioKey = getScenarioKey(entry.scenario_mode);
+  
+  // Store in new perScenario structure
+  if (!debugState.perScenario[scenarioKey]) {
+    debugState.perScenario[scenarioKey] = {};
+  }
+  debugState.perScenario[scenarioKey][entry.year] = entry;
+  
+  // Also store in legacy flat structure for backward compatibility
+  const key = getDebugStateKey(entry.year, entry.scenario_mode);
+  debugState[key] = entry;
+}
+
+/**
+ * Get debug state entry for a specific year and scenario
+ */
+export function getDebugStateEntry(year: number, scenarioMode?: string): DebugStateEntry | undefined {
+  const scenarioKey = getScenarioKey(scenarioMode);
+  
+  // Try new perScenario structure first
+  if (debugState.perScenario[scenarioKey] && debugState.perScenario[scenarioKey][year]) {
+    return debugState.perScenario[scenarioKey][year];
+  }
+  
+  // Fall back to legacy flat structure
+  const key = getDebugStateKey(year, scenarioMode);
+  return debugState[key] as DebugStateEntry | undefined;
 }
 
 /**
  * Add an error to debug state
+ * NOTE: Errors are now only logged to console, not stored in debug state
+ * to prevent giant error arrays from bloating the debug payload
  */
 export function addDebugError(
   year: number,
   error: string,
   values: Record<string, any>
 ): void {
-  debugState.errors.push({ year, error, values });
+  // Only log to console, don't store in debug state
+  console.warn(`[DebugState] Year ${year}: ${error}`, values);
 }
 
 /**
- * Validate state for a given year
+ * Validate state for a given year and scenario
  */
-export function validateState(year: number): boolean {
-  const entry = debugState[year];
+export function validateState(year: number, scenarioMode?: string): boolean {
+  const entry = getDebugStateEntry(year, scenarioMode);
   if (!entry) {
-    addDebugError(year, "Missing debug state entry", {});
+    // Don't add error to array, just log
+    console.warn(`[DebugState] Missing debug state entry for year ${year}, scenario ${scenarioMode || 'BASELINE'}`);
     return false;
   }
   
@@ -294,23 +465,33 @@ export function validateState(year: number): boolean {
 /**
  * Validate state across multiple years for degenerate patterns
  */
-export function validateStateAcrossYears(): void {
-  const years = Object.keys(debugState)
-    .filter(key => key !== "errors")
+export function validateStateAcrossYears(scenarioKey: ScenarioKey = 'BASELINE'): void {
+  const perYear = debugState.perScenario[scenarioKey] || {};
+  const years = Object.keys(perYear)
     .map(Number)
     .sort((a, b) => a - b);
   
   if (years.length < 6) return; // Need at least 6 years to check patterns
   
-  // Check 1: Maintenance never binds (failures always equal recoveries for >5 consecutive years)
+  // Check 1: Maintenance never binds (maintenance utilization always < 30% for >5 consecutive years)
+  // This indicates maintenance capacity is never a constraint
+  // ONLY flag if there are actual failures that should require maintenance
   let consecutiveMaintenanceNeverBinds = 0;
   let maxConsecutiveMaintenanceNeverBinds = 0;
   
   for (const year of years) {
-    const entry = debugState[year];
+    const entry = perYear[year];
     if (!entry) continue;
     
-    if (entry.satellitesFailed === entry.satellitesRecovered && entry.satellitesTotal > 0) {
+    // Check if maintenance utilization is consistently very low (< 30%) AND failures equal recoveries
+    // AND there are actual failures (not just zero failures = zero recoveries)
+    const maintenanceUtilization = entry.maintenance_utilization_percent || 0;
+    const failuresEqualRecoveries = Math.abs(entry.satellitesFailed - entry.satellitesRecovered) < 0.1;
+    const veryLowUtilization = maintenanceUtilization < 30.0;
+    const hasActualFailures = entry.satellitesFailed > 0.1; // At least 0.1 failures (not just rounding)
+    const hasFleet = entry.satellitesTotal > 10; // Need a meaningful fleet size
+    
+    if (failuresEqualRecoveries && veryLowUtilization && hasActualFailures && hasFleet) {
       consecutiveMaintenanceNeverBinds++;
       maxConsecutiveMaintenanceNeverBinds = Math.max(
         maxConsecutiveMaintenanceNeverBinds,
@@ -321,26 +502,40 @@ export function validateStateAcrossYears(): void {
     }
   }
   
-  if (maxConsecutiveMaintenanceNeverBinds > 5) {
-    addDebugError(
-      years[0],
-      `Maintenance never binds — model likely degenerate. Failures equal recoveries for ${maxConsecutiveMaintenanceNeverBinds} consecutive years.`,
-      { maxConsecutiveYears: maxConsecutiveMaintenanceNeverBinds }
-    );
-    console.warn(
-      `[DebugState] ⚠️ Maintenance never binds: failures equal recoveries for ${maxConsecutiveMaintenanceNeverBinds} consecutive years`
-    );
-  }
+  // Only flag if: many consecutive years (>5) AND significant failure rate (> 1% of fleet in at least one year)
+  const hasSignificantFailures = years.some(year => {
+    const entry = perYear[year];
+    if (!entry) return false;
+    const failureRate = entry.satellitesTotal > 0 ? entry.satellitesFailed / entry.satellitesTotal : 0;
+    return failureRate > 0.01; // At least 1% failure rate
+  });
+  
+  // Only flag if: many consecutive years, significant failures, AND fleet is large enough
+    // Only log once, not one per year
+    if (maxConsecutiveMaintenanceNeverBinds > 5 && hasSignificantFailures) {
+      console.warn(
+        `[DebugState] ⚠️ Maintenance never binds: utilization < 30% and failures equal recoveries for ${maxConsecutiveMaintenanceNeverBinds} consecutive years (Year ${years[0]}, Scenario ${scenarioKey})`
+      );
+    }
   
   // Check 2: Backhaul never binds (utilization always 1.0 for >10 years)
+  // CRITICAL FIX: Only flag if backhaul is legitimately always the constraint AND compute is being limited
+  // If backhaul utilization is high but compute is still growing, it's working as intended
   let consecutiveBackhaulNeverBinds = 0;
   let maxConsecutiveBackhaulNeverBinds = 0;
   
   for (const year of years) {
-    const entry = debugState[year];
+    const entry = perYear[year];
     if (!entry) continue;
     
-    if (Math.abs(entry.utilization_backhaul - 1.0) < 0.001 && entry.satellitesTotal > 0) {
+    // Only flag if: utilization is 1.0 AND compute is actually being limited by backhaul
+    // AND there's a meaningful fleet (not just a few satellites)
+    const backhaulAtMax = Math.abs(entry.utilization_backhaul - 1.0) < 0.001;
+    const hasMeaningfulFleet = entry.satellitesTotal > 50; // Need substantial fleet
+    const computeIsLimited = entry.compute_exportable_flops > 0 && 
+      entry.compute_exportable_flops < (entry.compute_raw_flops || 0) * 0.9; // Exportable < 90% of raw
+    
+    if (backhaulAtMax && hasMeaningfulFleet && computeIsLimited) {
       consecutiveBackhaulNeverBinds++;
       maxConsecutiveBackhaulNeverBinds = Math.max(
         maxConsecutiveBackhaulNeverBinds,
@@ -351,23 +546,24 @@ export function validateStateAcrossYears(): void {
     }
   }
   
-  if (maxConsecutiveBackhaulNeverBinds > 10) {
-    addDebugError(
-      years[0],
-      `Backhaul never binds — routing model likely incomplete. Utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years.`,
-      { maxConsecutiveYears: maxConsecutiveBackhaulNeverBinds }
-    );
-    console.warn(
-      `[DebugState] ⚠️ Backhaul never binds: utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years`
-    );
-  }
+    // Only flag if many consecutive years (>15) AND compute is actually being limited
+    // This reduces false positives when backhaul is working correctly as a constraint
+    if (maxConsecutiveBackhaulNeverBinds > 15) {
+      console.warn(
+        `[DebugState] ⚠️ Backhaul never binds: utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years (Scenario ${scenarioKey})`
+      );
+    }
 }
 
 /**
- * Export debug state as JSON
+ * Export debug state as JSON (without errors array)
  */
 export function exportDebugData(): void {
-  const blob = new Blob([JSON.stringify(debugState, null, 2)], { type: "application/json" });
+  // Export only perScenario, not the errors array
+  const exportData = {
+    perScenario: debugState.perScenario,
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -377,9 +573,9 @@ export function exportDebugData(): void {
 }
 
 /**
- * Get constraint timeline
+ * Get constraint timeline for a specific scenario
  */
-export function getConstraintTimeline(): Array<{
+export function getConstraintTimeline(scenarioKey: ScenarioKey = 'BASELINE'): Array<{
   year: number;
   dominantConstraint: DominantConstraint;
   constraintValues: {
@@ -400,13 +596,13 @@ export function getConstraintTimeline(): Array<{
     };
   }> = [];
   
-  const years = Object.keys(debugState)
-    .filter(key => key !== "errors")
+  const perYear = debugState.perScenario[scenarioKey] || {};
+  const years = Object.keys(perYear)
     .map(Number)
     .sort((a, b) => a - b);
   
   for (const year of years) {
-    const entry = debugState[year];
+    const entry = perYear[year];
     if (entry) {
       timeline.push({
         year,

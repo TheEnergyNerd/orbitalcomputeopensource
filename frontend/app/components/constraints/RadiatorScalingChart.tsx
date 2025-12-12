@@ -24,7 +24,12 @@ export default function RadiatorScalingChart({ debugState }: RadiatorScalingChar
     // Calculate per-satellite compute density and radiator area for each year
     return years.map(year => {
       const entry = debugState[year];
-      if (!entry || entry.satellitesTotal === 0) return null;
+      if (!entry || typeof entry !== 'object' || !('satellitesTotal' in entry)) return null;
+      
+      // Type guard: ensure it's a DebugStateEntry
+      if (!('year' in entry && typeof entry.year === 'number')) return null;
+      
+      if (entry.satellitesTotal === 0) return null;
       
       // Compute density = total compute / total satellites (PFLOPs per satellite)
       const computeDensity = (entry.compute_raw_flops / 1e15) / entry.satellitesTotal;
@@ -57,8 +62,8 @@ export default function RadiatorScalingChart({ debugState }: RadiatorScalingChar
   }
   
   const width = typeof window !== 'undefined' ? Math.min(800, window.innerWidth - 64) : 800;
-  const height = 400;
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 };
+  const height = typeof window !== 'undefined' && window.innerWidth >= 640 ? 500 : 300; // CRITICAL: Increased desktop to 500px to fill panel, 300px mobile
+  const padding = { top: 40, right: 40, bottom: 150, left: 80 }; // CRITICAL: Increased bottom to 150px to prevent x-axis cutoff on desktop
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   

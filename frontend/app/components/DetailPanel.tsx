@@ -7,7 +7,7 @@ import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { useSimulationStore } from "../store/simulationStore";
 import { useOrbitSim } from "../state/orbitStore";
-import { getDebugState } from "../lib/orbitSim/debugState";
+import { getDebugStateEntry } from "../lib/orbitSim/debugState";
 import type { SurfaceType } from "./SurfaceTabs";
 import { computePodSpec, calculateTechLevel } from "../lib/orbitSim/podSpecs";
 import { computeFactoryMultipliers } from "../lib/orbitSim/factoryEngine";
@@ -80,8 +80,8 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
     }
   };
 
-  // Only show cards in deployment section
-  if (activeSurface !== "deployment") {
+  // Only show cards in world/deployment section
+  if (activeSurface && activeSurface !== "world") {
     return null;
   }
 
@@ -731,43 +731,44 @@ export default function DetailPanel({ activeSurface }: DetailPanelProps = {}) {
 
         {/* Utilization Metrics (from thermal integration) */}
         {(() => {
-          const debugState = getDebugState();
           const currentYear = timeline && timeline.length > 0 ? timeline[timeline.length - 1]?.year : 2025;
-          const debugEntry = debugState[currentYear];
+          const debugEntry = getDebugStateEntry(currentYear, config?.scenarioMode);
           
-          if (!debugEntry) return null;
+          if (!debugEntry || typeof debugEntry !== 'object' || 'error' in debugEntry) return null;
+          
+          const entry = debugEntry as any;
           
           return (
             <Section title="System Utilization">
               <Metric 
                 label="Power Utilization" 
-                value={`${debugEntry.power_utilization_percent?.toFixed(1) || 0}%`}
-                color={debugEntry.power_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+                value={`${entry.power_utilization_percent?.toFixed(1) || 0}%`}
+                color={(entry.power_utilization_percent || 0) > 90 ? "text-yellow-400" : "text-white"}
               />
               <Metric 
                 label="Thermal Drift" 
-                value={`${debugEntry.thermal_drift_C_per_hr?.toFixed(2) || 0}°C/hr`}
-                color={Math.abs(debugEntry.thermal_drift_C_per_hr || 0) > 1 ? "text-orange-400" : "text-white"}
+                value={`${entry.thermal_drift_C_per_hr?.toFixed(2) || 0}°C/hr`}
+                color={Math.abs(entry.thermal_drift_C_per_hr || 0) > 1 ? "text-orange-400" : "text-white"}
               />
               <Metric 
                 label="Radiator Utilization" 
-                value={`${debugEntry.radiator_utilization_percent?.toFixed(1) || 0}%`}
-                color={debugEntry.radiator_utilization_percent > 95 ? "text-red-400" : debugEntry.radiator_utilization_percent > 80 ? "text-yellow-400" : "text-white"}
+                value={`${entry.radiator_utilization_percent?.toFixed(1) || 0}%`}
+                color={(entry.radiator_utilization_percent || 0) > 95 ? "text-red-400" : (entry.radiator_utilization_percent || 0) > 80 ? "text-yellow-400" : "text-white"}
               />
               <Metric 
                 label="Backhaul Utilization" 
-                value={`${debugEntry.backhaul_utilization_percent?.toFixed(1) || 0}%`}
-                color={debugEntry.backhaul_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+                value={`${entry.backhaul_utilization_percent?.toFixed(1) || 0}%`}
+                color={(entry.backhaul_utilization_percent || 0) > 90 ? "text-yellow-400" : "text-white"}
               />
               <Metric 
                 label="Manufacturing Utilization" 
-                value={`${debugEntry.manufacturing_utilization_percent?.toFixed(1) || 0}%`}
-                color={debugEntry.manufacturing_utilization_percent > 90 ? "text-yellow-400" : "text-white"}
+                value={`${entry.manufacturing_utilization_percent?.toFixed(1) || 0}%`}
+                color={(entry.manufacturing_utilization_percent || 0) > 90 ? "text-yellow-400" : "text-white"}
               />
               <Metric 
                 label="Maintenance Utilization" 
-                value={`${debugEntry.maintenance_utilization_percent?.toFixed(1) || 0}%`}
-                color={debugEntry.maintenance_utilization_percent > 90 ? "text-red-400" : debugEntry.maintenance_utilization_percent > 70 ? "text-yellow-400" : "text-white"}
+                value={`${entry.maintenance_utilization_percent?.toFixed(1) || 0}%`}
+                color={(entry.maintenance_utilization_percent || 0) > 90 ? "text-red-400" : (entry.maintenance_utilization_percent || 0) > 70 ? "text-yellow-400" : "text-white"}
               />
               {debugEntry.temp_core_C !== undefined && (
                 <Metric 

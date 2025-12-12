@@ -7,6 +7,7 @@ import { calculateCarbonCrossover } from "../lib/orbitSim/carbonModel";
 import { calculateComputeFromPower } from "../lib/orbitSim/computeEfficiency";
 import { calculateTotalOrbitalPower } from "../lib/orbitSim/launchPowerModel";
 import { showToast } from "../lib/utils/toast";
+import confetti from "canvas-confetti";
 
 interface SpecialMoment {
   id: string;
@@ -50,8 +51,25 @@ export function SpecialMoments() {
     }
 
     // 1. Cost Crossover - only show if we JUST crossed over (current year equals crossover year) AND year actually changed
-    const orbitalCosts = timeline.map(s => ({ year: s.year, cost: s.costPerComputeGround })).filter(c => c.cost > 0);
-    const groundCosts = timeline.map(s => ({ year: s.year, cost: s.costPerComputeMix })).filter(c => c.cost > 0);
+    // Use cost_orbit and cost_ground from the new deployment model, fallback to old fields for compatibility
+    // IMPORTANT: cost_orbit = orbital cost per TWh, cost_ground = ground cost per TWh
+    // costPerComputeGround = ground cost, costPerComputeMix = weighted average (not pure ground!)
+    const orbitalCosts = timeline.map(s => {
+      const step = s as any;
+      // Try new model fields first, then fallback
+      return { 
+        year: s.year, 
+        cost: step.cost_orbit || step.costPerComputeOrbit || 1000 
+      };
+    }).filter(c => c.cost > 0);
+    const groundCosts = timeline.map(s => {
+      const step = s as any;
+      // Use cost_ground from new model, or costPerComputeGround from old model
+      return { 
+        year: s.year, 
+        cost: step.cost_ground || s.costPerComputeGround || 340 
+      };
+    }).filter(c => c.cost > 0);
     
     // Only calculate if we have valid data
     if (orbitalCosts.length > 0 && groundCosts.length > 0) {
@@ -76,7 +94,14 @@ export function SpecialMoments() {
         const momentId = `cost_crossover_${costCrossover.crossover_year}`;
         if (!detectedMomentsRef.current.has(momentId)) {
           detectedMomentsRef.current.add(momentId);
-          showToast(`💰 Cost Crossover Achieved! Orbital compute is now cheaper than ground in ${costCrossover.crossover_year}`, 'info');
+          // Trigger confetti celebration
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#22c55e', '#10b981', '#34d399']
+          });
+          showToast(`🎉 Cost Crossover Achieved! Orbital compute is now cheaper than ground in ${costCrossover.crossover_year}`, 'info');
           newMoments.push({
             id: momentId,
             type: "cost_crossover",
@@ -115,7 +140,14 @@ export function SpecialMoments() {
       const momentId = `carbon_crossover_${carbonCrossover.crossover_year}`;
       if (!detectedMomentsRef.current.has(momentId)) {
         detectedMomentsRef.current.add(momentId);
-        showToast(`🌱 Carbon Crossover Achieved! Orbital compute is now cleaner than ground in ${carbonCrossover.crossover_year}`, 'info');
+        // Trigger confetti celebration
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#10b981', '#34d399', '#6ee7b7']
+        });
+        showToast(`🎉 Carbon Crossover Achieved! Orbital compute is now cleaner than ground in ${carbonCrossover.crossover_year}`, 'info');
         newMoments.push({
           id: momentId,
           type: "carbon_crossover",
@@ -153,7 +185,13 @@ export function SpecialMoments() {
         // Show alert if we just crossed OR if year changed and we're above threshold
         if ((prevOrbitalShare <= 0.5 || !prevStep) && yearChanged && !isInitialLoad) {
           detectedMomentsRef.current.add(momentId50Percent);
-          showToast(`🚀 Milestone: Orbit > 50% of world compute! (${(orbitalShare * 100).toFixed(1)}%)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#3b82f6', '#60a5fa', '#93c5fd']
+          });
+          showToast(`🎉 Milestone: Orbit > 50% of world compute! (${(orbitalShare * 100).toFixed(1)}%)`, 'info');
           newMoments.push({
             id: momentId50Percent,
             type: "orbit_50_percent",
@@ -164,7 +202,13 @@ export function SpecialMoments() {
         } else if (!isInitialLoad && yearChanged) {
           // Just crossed this year, show alert
           detectedMomentsRef.current.add(momentId50Percent);
-          showToast(`🚀 Milestone: Orbit > 50% of world compute! (${(orbitalShare * 100).toFixed(1)}%)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#3b82f6', '#60a5fa', '#93c5fd']
+          });
+          showToast(`🎉 Milestone: Orbit > 50% of world compute! (${(orbitalShare * 100).toFixed(1)}%)`, 'info');
           newMoments.push({
             id: momentId50Percent,
             type: "orbit_50_percent",
@@ -206,7 +250,13 @@ export function SpecialMoments() {
         // Show alert if we just crossed OR if year changed and we're above threshold
         if ((prevTotalOrbitalPowerTW < 1.0 || !prevStep) && yearChanged && !isInitialLoad) {
           detectedMomentsRef.current.add(momentId1TW);
-          showToast(`⚡ Milestone: First >1 TW orbital power achieved! (${totalOrbitalPowerTW.toFixed(2)} TW)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#a855f7', '#c084fc', '#d8b4fe']
+          });
+          showToast(`🎉 Milestone: First >1 TW orbital power achieved! (${totalOrbitalPowerTW.toFixed(2)} TW)`, 'info');
           newMoments.push({
             id: momentId1TW,
             type: "first_1TW_power",
@@ -217,7 +267,13 @@ export function SpecialMoments() {
         } else if (!isInitialLoad && yearChanged) {
           // Just crossed this year, show alert
           detectedMomentsRef.current.add(momentId1TW);
-          showToast(`⚡ Milestone: First >1 TW orbital power achieved! (${totalOrbitalPowerTW.toFixed(2)} TW)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#a855f7', '#c084fc', '#d8b4fe']
+          });
+          showToast(`🎉 Milestone: First >1 TW orbital power achieved! (${totalOrbitalPowerTW.toFixed(2)} TW)`, 'info');
           newMoments.push({
             id: momentId1TW,
             type: "first_1TW_power",
@@ -268,7 +324,13 @@ export function SpecialMoments() {
         // Show alert if we just crossed OR if year changed and we're above threshold
         if ((prevTotalOrbitalComputeEFLOPs < 1.0 || !prevStep) && yearChanged && !isInitialLoad) {
           detectedMomentsRef.current.add(momentId1EFLOP);
-          showToast(`💻 Milestone: First >1 EFLOP orbital compute achieved! (${totalOrbitalComputeEFLOPs.toFixed(2)} EFLOPs)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#ec4899', '#f472b6', '#f9a8d4']
+          });
+          showToast(`🎉 Milestone: First >1 EFLOP orbital compute achieved! (${totalOrbitalComputeEFLOPs.toFixed(2)} EFLOPs)`, 'info');
           newMoments.push({
             id: momentId1EFLOP,
             type: "first_1EFLOP_compute",
@@ -279,7 +341,13 @@ export function SpecialMoments() {
         } else if (!isInitialLoad && yearChanged) {
           // Just crossed this year, show alert
           detectedMomentsRef.current.add(momentId1EFLOP);
-          showToast(`💻 Milestone: First >1 EFLOP orbital compute achieved! (${totalOrbitalComputeEFLOPs.toFixed(2)} EFLOPs)`, 'info');
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#ec4899', '#f472b6', '#f9a8d4']
+          });
+          showToast(`🎉 Milestone: First >1 EFLOP orbital compute achieved! (${totalOrbitalComputeEFLOPs.toFixed(2)} EFLOPs)`, 'info');
           newMoments.push({
             id: momentId1EFLOP,
             type: "first_1EFLOP_compute",

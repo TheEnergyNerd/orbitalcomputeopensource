@@ -66,6 +66,26 @@ export function useSimPolling() {
       } catch (error: any) {
         retryCount++;
         
+        // Suppress CORS errors when backend isn't available (common in dev)
+        // Check for CORS-related errors in multiple ways
+        const isCorsError = 
+          error.message?.includes('CORS') || 
+          error.message?.includes('Cross-Origin') ||
+          error.code === 'ERR_NETWORK' ||
+          error.message?.includes('Network Error') ||
+          error.code === 'ECONNREFUSED' ||
+          (error.response === undefined && error.request !== undefined);
+        
+        if (isCorsError) {
+          // Backend not available or CORS issue - silently handle
+          if (retryCount >= 3) {
+            setError(null);
+            setLoading(false);
+            return; // Stop polling
+          }
+          return; // Continue polling but don't log error
+        }
+        
         if (error.response?.status === 503) {
           if (retryCount >= MAX_RETRIES) {
             setError("Simulation initialization is taking too long. Please check the backend logs.");

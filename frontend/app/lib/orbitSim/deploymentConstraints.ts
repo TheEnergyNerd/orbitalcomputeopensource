@@ -188,7 +188,8 @@ export function calculateHeatGeneration(
   powerKW: number,
   electricalEfficiency: number = 0.85 // 85% electrical efficiency
 ): number {
-  return powerKW * (1 - electricalEfficiency); // kW of waste heat
+  // FIX: 85% of power becomes heat (not 15%)
+  return powerKW * electricalEfficiency; // kW of waste heat (85% of power)
 }
 
 /**
@@ -296,18 +297,23 @@ export function calculateAutonomyLevel(
 export function calculateRepairCapacity(
   totalSatellites: number,
   year: number,
-  strategy: StrategyMode
+  strategy: StrategyMode,
+  autonomyLevelOverride?: number
 ): number {
-  // Base repair capacity: starts very low (1% of fleet per year) and grows with autonomy
-  const baseRepairRate = 0.01; // 1% base rate (much lower than before)
+  // CRITICAL FIX: Increase base repair capacity to handle normal failure rates
+  // Base failure rate is ~3% per year, so repair capacity should be at least 3-5% to handle it
+  // Base repair capacity: starts at 2% and grows with autonomy
+  const baseRepairRate = 0.02; // 2% base rate (can handle most normal failures)
   
-  // Autonomy improves repair capacity, but starts from a low base
-  const autonomyLevel = calculateAutonomyLevel(year, strategy);
-  // Repair rate grows with autonomy, but more slowly than before
-  const repairRate = baseRepairRate * Math.sqrt(autonomyLevel); // Square root growth (slower)
+  // Autonomy improves repair capacity significantly
+  // Use override if provided (for scenario modes), otherwise calculate from year/strategy
+  const autonomyLevel = autonomyLevelOverride ?? calculateAutonomyLevel(year, strategy);
+  // Repair rate grows with autonomy (square root for moderate growth)
+  const repairRate = baseRepairRate * Math.sqrt(autonomyLevel);
   
-  // Maximum repair capacity: 15% of fleet per year (hard limit, reduced from 20%)
-  const maxRepairRate = 0.15;
+  // Maximum repair capacity: 20% of fleet per year (increased from 10%)
+  // This allows the system to handle failure spikes and maintenance overload
+  const maxRepairRate = 0.20;
   const effectiveRepairRate = Math.min(repairRate, maxRepairRate);
   
   // Ensure minimum of 1 satellite can be repaired if we have satellites
@@ -317,30 +323,55 @@ export function calculateRepairCapacity(
 }
 
 /**
+ * Unrecoverable failure fraction by scenario
+ * Not all failures can be recovered - some are catastrophic
+ */
+const UNRECOVERABLE_FRACTION: Record<string, number> = {
+  BASELINE: 0.15,      // 15% of failures are unrecoverable
+  ORBITAL_BEAR: 0.35,  // 35% of failures are unrecoverable (poor maintenance)
+  ORBITAL_BULL: 0.05,  // 5% of failures are unrecoverable (excellent maintenance)
+};
+
+/**
  * Calculate autonomous maintenance constraints
  */
 export function calculateMaintenanceConstraints(
   totalSatellites: number,
   year: number,
-  strategy: StrategyMode
+  strategy: StrategyMode,
+  failureRateBaseOverride?: number,
+  autonomyLevelOverride?: number,
+  scenarioMode?: string
 ): MaintenanceConstraints {
   // Base failure rate: 2-4% per year per satellite
-  const baseFailureRate = 0.03; // 3% average
+  // Use override if provided (for scenario modes), otherwise use default
+  const baseFailureRate = failureRateBaseOverride ?? 0.03; // 3% average
   
   // Autonomy reduces effective failure rate
-  const autonomyLevel = calculateAutonomyLevel(year, strategy);
-  const failureRate = baseFailureRate / autonomyLevel;
+  const autonomyLevel = autonomyLevelOverride ?? calculateAutonomyLevel(year, strategy);
+  const failureRate = baseFailureRate / Math.max(0.1, autonomyLevel); // Prevent division by zero
   
   // Calculate failures this year
   const failuresThisYear = Math.floor(totalSatellites * failureRate);
   
-  // Calculate recoverable failures
-  const repairCapacity = calculateRepairCapacity(totalSatellites, year, strategy);
-  const recoverable = Math.min(failuresThisYear, repairCapacity);
-  const permanentLoss = Math.max(0, failuresThisYear - recoverable);
+  // FIX: Not all failures can be recovered - some are catastrophic
+  // Get unrecoverable fraction based on scenario
+  const scenarioKey = scenarioMode || "BASELINE";
+  const unrecoverableFraction = UNRECOVERABLE_FRACTION[scenarioKey] || UNRECOVERABLE_FRACTION.BASELINE;
+  const unrecoverableThisYear = Math.floor(failuresThisYear * unrecoverableFraction);
+  
+  // Calculate recoverable failures (capacity-limited AND scenario-limited)
+  const repairCapacity = calculateRepairCapacity(totalSatellites, year, strategy, autonomyLevelOverride);
+  const potentiallyRecoverable = failuresThisYear - unrecoverableThisYear;
+  const recoverable = Math.min(potentiallyRecoverable, repairCapacity);
+  
+  // Permanent loss = unrecoverable + (failures - recoverable)
+  const permanentLoss = unrecoverableThisYear + Math.max(0, failuresThisYear - recoverable - unrecoverableThisYear);
   
   // Survival fraction (1 - permanent loss rate)
-  const survivalFraction = 1.0 - (permanentLoss / totalSatellites);
+  const survivalFraction = totalSatellites > 0
+    ? Math.max(0.1, 1.0 - (permanentLoss / totalSatellites))
+    : 1.0;
   
   return {
     failureRate,
@@ -391,7 +422,10 @@ export function calculateConstrainedEffectiveCompute(
   strategy: StrategyMode,
   launchesPerYear: number,
   newA: number,
-  newB: number
+  newB: number,
+  failureRateBaseOverride?: number,
+  autonomyLevelOverride?: number,
+  scenarioMode?: string
 ): EffectiveComputeResult {
   // 1. Launch constraints
   const launchConstraints = calculateLaunchConstraints(
@@ -418,7 +452,10 @@ export function calculateConstrainedEffectiveCompute(
   const maintenanceConstraints = calculateMaintenanceConstraints(
     totalSats,
     year,
-    strategy
+    strategy,
+    failureRateBaseOverride,
+    autonomyLevelOverride,
+    scenarioMode
   );
   
   // 4. Backhaul as hard competing bottleneck (NO STATIC CLAMP)
