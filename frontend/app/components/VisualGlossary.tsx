@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { SurfaceType } from "./SurfaceTabs";
 
 interface GlossaryItem {
@@ -18,12 +18,54 @@ interface VisualGlossaryProps {
 export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
   const [isOpen, setIsOpen] = useState(false);
   
-  // Only show in overview/world view tab
-  if (activeSurface !== "overview") {
+  // Debug: Log when component renders (before early return)
+  useEffect(() => {
+    console.log('[VisualGlossary] Component rendered, activeSurface:', activeSurface, 'isOpen:', isOpen);
+  }, [activeSurface, isOpen]);
+  
+  // Only show in world view tab
+  if (activeSurface !== "world") {
+    console.log('[VisualGlossary] Early return - activeSurface not world:', activeSurface);
     return null;
   }
+  
+  console.log('[VisualGlossary] Rendering button/panel for activeSurface:', activeSurface);
 
   const glossaryItems: GlossaryItem[] = [
+    {
+      id: "shapes-circles-squares",
+      title: "Shapes: Circles vs Squares",
+      description: "Circles (spheres) = Satellites in orbit. Squares = Ground sites (data centers in blue, launch sites in orange). Satellites move along orbital paths; ground sites are fixed on Earth's surface.",
+      visual: (
+        <div className="flex flex-col gap-2 items-center">
+          <div className="flex gap-3">
+            <div className="w-4 h-4 rounded-full bg-teal-400 shadow-lg"></div>
+            <span className="text-xs text-gray-300">Circle = Satellite</span>
+          </div>
+          <div className="flex gap-3">
+            <div className="w-4 h-4 bg-blue-500"></div>
+            <span className="text-xs text-gray-300">Square = Ground Site</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "ground-site-colors",
+      title: "Ground Site Colors",
+      description: "Blue spheres = Data centers (compute facilities on Earth). Orange spheres = Launch sites (rocket launch facilities). Both are fixed on Earth's surface and don't move like satellites.",
+      visual: (
+        <div className="flex flex-col gap-2 items-center">
+          <div className="flex gap-3 items-center">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-xs text-gray-300">Blue = Data Center</span>
+          </div>
+          <div className="flex gap-3 items-center">
+            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+            <span className="text-xs text-gray-300">Orange = Launch Site</span>
+          </div>
+        </div>
+      ),
+    },
     {
       id: "class-a",
       title: "Class A Satellites",
@@ -39,26 +81,27 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
     {
       id: "class-b",
       title: "Class B Satellites",
-      description: "White diamonds. High-power inference compute. Always sun-facing, breathing glow. SSO orbit (800-1000km).",
+      description: "White diamonds. High-power inference compute. Always sun-facing. SSO orbit (800-1000km).",
       visual: (
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 transform rotate-45 bg-white shadow-lg shadow-cyan-400/70 border border-cyan-300/50 animate-pulse"></div>
+          <div className="w-6 h-6 transform rotate-45 bg-white shadow-lg shadow-cyan-400/70 border border-cyan-300/50"></div>
           <span className="text-xs text-gray-300">White diamond (sun-facing)</span>
         </div>
       ),
       color: "#ffffff",
     },
     {
-      id: "route-thickness",
-      title: "Route Thickness",
-      description: "Thicker lines = more traffic load. Scales with data throughput (10-500+ Mbps).",
+      id: "route-lines",
+      title: "Number of Route Lines",
+      description: "Each route between satellites or ground stations is shown as a line. More routes = more lines visible. Square nodes appear along routes, representing intermediate relay points or data processing stations that route traffic between endpoints.",
       visual: (
-        <div className="flex flex-col gap-1 items-center">
-          <div className="h-0.5 bg-cyan-400 w-20 opacity-60"></div>
-          <div className="h-1 bg-cyan-400 w-20 opacity-70"></div>
-          <div className="h-2 bg-cyan-400 w-20 opacity-80"></div>
-          <div className="h-3 bg-cyan-400 w-20 opacity-90"></div>
-          <span className="text-xs text-gray-400 mt-1">Low → High load</span>
+        <div className="flex flex-col gap-2 items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-16 h-0.5 bg-cyan-400"></div>
+            <div className="w-2 h-2 bg-blue-500"></div>
+            <div className="w-16 h-0.5 bg-cyan-400"></div>
+          </div>
+          <span className="text-xs text-gray-400">Route line → Square node → Route line</span>
         </div>
       ),
     },
@@ -180,17 +223,6 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
       ),
     },
     {
-      id: "breathing-glow",
-      title: "Class B Breathing Glow",
-      description: "Pulsing glow intensity (1-2s cycle) based on sun alignment quality. More aligned = brighter glow.",
-      visual: (
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 transform rotate-45 bg-white shadow-lg shadow-cyan-400/50 animate-pulse"></div>
-          <span className="text-xs text-gray-300">Breathing glow</span>
-        </div>
-      ),
-    },
-    {
       id: "world-tint",
       title: "Carbon World Tint",
       description: "Red tint = orbital compute worse than ground. Green-cyan tint = orbital better (after crossover). One-time change, no oscillation.",
@@ -215,66 +247,6 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
         </div>
       ),
     },
-    {
-      id: "solar-availability",
-      title: "Solar Availability Chart",
-      description: "Shows % full-power uptime: Ground Solar (18-28%, oscillates), Solar+Storage (35-55%), Space-Based Solar (92-99%, flat after 2030). Gold pulse when SBS regime achieved.",
-      visual: (
-        <div className="flex flex-col gap-1 items-center">
-          <div className="flex gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <div className="w-3 h-3 bg-orange-500 rounded"></div>
-            <div className="w-3 h-3 bg-green-500 rounded"></div>
-          </div>
-          <span className="text-xs text-gray-400">Ground → Storage → SBS</span>
-        </div>
-      ),
-    },
-    {
-      id: "energy-beams",
-      title: "SSO Energy Beams",
-      description: "Yellow/gold beams from SSO ring (800-1000km) to surface regions. Persist through night, ignore weather. Opacity = energy contribution share.",
-      visual: (
-        <div className="flex items-center gap-2">
-          <div className="w-12 h-1 bg-yellow-400 rounded opacity-60"></div>
-          <span className="text-xs text-gray-300">SSO → Surface</span>
-        </div>
-      ),
-    },
-    {
-      id: "ground-solar-glow",
-      title: "Ground Solar Glows",
-      description: "Patchy orange glows on surface. Only during daytime (6 AM-6 PM). Suppressed by weather/season. Disappears at night.",
-      visual: (
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-orange-500/40 rounded-full"></div>
-          <span className="text-xs text-gray-300">Daytime only</span>
-        </div>
-      ),
-    },
-    {
-      id: "shell-stability",
-      title: "Shell Stability",
-      description: "Stable shell: smooth, even glow. Congested shell: noisy glow, spatial jitter, brightness hotspots.",
-      visual: (
-        <div className="flex flex-col gap-1 items-center">
-          <div className="w-12 h-1 bg-teal-400 rounded opacity-80"></div>
-          <div className="w-12 h-1 bg-teal-400 rounded opacity-60" style={{ transform: 'translateX(2px)' }}></div>
-          <span className="text-xs text-gray-400">Stable → Congested</span>
-        </div>
-      ),
-    },
-    {
-      id: "threshold-alerts",
-      title: "Threshold Alerts",
-      description: "Full-screen glow + toast when: Cost crossover, Carbon crossover, Orbit >50% compute, First >1 TW power, First >1 EFLOP compute. Triggers once per threshold.",
-      visual: (
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-400/30 rounded-full animate-pulse"></div>
-          <span className="text-xs text-gray-300">Milestone alert</span>
-        </div>
-      ),
-    },
   ];
 
   if (!isOpen) {
@@ -284,7 +256,11 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
           console.log('[VisualGlossary] Button clicked, opening glossary');
           setIsOpen(true);
         }}
-        className="fixed top-[180px] right-6 z-[85] px-4 py-2 bg-gray-800/90 hover:bg-gray-700/90 border border-gray-600 rounded-lg text-sm text-white transition-colors shadow-lg pointer-events-auto"
+        className="fixed top-[180px] right-6 z-[100] px-4 py-2.5 bg-gray-900/95 hover:bg-gray-800/95 border-2 border-cyan-500/50 rounded-lg text-sm font-semibold text-white transition-colors shadow-xl pointer-events-auto"
+        style={{ 
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 4px 12px rgba(0, 212, 255, 0.3)'
+        }}
         aria-label="Open visual glossary"
       >
         📖 Visual Guide
@@ -293,7 +269,7 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
   }
 
   return (
-    <div className="fixed top-[180px] right-6 z-[85] w-96 max-w-[90vw] max-h-[85vh] overflow-y-auto panel-glass rounded-2xl p-5 shadow-2xl border border-white/10 pointer-events-auto">
+    <div className="fixed top-[180px] right-6 z-[100] w-96 max-w-[90vw] max-h-[85vh] overflow-y-auto panel-glass rounded-2xl p-5 shadow-2xl border border-white/10 pointer-events-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white">Visual Glossary</h2>
         <button

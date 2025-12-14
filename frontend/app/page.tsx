@@ -157,7 +157,7 @@ export default function Home() {
         {/* Tutorial System */}
         <TutorialSystem activeSurface={activeSurface} onSurfaceChange={setActiveSurface} />
         
-        {/* Visual Glossary - show in world view */}
+        {/* Visual Glossary - show only in world view */}
         {activeSurface === "world" && <VisualGlossary activeSurface={activeSurface} />}
       </>
       </main>
