@@ -669,8 +669,44 @@ const calculateSafeDefaults = (year: string) => {
     const MAX_DEPLOYABLE_M2 = 100;
     const maxRadiatorArea = hasDeployable ? MAX_DEPLOYABLE_M2 : MAX_BODY_MOUNTED_M2;
     
-    // Start with a very conservative bus power (much lower to avoid constraints)
-    const busPowerKw = 20; // Very conservative: 20kW (much lower to ensure no constraint violations)
+    // Match baseline scenario: POWER_PROGRESSION[2025] = 5kW * busPowerMultiplier(0.92) = 4.6kW
+    // For 2025 baseline: 5kW * 0.92 = 4.6kW, but we'll use 5kW as a safe default
+    // For other years, calculate from progression
+    const POWER_PROGRESSION: Record<number, number> = {
+      2025: 5,    // Conservative start (body-mounted radiators)
+      2028: 15,   // Early deployables becoming available
+      2030: 35,   // Mid-term (Starlink V3 level)
+      2033: 80,   // Advanced deployables for compute-optimized
+      2035: 110,  // High-power compute satellites
+      2040: 150,  // Target: 150 kW for aggressive compute satellites
+    };
+    
+    // Get base power from progression
+    let basePowerKw = 5; // Default to 2025 value
+    if (POWER_PROGRESSION[yearNum]) {
+      basePowerKw = POWER_PROGRESSION[yearNum];
+    } else {
+      // Interpolate between years
+      const years = Object.keys(POWER_PROGRESSION).map(Number).sort((a, b) => a - b);
+      if (yearNum <= years[0]) {
+        basePowerKw = POWER_PROGRESSION[years[0]];
+      } else if (yearNum >= years[years.length - 1]) {
+        basePowerKw = POWER_PROGRESSION[years[years.length - 1]];
+      } else {
+        for (let i = 0; i < years.length - 1; i++) {
+          if (yearNum >= years[i] && yearNum <= years[i + 1]) {
+            const lower = POWER_PROGRESSION[years[i]];
+            const upper = POWER_PROGRESSION[years[i + 1]];
+            const t = (yearNum - years[i]) / (years[i + 1] - years[i]);
+            basePowerKw = lower + (upper - lower) * t;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Apply baseline multiplier (0.92)
+    const busPowerKw = basePowerKw * 0.92;
     const emissivity = 0.90; // High emissivity for better heat rejection
     const radiatorTempC = 25; // Slightly higher temp for better rejection
     
@@ -711,12 +747,12 @@ const calculateSafeDefaults = (year: string) => {
       linkCapacityGbps: conservativeLinkCapacityGbps, // Conservative: 50 Gbps (lower end)
       groundStations: 100, // Middle of 20-150 range (slightly higher for better backhaul)
       fleetSize: 5500, // Middle of 1000-10000 range
-      failureRatePercent: 5.25, // Middle of 0.5-10 range
+      failureRatePercent: 4.5, // Baseline: failureRateBase = 0.045 = 4.5%
       servicerDrones: 50, // Middle of 0-100 range
       launchesPerYear: 29, // Middle of 6-52 range
       satsPerLaunch: 55, // Middle of 10-100 range
-      launchCostPerKg: 260, // Middle of 20-500 range
-      launchCostImprovementRate: 0.08, // Match baseline: launchCostDeclinePerYear = 0.92 means 8% decline per year
+      launchCostPerKg: 200, // Baseline: $200/kg (matches baseline scenario base_cost_per_kg_to_leo)
+      launchCostImprovementRate: 0.07, // Baseline: launchCostDeclinePerYear = 0.93 means 7% decline per year
       satelliteBaseCost: 275000, // Middle of 50k-500k range (275k)
       // Compute / Silicon
       processNode: 8, // Middle of 3-14 range (rounded to integer)
@@ -1097,7 +1133,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             label="Radiator Area"
             value={params.radiatorAreaPerSat}
             onChange={(v) => updateParam('radiatorAreaPerSat', v)}
-            min={20} max={1200} unit=" m²"
+            min={10} max={800} unit=" m²"
             help="Thin-film deployable radiator panels"
             disabled={hasSimulationStarted}
           />
@@ -1121,7 +1157,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             label="Bus Power"
             value={params.busPowerKw}
             onChange={(v) => updateParam('busPowerKw', v)}
-            min={20} max={500} unit=" kW"
+            min={2} max={50} unit=" kW"
             disabled={hasSimulationStarted}
           />
           
