@@ -63,7 +63,74 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     computeStrategy: "balanced",
     launchStrategy: "medium",
   }];
-  const initialResult = runSimulationFromPlans(initialConfig, initialPlans);
+  
+  // CRITICAL FIX: Defer simulation to avoid blocking UI initialization
+  // Start with minimal timeline, then populate asynchronously
+  // Create a minimal initial timeline to avoid blocking
+  const minimalYearStep: YearStep = {
+    year: initialConfig.startYear,
+    deploymentsCompleted: 0,
+    rawGroundDemandTwh: initialConfig.groundBaseTwh || 100,
+    efficientGroundDemandTwh: initialConfig.groundBaseTwh || 100,
+    offloadedToOrbitTwh: 0,
+    netGroundComputeTwh: initialConfig.groundBaseTwh || 100,
+    orbitalComputeTwh: 0,
+    groundShare: 1.0,
+    orbitalShare: 0,
+    podsTotal: 0,
+    racksTotal: 0,
+    chipsTotal: 0,
+    costPerComputeGround: 400,
+    costPerComputeMix: 400,
+    latencyGroundMs: 120,
+    latencyMixMs: 120,
+    opexGround: 0,
+    opexMix: 0,
+    opexSavings: 0,
+    opexGroundBaseline: 0,
+    carbonGround: 0,
+    carbonMix: 0,
+    carbonSavings: 0,
+    carbonGroundBaseline: 0,
+    routerTotalCost: 0,
+    routerTotalLatencyPenalty: 0,
+    routerTotalCarbon: 0,
+    routerReward: 0,
+    orbitShareFromRouter: 0,
+    stageThroughputs: [],
+  };
+  
+  const initialResult = { timeline: [minimalYearStep] };
+  
+  // Run simulation asynchronously after store is created
+  // Use a longer delay to ensure UI renders first
+  if (typeof window !== 'undefined') {
+    // Use requestIdleCallback if available for better performance, otherwise setTimeout
+    const scheduleRun = (callback: () => void) => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(callback, { timeout: 2000 });
+      } else {
+        setTimeout(callback, 500); // Longer delay to ensure UI renders
+      }
+    };
+    
+    scheduleRun(() => {
+      try {
+        const result = runSimulationFromPlans(initialConfig, initialPlans);
+        set({ timeline: result.timeline, selectedYearIndex: result.timeline.length - 1 });
+      } catch (error) {
+        console.error('[SimulationStore] Error during initial simulation:', error);
+      }
+    });
+  } else {
+    // SSR: run synchronously (shouldn't happen in client components)
+    try {
+      const result = runSimulationFromPlans(initialConfig, initialPlans);
+      initialResult.timeline = result.timeline;
+    } catch (error) {
+      console.error('[SimulationStore] Error during initial simulation:', error);
+    }
+  }
 
   // Initialize futures state
   const initialWorldState: WorldState = {

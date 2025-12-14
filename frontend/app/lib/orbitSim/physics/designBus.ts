@@ -16,6 +16,7 @@ import {
   type OrbitEnv,
 } from "./physicsConfig";
 import type { BusDesignInputs, BusPhysicsOutputs } from "./physicsTypes";
+import { DEFAULT_RADIATION_MODEL, calculateShieldingMass } from "../radiationModel";
 
 function computeRadiatorArea(heatKw: number): number {
   const q = heatKw * 1_000; // W
@@ -152,10 +153,14 @@ export function designComputeBus(
   // Estimate as ~18% of payload mass to close the gap
   const otherMassKg = payloadMassKg * 0.18;
   
+  // REALITY CHECK: Add radiation shielding mass (2 kg per kW compute)
+  const radiationShieldingMassKg = calculateShieldingMass(siliconPowerKw, DEFAULT_RADIATION_MODEL);
+  
   const totalMassKg =
     payloadMassKg +
     structureMassKg +
     shieldingMassKg +
+    radiationShieldingMassKg + // REALITY CHECK: Additional shielding for radiation
     powerElectronicsMassKg +
     avionicsMassKg +
     batteryMassKg +

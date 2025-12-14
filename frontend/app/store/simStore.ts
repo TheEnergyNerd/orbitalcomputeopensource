@@ -75,7 +75,7 @@ interface SimStore {
 
 export const useSimStore = create<SimStore>((set) => ({
   state: null,
-  loading: true,
+  loading: false, // Start as false - new OrbitSim doesn't need backend
   error: null,
   selectedEntity: null,
   scenario: "normal",

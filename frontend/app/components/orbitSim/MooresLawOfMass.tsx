@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { useSimulationStore } from "../../store/simulationStore";
 import { getDebugStateEntries } from "../../lib/orbitSim/debugState";
+import { getComputeDensityCurve } from "../../lib/orbitSim/mooresLawPlateau";
 import * as d3 from "d3";
 
 interface MooresLawOfMassProps {
@@ -33,6 +34,14 @@ export default function MooresLawOfMass({ scenarioMode }: MooresLawOfMassProps) 
       };
     }).filter(d => d.tflopsPerKg > 0);
   }, [selectedScenarioKey]);
+
+  // Get theoretical plateau curve
+  const plateauCurve = useMemo(() => {
+    if (data.length === 0) return [];
+    const minYear = Math.min(...data.map(d => d.year));
+    const maxYear = Math.max(...data.map(d => d.year));
+    return getComputeDensityCurve(minYear, Math.max(maxYear, 2050));
+  }, [data]);
 
   React.useEffect(() => {
     if (!svgRef.current || data.length === 0) {
@@ -73,7 +82,22 @@ export default function MooresLawOfMass({ scenarioMode }: MooresLawOfMassProps) 
       .nice()
       .range([height, 0]);
 
-    // Line
+    // Theoretical plateau curve (S-curve)
+    const plateauLine = d3.line<typeof plateauCurve[0]>()
+      .x(d => xScale(d.year))
+      .y(d => yScale(d.tflopsPerKg))
+      .curve(d3.curveMonotoneX);
+
+    g.append("path")
+      .datum(plateauCurve)
+      .attr("fill", "none")
+      .attr("stroke", "#10b981")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "5,5")
+      .attr("opacity", 0.7)
+      .attr("d", plateauLine);
+
+    // Actual data line
     const line = d3.line<typeof data[0]>()
       .x(d => xScale(d.year))
       .y(d => yScale(d.tflopsPerKg))
@@ -96,35 +120,71 @@ export default function MooresLawOfMass({ scenarioMode }: MooresLawOfMassProps) 
       .attr("r", 3)
       .attr("fill", "#3b82f6");
 
-    // Target annotations
-    const targets = [
-      { year: 2025, value: 0.1, label: "2025: 0.1 TFLOPS/kg" },
-      { year: 2030, value: 10, label: "2030: 10 TFLOPS/kg" },
-      { year: 2040, value: 500, label: "2040: 500 TFLOPS/kg" },
+    // Plateau annotations
+    const annotations = [
+      { year: 2025, value: 10, label: "Current: 3nm", color: "#94a3b8" },
+      { year: 2035, value: 260, label: "Inflection point", color: "#f59e0b" },
+      { year: 2045, value: 490, label: "Physics plateau", color: "#ef4444" },
     ];
 
-    targets.forEach(target => {
-      if (target.year >= (data[0]?.year ?? 2025) && target.year <= (data[data.length - 1]?.year ?? 2040)) {
+    annotations.forEach(annotation => {
+      if (annotation.year >= (data[0]?.year ?? 2025) && annotation.year <= (data[data.length - 1]?.year ?? 2040)) {
+        const plateauValue = plateauCurve.find(d => d.year === annotation.year)?.tflopsPerKg ?? annotation.value;
         g.append("line")
-          .attr("x1", xScale(target.year))
-          .attr("x2", xScale(target.year))
+          .attr("x1", xScale(annotation.year))
+          .attr("x2", xScale(annotation.year))
           .attr("y1", 0)
           .attr("y2", height)
-          .attr("stroke", "#fbbf24")
+          .attr("stroke", annotation.color)
           .attr("stroke-width", 1)
           .attr("stroke-dasharray", "3,3")
           .attr("opacity", 0.5);
 
         g.append("text")
-          .attr("x", xScale(target.year))
-          .attr("y", yScale(target.value))
+          .attr("x", xScale(annotation.year))
+          .attr("y", yScale(plateauValue))
           .attr("dx", 5)
           .attr("dy", -5)
-          .attr("fill", "#fbbf24")
+          .attr("fill", annotation.color)
           .attr("font-size", "10px")
-          .text(target.label);
+          .text(annotation.label);
       }
     });
+
+    // Legend
+    const legend = g.append("g")
+      .attr("transform", `translate(${width - 150}, 20)`);
+
+    legend.append("line")
+      .attr("x1", 0)
+      .attr("x2", 20)
+      .attr("y1", 0)
+      .attr("y2", 0)
+      .attr("stroke", "#3b82f6")
+      .attr("stroke-width", 2);
+    legend.append("text")
+      .attr("x", 25)
+      .attr("y", 0)
+      .attr("dy", "0.35em")
+      .attr("fill", "#94a3b8")
+      .attr("font-size", "10px")
+      .text("Actual");
+
+    legend.append("line")
+      .attr("x1", 0)
+      .attr("x2", 20)
+      .attr("y1", 15)
+      .attr("y2", 15)
+      .attr("stroke", "#10b981")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "5,5");
+    legend.append("text")
+      .attr("x", 25)
+      .attr("y", 15)
+      .attr("dy", "0.35em")
+      .attr("fill", "#94a3b8")
+      .attr("font-size", "10px")
+      .text("Theoretical (S-curve)");
 
     // Axes
     const xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));

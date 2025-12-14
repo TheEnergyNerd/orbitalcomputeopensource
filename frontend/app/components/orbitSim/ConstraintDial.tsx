@@ -179,17 +179,19 @@ export default function ConstraintDial({
         .attr("stroke-width", 1)
         .style("opacity", 0.3);
 
-      // Labels
-      const labelX = centerX + (radius + 20) * Math.cos(angle);
-      const labelY = centerY + (radius + 20) * Math.sin(angle);
+      // Labels - position further out to avoid truncation
+      const labelRadius = radius + (isMobile ? 30 : 40);
+      const labelX = centerX + labelRadius * Math.cos(angle);
+      const labelY = centerY + labelRadius * Math.sin(angle);
       
       svg.append("text")
         .attr("x", labelX)
         .attr("y", labelY)
         .attr("text-anchor", "middle")
         .attr("dominant-baseline", "middle")
-        .style("font-size", "11px")
+        .style("font-size", isMobile ? "9px" : "10px")
         .style("fill", "#cbd5e1")
+        .style("pointer-events", "none")
         .text(massCategories[i].label);
     });
 
@@ -343,8 +345,9 @@ export default function ConstraintDial({
       .style("fill", "#94a3b8")
       .text("Year");
 
-    // Legend (responsive position)
-    const legendX = isMobile ? width - 100 : width - 120;
+    // Legend (responsive position - ensure it fits)
+    const legendWidth = isMobile ? 90 : 110;
+    const legendX = Math.min(width - legendWidth - 10, width - legendWidth);
     const legend = svg.append("g")
       .attr("transform", `translate(${legendX}, 20)`);
 
@@ -447,20 +450,22 @@ export default function ConstraintDial({
       </div>
       
       {/* Tooltip */}
-      {hoveredSegment && (
-        <div
-          ref={tooltipRef}
-          className="absolute bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white pointer-events-none z-50"
-          style={{ display: "none" }}
-        >
-          <div className="font-semibold mb-1">
-            {hoveredSegment.type === 'mass' ? 'Mass Fraction' : 'Utilization'}
-          </div>
-          <div style={{ color: hoveredSegment.type === 'mass' ? "#3b82f6" : "#10b981" }}>
-            {hoveredSegment.label}: {(hoveredSegment.value * 100).toFixed(1)}%
-          </div>
-        </div>
-      )}
+      <div
+        ref={tooltipRef}
+        className="absolute bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white pointer-events-none z-50"
+        style={{ display: hoveredSegment ? "block" : "none" }}
+      >
+        {hoveredSegment && (
+          <>
+            <div className="font-semibold mb-1">
+              {hoveredSegment.type === 'mass' ? 'Mass Fraction' : 'Utilization'}
+            </div>
+            <div style={{ color: hoveredSegment.type === 'mass' ? "#3b82f6" : "#10b981" }}>
+              {hoveredSegment.label}: {(hoveredSegment.value * 100).toFixed(1)}%
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

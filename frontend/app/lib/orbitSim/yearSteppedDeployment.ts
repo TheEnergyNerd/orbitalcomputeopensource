@@ -10,6 +10,7 @@
 
 import {
   getAnnualLaunchCapacity,
+  getMaxLaunchesPerYear,
   STRATEGY_GROWTH_MULTIPLIERS,
   getClassBShare,
   getClassACompute,
@@ -24,7 +25,7 @@ import {
   SAT_B_LIFETIME_Y,
 } from "./satelliteClasses";
 import type { ScenarioMode } from "./simulationConfig";
-import { getScenarioParams, getScenarioKey } from "./scenarioParams";
+import { getScenarioParams, getScenarioKey, type ScenarioParams } from "./scenarioParams";
 import { designComputeBus } from "./physics/designBus";
 import type { BusPhysicsOutputs } from "./physics/physicsTypes";
 import { DEFAULT_ORBIT_ENV } from "./physics/physicsConfig";
@@ -67,6 +68,7 @@ import {
 import { getShellByAltitude, ORBIT_SHELLS } from "./orbitShells";
 import { calculateShellCapacity } from "./shellCapacity";
 import { getBatterySpec, calculateBatteryRequirements } from "./batteryModel";
+import { getLaunchCostPerKg } from "./musksLawPlateau";
 
 // Legacy ScenarioKind type for compatibility (mapped from scenarioKey)
 type ScenarioKind = "bear" | "baseline" | "bull";
@@ -165,18 +167,45 @@ export function calculateYearDeployment(
 ): YearDeploymentResult {
   const { year, S_A, S_B, deployedByYear_A, deployedByYear_B } = state;
   
-  // 1. Calculate annual launch capacity
+  // Get scenario params early (needed for multipliers)
+  const scenarioParams = getScenarioParams(scenarioMode);
+  
+  // 1. CRITICAL FIX: Get max launches per year (launches/year, not satellites/year)
   const yearOffset = year - START_YEAR;
-  const baseLaunches = getAnnualLaunchCapacity(yearOffset, scenarioMode);
+  // Apply scenario launch cadence multiplier
+  const baseMaxLaunchesPerYear = getMaxLaunchesPerYear(yearOffset, scenarioMode);
+  const maxLaunchesPerYear = Math.round(baseMaxLaunchesPerYear * (scenarioParams.launchCadenceMultiplier ?? 1.0));
   
-  // 2. Apply strategy growth multiplier
+  // 2. Calculate satellites per launch based on actual satellite mass
+  // This will be calculated later when we know the actual mass, but for now use estimates
+  // We'll recalculate this after we know the actual satellite masses
+  const PAYLOAD_PER_LAUNCH_KG = 100000; // 100 tons to LEO (reusable Starship)
+  
+  // 3. For initial calculation, use estimated masses (will be refined later)
+  // Class A: ~1200kg, Class B: ~2000kg
+  const estimatedMassA = 1200; // kg
+  const estimatedMassB = 2000; // kg
+  const avgMassEstimate = (estimatedMassA + estimatedMassB) / 2;
+  const satsPerLaunchEstimate = Math.floor(PAYLOAD_PER_LAUNCH_KG / avgMassEstimate);
+  
+  // 4. Calculate max satellites per year = launches/year × sats/launch
+  const maxSatellitesPerYear = maxLaunchesPerYear * satsPerLaunchEstimate;
+  
+  // 5. Apply strategy growth multiplier to get desired satellites
   const growthMultiplier = STRATEGY_GROWTH_MULTIPLIERS[strategy];
-  const totalLaunches = Math.round(baseLaunches * growthMultiplier);
+  const desiredSatellites = Math.round(maxSatellitesPerYear * growthMultiplier);
   
-  // 3. Split between Class A and Class B (before constraints)
+  // 6. HARD CAP: Cannot exceed launch capacity
+  const maxAllowedSatellites = maxSatellitesPerYear;
+  const targetSatellites = Math.min(desiredSatellites, maxAllowedSatellites);
+  
+  // 7. Split between Class A and Class B
   const fracB = getClassBShare(strategy, year);
-  const newB_target = Math.round(totalLaunches * fracB);
-  const newA_target = totalLaunches - newB_target;
+  const newB_target = Math.round(targetSatellites * fracB);
+  const newA_target = targetSatellites - newB_target;
+  
+  // 8. Calculate actual launches needed (for reporting) - will be recalculated after we know actual masses
+  let totalLaunches = Math.ceil(targetSatellites / satsPerLaunchEstimate);
   
   // 3.5. APPLY LAUNCH CONSTRAINTS (mass and cost gating)
   const launchConstraints = calculateLaunchConstraints(
@@ -192,8 +221,9 @@ export function calculateYearDeployment(
   const allowedTotal = launchConstraints.allowed;
   const scaleFactor = totalTarget > 0 ? allowedTotal / totalTarget : 0;
   
-  const newA = Math.round(newA_target * scaleFactor);
-  const newB = Math.round(newB_target * scaleFactor);
+  // Use let so we can recalculate after we know actual masses
+  let newA = Math.round(newA_target * scaleFactor);
+  let newB = Math.round(newB_target * scaleFactor);
   
   // 4. Distribute Class A across orbits based on strategy
   const orbitAlloc = getOrbitAllocation(strategy);
@@ -215,6 +245,16 @@ export function calculateYearDeployment(
   
   const satellitesTotal_after_launches_retirements = S_A_new + S_B_new;
   
+  // DEBUG: Log fleet dynamics for verification
+  if (year % 5 === 0 || year === 2040) {
+    const maxLaunches = getMaxLaunchesPerYear(yearOffset, scenarioMode);
+    const PAYLOAD_PER_LAUNCH_KG = 100000;
+    const avgMassEstimate = (estimatedMassA + estimatedMassB) / 2;
+    const satsPerLaunchEstimate = Math.floor(PAYLOAD_PER_LAUNCH_KG / avgMassEstimate);
+    const maxPossibleNewSats = maxLaunches * satsPerLaunchEstimate;
+    // Debug logging removed for production
+  }
+  
   // Update orbit-specific counts (simplified: assume retirements are proportional)
   const S_A_total_prev = state.S_A_lowLEO + state.S_A_midLEO + state.S_A_sunSync;
   const S_A_lowLEO_new = S_A_total_prev > 0
@@ -227,8 +267,7 @@ export function calculateYearDeployment(
   const S_B_sunSync_new = S_B_new; // All Class B are sun-sync
   
   // 7. Calculate tech curves with progress factors
-  // Get scenario params (centralized)
-  const scenarioParams = getScenarioParams(scenarioMode);
+  // scenarioParams already retrieved above
   const scenarioKey = getScenarioKey(scenarioMode);
   const scenarioKind: ScenarioKind = scenarioKey === "orbitalBull" ? "bull" :
                                      scenarioKey === "orbitalBear" ? "bear" :
@@ -241,7 +280,7 @@ export function calculateYearDeployment(
   const techGrowthPerYear = scenarioParams.techGrowthPerYear;
   const launchCostDeclinePerYear = scenarioParams.launchCostDeclinePerYear;
   const demandGrowthPerYear = scenarioParams.demandGrowthPerYear;
-  const amortizationYears = 10; // Keep legacy param for now
+  // amortizationYears defined below for cost calculations
 
   // Exponential in years, not "/5" hacks.
   const techProgressFactor = Math.pow(techGrowthPerYear, yearIndex);
@@ -259,8 +298,19 @@ export function calculateYearDeployment(
   const baseComputePerB = getClassBCompute(year);
   
   // Apply tech progress (scenario-dependent)
-  const computePerA = baseComputePerA * techProgressFactor;
-  const computePerB = baseComputePerB * techProgressFactor;
+  let computePerA = baseComputePerA * techProgressFactor;
+  let computePerB = baseComputePerB * techProgressFactor;
+  
+  // REALITY CHECK: Apply radiation effects (ECC overhead and performance degradation)
+  // ECC overhead: 15% compute spent on error correction
+  // Performance degradation: 5% per year (cumulative)
+  const ECC_OVERHEAD = 0.15; // 15% compute overhead
+  const PERFORMANCE_DEGRADATION_PER_YEAR = 0.05; // 5% per year
+  const yearsInOrbit = Math.max(0, year - 2025); // Years since deployment start
+  const degradationFactor = Math.pow(1 - PERFORMANCE_DEGRADATION_PER_YEAR, yearsInOrbit);
+  // Apply both ECC overhead and degradation
+  computePerA = computePerA * (1 - ECC_OVERHEAD) * degradationFactor;
+  computePerB = computePerB * (1 - ECC_OVERHEAD) * degradationFactor;
   
   const BASELINE_PFLOPS_PER_KW = 0.0001;
   const LIMIT_PFLOPS_PER_KW_2036 = 0.005;
@@ -335,19 +385,22 @@ export function calculateYearDeployment(
     }
   }
   const baseMassPerSatKg = 1500.0;
-  const basePowerPerSatKw = 150.0; // Starting at 150kW in 2025
+  // basePowerPerSatKw will be calculated below using getBusPower
   const baseComputeTflopsPerSat = 50.0;
   
-  // Power per sat progression: 150kW (2025) → 300kW (2028) → 500kW (2032) → 750kW (2036) → 1000kW (2040)
+  // REALITY CHECK: Power per sat progression - thermally constrained by radiator limits
+  // Power progression: 5kW (2025) → 150kW (2040) for compute-optimized satellites
+  // Uses S-curve growth for realistic scaling
   const POWER_PROGRESSION: Record<number, number> = {
-    2025: 150,
-    2028: 300,
-    2032: 500,
-    2036: 750,
-    2040: 1000,
+    2025: 5,    // Conservative start (body-mounted radiators)
+    2028: 15,   // Early deployables becoming available
+    2030: 35,   // Mid-term (Starlink V3 level)
+    2033: 80,   // Advanced deployables for compute-optimized
+    2035: 110,  // High-power compute satellites
+    2040: 150,  // Target: 150 kW for aggressive compute satellites
   };
   
-  const getBusPower = (year: number): number => {
+  const getBusPower = (year: number, scenarioParams: ScenarioParams): number => {
     // If exact year match, use that value
     if (POWER_PROGRESSION[year]) {
       return POWER_PROGRESSION[year];
@@ -391,8 +444,9 @@ export function calculateYearDeployment(
       : Math.pow(1.45, yearIndex)); // 45% for others
   
   const massPerSatKg = Math.min(baseMassPerSatKg * massPowerGrowthFactor, 5000.0);
-  // Use sandbox power if available, otherwise use progression curve
-  const powerPerSatKw = sandboxOverrides?.busPowerKw ?? Math.min(getBusPower(year), 2000.0);
+  // Use sandbox power if available, otherwise use progression curve with scenario multiplier
+  const basePowerPerSatKw = sandboxOverrides?.busPowerKw ?? Math.min(getBusPower(year, scenarioParams), 2000.0);
+  const powerPerSatKw = basePowerPerSatKw * (scenarioParams.busPowerMultiplier ?? 1.0);
   const computeTflopsPerSat = baseComputeTflopsPerSat * computeGrowthFactor;
   
   physicsMassPerSatelliteKgA = massPerSatKg;
@@ -400,6 +454,33 @@ export function calculateYearDeployment(
   physicsPowerPerSatelliteKw = powerPerSatKw;
   physicsComputeTflopsNominal = computeTflopsPerSat;
   physicsComputeTflopsDerated = computeTflopsPerSat * 0.95;
+  
+  // CRITICAL FIX: Recalculate satellites per launch based on actual masses
+  // This ensures the launch constraint is properly enforced
+  const PAYLOAD_PER_LAUNCH_KG_ACTUAL = 100000; // 100 tons to LEO (reusable Starship)
+  const actualSatsPerLaunchA = Math.floor(PAYLOAD_PER_LAUNCH_KG_ACTUAL / physicsMassPerSatelliteKgA);
+  const actualSatsPerLaunchB = Math.floor(PAYLOAD_PER_LAUNCH_KG_ACTUAL / physicsMassPerSatelliteKgB);
+  // Weighted average based on current target split
+  const totalTargetSats = newA + newB;
+  const avgSatsPerLaunchActual = totalTargetSats > 0
+    ? (newA * actualSatsPerLaunchA + newB * actualSatsPerLaunchB) / totalTargetSats
+    : (actualSatsPerLaunchA + actualSatsPerLaunchB) / 2;
+  
+  // Recalculate max satellites per year with actual masses
+  const maxSatellitesPerYearActual = maxLaunchesPerYear * Math.floor(avgSatsPerLaunchActual);
+  
+  // HARD CAP: Re-enforce launch constraint with actual masses
+  // If current deployment exceeds launch capacity, reduce it
+  if (totalTargetSats > maxSatellitesPerYearActual) {
+    const scaleFactor = maxSatellitesPerYearActual / totalTargetSats;
+    newA = Math.round(newA * scaleFactor);
+    newB = Math.round(newB * scaleFactor);
+    
+    // Recalculate total launches with actual constraint
+    totalLaunches = Math.ceil((newA + newB) / Math.floor(avgSatsPerLaunchActual));
+    
+        // Launch constraint logging removed for production
+  }
   
   // FIX #2: Radiator sizing using realistic flux limit (0.3 kW/m² for 300K radiator)
   // FIX: 85% of bus power becomes heat (15% is electrical losses)
@@ -463,8 +544,12 @@ export function calculateYearDeployment(
   const physicsComputePFLOPsDerated = physicsComputeTflopsDerated * 1e3;
   
   // Use sandbox power if available (sandboxOverrides already declared above)
-  const powerPerA = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
-  const powerPerB = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
+  // REALITY CHECK: Apply thermal constraints to power
+  // Power is initially set from progression curve, but must respect thermal limits
+  let powerPerA = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
+  let powerPerB = sandboxOverrides?.busPowerKw ?? physicsPowerPerSatelliteKw;
+  
+  // Thermal limits will be applied after radiator area calculation
   
   const computePerA_physics = physicsComputePFLOPsDerated;
   const computePerB_physics = physicsComputePFLOPsDerated;
@@ -486,16 +571,24 @@ export function calculateYearDeployment(
   const tempDemandGrowthFactor = Math.pow(1.08, yearIndex);
   const totalComputePFLOPs = tempBaseDemandPFLOPs * tempDemandGrowthFactor;
   
-  // FIX: 85% of bus power becomes heat (15% is electrical losses)
+  // REALITY CHECK: Radiator sizing with thermal constraints
+  // Calculate required radiator area based on heat generation
+  // Note: Power will be constrained by thermal limits after radiator area calculation
   const heatGenPerA_kw = powerPerA * 0.85; // 85% of power becomes heat
   const heatGenPerB_kw = powerPerB * 0.85; // 85% of power becomes heat
-  
-  // FIX #2: Radiator sizing using realistic flux limit (0.3 kW/m² for 300K radiator)
-  // Reuse constants defined above
   const radiatorAreaPerA = (heatGenPerA_kw / RADIATOR_FLUX_LIMIT_KW_PER_M2) * safety_margin;
   const radiatorAreaPerB = (heatGenPerB_kw / RADIATOR_FLUX_LIMIT_KW_PER_M2) * safety_margin;
   
-  // Apply strategy adjustments (but keep minimum viable size)
+  // REALITY CHECK: Apply thermal model limits
+  // Body-mounted: max 20 m² (simple, reliable)
+  // Deployable: max 100 m² (complex, risky)
+  // Determine if deployable radiators are available based on year and power
+  const hasDeployableRadiators = year >= 2028; // Deployables available from 2028
+  const MAX_BODY_MOUNTED_RADIATOR_M2 = 20;
+  const MAX_DEPLOYABLE_RADIATOR_M2 = 100;
+  const maxRadiatorAreaM2 = hasDeployableRadiators ? MAX_DEPLOYABLE_RADIATOR_M2 : MAX_BODY_MOUNTED_RADIATOR_M2;
+  
+  // Apply strategy adjustments (but keep within thermal limits)
   let strategyMultiplierA = 1.0;
   let strategyMultiplierB = 1.0;
   if (strategy === "CARBON") {
@@ -509,8 +602,28 @@ export function calculateYearDeployment(
     strategyMultiplierB = 0.85;
   }
   
-  const finalRadiatorAreaPerA = Math.max(radiatorAreaPerA * strategyMultiplierA, 2.0);
-  const finalRadiatorAreaPerB = Math.max(radiatorAreaPerB * strategyMultiplierB, 5.0);
+  // REALITY CHECK: Cap radiator area at thermal limits
+  const finalRadiatorAreaPerA = Math.min(
+    Math.max(radiatorAreaPerA * strategyMultiplierA, 2.0),
+    maxRadiatorAreaM2
+  );
+  const finalRadiatorAreaPerB = Math.min(
+    Math.max(radiatorAreaPerB * strategyMultiplierB, 5.0),
+    maxRadiatorAreaM2
+  );
+  
+  // REALITY CHECK: If radiator area is capped, recalculate max power
+  // This ensures power doesn't exceed thermal constraints
+  const maxPowerFromRadiatorA = (finalRadiatorAreaPerA * RADIATOR_FLUX_LIMIT_KW_PER_M2) / 0.85; // Divide by 0.85 to account for heat fraction
+  const maxPowerFromRadiatorB = (finalRadiatorAreaPerB * RADIATOR_FLUX_LIMIT_KW_PER_M2) / 0.85;
+  
+  // REALITY CHECK: Cap power to thermal limits (apply thermal constraints)
+  powerPerA = Math.min(powerPerA, maxPowerFromRadiatorA);
+  powerPerB = Math.min(powerPerB, maxPowerFromRadiatorB);
+  
+  // Recalculate heat generation with thermal-constrained power
+  const heatGenPerA_kw_constrained = powerPerA * 0.85;
+  const heatGenPerB_kw_constrained = powerPerB * 0.85;
   
   const power_total_kw_raw = satellitesTotal_current * physicsPowerPerSatelliteKw;
   const power_total_kw = power_total_kw_raw;
@@ -616,7 +729,7 @@ export function calculateYearDeployment(
   
   const satellite_count = S_A_new + S_B_new;
   
-  const physicsOutput = stepPhysics(physicsState, satellite_count, scenarioMode);
+  const physicsOutput = stepPhysics(physicsState, satellite_count, scenarioMode, year);
   
   const computeExportablePF = physicsOutput.compute_exportable_flops;
   
@@ -898,19 +1011,30 @@ export function calculateYearDeployment(
   const batteryCapacityA_kWh = batteryMassA_kg * 0.2;
   const batteryCapacityB_kWh = batteryMassB_kg * 0.2;
   
-  // Class A cost: Battery + Radiator + Launch adder + Battery Tax
+  // REALITY CHECK: Add radiation shielding cost multiplier (30% cost increase for rad-hard)
+  const RADIATION_COST_MULTIPLIER = 1.3; // 30% cost adder for radiation hardening
+  
+  // Class A cost: Battery + Radiator + Launch adder + Battery Tax + Radiation shielding
   const batteryCostA = batteryCapacityA_kWh * BATTERY_COST_PER_KWH;
   const radiatorCostA = radiatorMassA_kg * RADIATOR_COST_PER_KG;
-  const launchAdderA = (batteryMassA_kg + radiatorMassA_kg) * BASE_LAUNCH_COST_PER_KG;
+  // REALITY CHECK: Add radiation shielding mass cost (2 kg per kW compute)
+  const radiationShieldingMassA_kg = powerPerA * 2.0; // 2 kg per kW
+  const radiationShieldingCostA = radiationShieldingMassA_kg * RADIATOR_COST_PER_KG; // Use same cost as radiator
+  const launchAdderA = (batteryMassA_kg + radiatorMassA_kg + radiationShieldingMassA_kg) * BASE_LAUNCH_COST_PER_KG;
   const batteryTaxA = 150_000; // $150k for eclipse batteries (150 kWh @ $1k/kWh)
-  const costA = (batteryCostA + radiatorCostA + launchAdderA + batteryTaxA) / 1e6; // Convert to millions
+  const baseCostA = batteryCostA + radiatorCostA + radiationShieldingCostA + launchAdderA + batteryTaxA;
+  const costA = (baseCostA * RADIATION_COST_MULTIPLIER) / 1e6; // Apply radiation cost multiplier, convert to millions
   
-  // Class B cost: Battery + Radiator + Launch adder + Battery Tax (smaller battery)
+  // Class B cost: Battery + Radiator + Launch adder + Battery Tax + Radiation shielding (smaller battery)
   const batteryCostB = batteryCapacityB_kWh * BATTERY_COST_PER_KWH;
   const radiatorCostB = radiatorMassB_kg * RADIATOR_COST_PER_KG;
-  const launchAdderB = (batteryMassB_kg + radiatorMassB_kg) * BASE_LAUNCH_COST_PER_KG;
+  // REALITY CHECK: Add radiation shielding mass cost (2 kg per kW compute)
+  const radiationShieldingMassB_kg = powerPerB * 2.0; // 2 kg per kW
+  const radiationShieldingCostB = radiationShieldingMassB_kg * RADIATOR_COST_PER_KG; // Use same cost as radiator
+  const launchAdderB = (batteryMassB_kg + radiatorMassB_kg + radiationShieldingMassB_kg) * BASE_LAUNCH_COST_PER_KG;
   const batteryTaxB = 10_000; // $10k for safe mode batteries (10 kWh)
-  const costB = (batteryCostB + radiatorCostB + launchAdderB + batteryTaxB) / 1e6; // Convert to millions
+  const baseCostB = batteryCostB + radiatorCostB + radiationShieldingCostB + launchAdderB + batteryTaxB;
+  const costB = (baseCostB * RADIATION_COST_MULTIPLIER) / 1e6; // Apply radiation cost multiplier, convert to millions
   // FIX: Heat generation is 85% of power (not 10%)
   const heatGenA = calculateHeatGeneration(powerPerA); // Returns powerPerA * 0.85
   const heatGenB = calculateHeatGeneration(powerPerB); // Returns powerPerB * 0.85
@@ -1063,16 +1187,21 @@ export function calculateYearDeployment(
                                    200; // Baseline: $200/kg (standard)
   
   // Apply sandbox launch cost with improvement rate if provided
+  // UPDATED: Use plateau model with floor for launch costs
   let cost_per_kg_to_leo: number;
   if (sandboxOverrides?.launchCostPerKg) {
     const baseLaunchCost = sandboxOverrides.launchCostPerKg;
     const improvementRate = sandboxOverrides.launchCostImprovementRate ?? launchCostDeclinePerYear;
     // Apply improvement rate: cost decreases by improvementRate each year
     const improvementFactor = Math.pow(1 - improvementRate, yearIndex);
-    cost_per_kg_to_leo = baseLaunchCost * improvementFactor;
-    console.log(`[SANDBOX OVERRIDE] Year ${year}: cost_per_kg_to_leo = ${cost_per_kg_to_leo.toFixed(2)} (base: ${baseLaunchCost}, improvement: ${(improvementRate * 100).toFixed(1)}%/yr)`);
+    const unconstrainedCost = baseLaunchCost * improvementFactor;
+    // Apply floor: can't go below $30/kg (physics/economics limit)
+    const floorCostPerKg = 30;
+    cost_per_kg_to_leo = Math.max(unconstrainedCost, floorCostPerKg);
+    // Sandbox override logging removed for production
   } else {
-    cost_per_kg_to_leo = base_cost_per_kg_to_leo * launchCostDeclineFactor;
+    // Use plateau model with floor
+    cost_per_kg_to_leo = getLaunchCostPerKg(year, 2025, base_cost_per_kg_to_leo);
   }
   const launchCostThisYearUSD = launchMassThisYearKg * cost_per_kg_to_leo;
   const avgCostPerSatelliteUSD = (costA + costB) / 2;
@@ -1169,7 +1298,16 @@ export function calculateYearDeployment(
   }
 
   // === Latency mix ====================================================
-  const latency_ground_ms = 120;
+  // Ground latency improves over time (10% improvement over 15 years)
+  // From simulationRunner.ts: baseGroundLatency * (1 - 0.10 * progress)
+  const baseGroundLatency = 120;
+  const groundLatencyDrop = 0.10; // 10% improvement over horizon
+  const horizonYears = 15; // 2025 to 2040
+  const progress = Math.min(1, yearIndex / horizonYears);
+  // Ease out cubic for smooth improvement curve
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+  const latency_ground_ms = baseGroundLatency * (1 - groundLatencyDrop * easeOutCubic(progress));
+  
   const baseLatencyOrbitMs = 30;
   const latencyImprovementPerYear = 0.01;
   const latency_orbit_ms = baseLatencyOrbitMs * Math.pow(1 - latencyImprovementPerYear, yearIndex);
@@ -1182,8 +1320,13 @@ export function calculateYearDeployment(
   // FIXED: Use scenario params for learning rates and initial multiples
   
   // 1) Ground cost per compute should decline with tech progress (scenario-dependent)
-  const baseGroundCostPerCompute = 340; // $/unit in 2025
-  const cost_per_compute_ground = baseGroundCostPerCompute * Math.pow(1 - scenarioParams.groundLearningRate, yearIndex);
+  // CRITICAL FIX: Ground cost should decline but approach a floor (power, cooling, land costs)
+  const baseGroundCostPerCompute = 280; // $/PFLOP in 2025 (updated from 340)
+  const annualDecline = scenarioParams.groundLearningRate; // 2-2.5% annual improvement
+  const floor = 120; // Can't go below this (power, cooling, land costs)
+  
+  const projectedGroundCost = baseGroundCostPerCompute * Math.pow(1 - annualDecline, yearIndex);
+  const cost_per_compute_ground = Math.max(projectedGroundCost, floor);
   
   // 2) Use physics-based derated compute for cost calculation (use modified bus physics)
   const busAvailability = scenarioMode === "ORBITAL_BULL"
@@ -1199,15 +1342,81 @@ export function calculateYearDeployment(
   const prevCumulativeExportedPFLOPs =
     previousEntry?.cumulativeExportedPFLOPs ?? 0;
 
+  // === FIXED COSTS (Don't scale with fleet) ===
+  
+  // Cumulative R&D (spent before 2025, amortized over program life)
+  const cumulativeRDBillions = 20; // Starship + satellite R&D
+  const programLifeYears = 20;
+  const annualRDAmortization = cumulativeRDBillions / programLifeYears;
+  
+  // Ground infrastructure (scales slowly)
+  const groundStationCostBillions = 2 + (year - 2025) * 0.3; // $2B in 2025, grows
+  const groundStationAmortization = groundStationCostBillions / 10; // 10 year life
+  
+  // Fixed operations (mission control, engineering, etc)
+  const fixedOpsBillions = 3 + (year - 2025) * 0.2; // Grows slowly
+  
+  // Total fixed costs
+  const totalFixedBillions = annualRDAmortization + groundStationAmortization + fixedOpsBillions;
+  const totalFixedUSD = totalFixedBillions * 1e9;
+  
+  // === VARIABLE COSTS (Scale with fleet) ===
+  
+  // Manufacturing cost follows learning curve
+  const getManufacturingCostPerKg = (year: number): number => {
+    const base2025 = 8000; // $/kg in 2025
+    const floor = 2000;    // Can't go below this
+    const learningRate = 0.12; // 12% annual improvement
+    
+    const yearsFromBase = year - 2025;
+    const projected = base2025 * Math.pow(1 - learningRate, yearsFromBase);
+    
+    return Math.max(projected, floor);
+  };
+  
+  // Calculate manufacturing cost for satellites launched this year
+  const manufacturingCostPerKg = getManufacturingCostPerKg(year);
+  // Use weighted average mass (already calculated above) for satellites launched this year
+  const massLaunchedKg = (newA + newB) * avgMassPerSatelliteKg;
+  const manufacturingCostUSD = massLaunchedKg * manufacturingCostPerKg;
+  
+  // Launch costs (from totalOrbitalCostThisYearUSD, which includes launch + replacement)
+  // Extract launch portion (replacement is already accounted for separately)
+  const launchCostUSD = launchCostThisYearUSD;
+  
+  // Operations (scales with fleet size)
+  const opsPerSatPerYear = 5000; // $/sat/year for monitoring, updates, etc
+  const variableOpsUSD = satellitesTotal * opsPerSatPerYear;
+  
+  // Total variable costs
+  const totalVariableUSD = launchCostUSD + manufacturingCostUSD + variableOpsUSD;
+  
+  // === TOTAL ANNUAL COST ===
+  const totalAnnualCostUSD = totalFixedUSD + totalVariableUSD;
   const cumulativeOrbitalCostUSD =
-    prevCumulativeOrbitalCostUSD + totalOrbitalCostThisYearUSD;
+    prevCumulativeOrbitalCostUSD + totalAnnualCostUSD;
   const cumulativeExportedPFLOPs =
     prevCumulativeExportedPFLOPs + fleetTotalComputePFLOPsDerated;
 
-  // Raw orbit unit cost
-  const rawOrbitUnitCost =
-    cumulativeExportedPFLOPs > 0 && cumulativeOrbitalCostUSD > 0
-      ? cumulativeOrbitalCostUSD / cumulativeExportedPFLOPs
+  // Raw orbit unit cost (annual cost per annual compute)
+  // Use effective compute (after thermal derating) for cost calculations
+  const effectivePFLOPs = computeExportablePFLOPs;
+  
+  // Guard against division by zero in early years
+  let rawOrbitUnitCost: number;
+  if (effectivePFLOPs < 1) {
+    // Effectively infinite cost when no compute
+    rawOrbitUnitCost = 10000;
+  } else {
+    // Annual cost per annual compute
+    rawOrbitUnitCost = totalAnnualCostUSD / effectivePFLOPs;
+  }
+  
+  // For cumulative calculation (used for calibration)
+  const cumulativeEffectivePFLOPs = prevCumulativeExportedPFLOPs + computeExportablePFLOPs;
+  const cumulativeOrbitUnitCost =
+    cumulativeEffectivePFLOPs > 0 && cumulativeOrbitalCostUSD > 0
+      ? cumulativeOrbitalCostUSD / cumulativeEffectivePFLOPs
       : Infinity;
 
   // 4) One-time calibration: in the first year with non-zero orbit compute,
@@ -1233,9 +1442,18 @@ export function calculateYearDeployment(
 
   // 5) Apply learning rate (scenario-dependent)
   // Orbit cost improves over time with learning
-  const cost_per_compute_orbit = Number.isFinite(cost_per_compute_orbit_raw)
+  let cost_per_compute_orbit = Number.isFinite(cost_per_compute_orbit_raw)
     ? cost_per_compute_orbit_raw * Math.pow(1 - scenarioParams.orbitLearningRate, yearIndex)
     : Infinity;
+  
+  // Add maturity penalty for early years (delays crossover by 1-2 years)
+  // Technology readiness delay: early years have higher costs due to immature tech
+  if (Number.isFinite(cost_per_compute_orbit) && cost_per_compute_orbit > 0) {
+    const maturityPenalty = year < 2028 ? 1.3 :    // 30% penalty before 2028
+                            year < 2030 ? 1.15 :    // 15% penalty 2028-2029
+                            1.0;                     // No penalty after 2030
+    cost_per_compute_orbit = cost_per_compute_orbit * maturityPenalty;
+  }
 
   // Clamp only for display, not for the diagnostic raw value.
   const orbit_cost_per_compute_display = Math.min(cost_per_compute_orbit, 1e7);
@@ -1365,7 +1583,8 @@ export function calculateYearDeployment(
   const annual_opex_orbit = base_annual_opex_orbit_with_fixed + congestionMetrics.congestionCostAnnual;
 
   const raw_annual_opex_mix = annual_opex_ground + annual_opex_orbit;
-  const annual_opex_mix = sane(raw_annual_opex_mix, 1e12);
+  // Remove cap - allow OPEX to exceed $1T (actual values go to $1.8T by 2040)
+  const annual_opex_mix = sane(raw_annual_opex_mix, 1e13); // Increased to $10T cap for display safety
 
   // === Carbon =========================================================
   // D. Fix carbon: per-year launches + cumulative amortization
@@ -1546,6 +1765,11 @@ export function calculateYearDeployment(
     backhaul_bandwidth_used: backhaul_used_tbps_from_physics * 1000,
     backhaul_bw_per_PFLOP: 10, // Gbps per PFLOP
     // REMOVED: utilization_backhaul_raw (fake utilization field)
+    // --- Spectrum/Downlink Reality ---
+    downlink_capacity_tbps: effectiveComputeResult.spectrum?.downlinkCapacityTbps,
+    downlink_used_tbps: effectiveComputeResult.spectrum?.downlinkUsedTbps,
+    downlink_utilization_percent: effectiveComputeResult.spectrum?.downlinkUtilizationPercent,
+    spectrum_constrained: effectiveComputeResult.spectrum?.spectrumConstrained,
     // --- Autonomy & Maintenance Reality ---
     maintenance_debt: maintenance_debt,
     failures_unrecovered: failures_unrecovered_this_year, // This year's unrecoverable failures
@@ -1730,7 +1954,7 @@ export function calculateYearDeployment(
   
   // CRITICAL ASSERTION: Verify the aggregation is correct
   if (Math.abs(debugEntry.satellitesTotal - (final_S_A_new + final_S_B_new)) > 0.1) {
-    console.error(`[CRITICAL BUG] Year ${year}: satellitesTotal aggregation failed. satellitesTotal=${debugEntry.satellitesTotal}, expected=${final_S_A_new + final_S_B_new}, classA=${debugEntry.classA_satellites_alive}, classB=${debugEntry.classB_satellites_alive}`);
+    // Critical bug logging removed for production (errors are still tracked in debug state)
     throw new Error(`[CRITICAL BUG] Year ${year}: satellitesTotal aggregation mismatch. satellitesTotal=${debugEntry.satellitesTotal}, expected=${final_S_A_new + final_S_B_new}`);
   }
   
@@ -1867,9 +2091,20 @@ export function runMultiYearDeployment(
       thermalState: result.thermalState, // Legacy
     };
     
-    // Update deployment history
+    // Update deployment history (CRITICAL: Track for retirement calculations)
+    // Track the satellites that were actually launched (before survival is applied)
+    // This is what will be retired in SAT_A_LIFETIME_Y / SAT_B_LIFETIME_Y years
     state.deployedByYear_A.set(year, result.newA);
     state.deployedByYear_B.set(year, result.newB);
+    
+    // DEBUG: Verify retirement tracking (log every 5 years or at 2040)
+    if (year % 5 === 0 || year === 2040) {
+      const retirementYearA = year - SAT_A_LIFETIME_Y;
+      const retirementYearB = year - SAT_B_LIFETIME_Y;
+      const expectedRetiredA = state.deployedByYear_A.get(retirementYearA) || 0;
+      const expectedRetiredB = state.deployedByYear_B.get(retirementYearB) || 0;
+      // Retirement tracking logging removed for production
+    }
   }
   
   return results;

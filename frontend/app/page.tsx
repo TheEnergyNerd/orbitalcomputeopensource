@@ -27,7 +27,7 @@ import DetailPanel from "./components/DetailPanel";
 import TimeScaleControl from "./components/TimeScaleControl";
 import Toast from "./components/Toast";
 import FuturesMarketView from "./components/futures/FuturesMarketView";
-import ConstraintsRiskView from "./components/orbitSim/ConstraintsRiskView";
+import ConstraintsRiskView from "./components/constraints/ConstraintsRiskView";
 import PhysicsLimitsTab from "./components/PhysicsLimitsTab";
 import { useEffect, useState } from "react";
 import { useSimStore } from "./store/simStore";

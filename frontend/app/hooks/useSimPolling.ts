@@ -11,13 +11,26 @@ export function useSimPolling() {
   const runFactoryTick = useSandboxStore.getState().runFactoryTick;
 
   useEffect(() => {
+    // CRITICAL FIX: New OrbitSim doesn't need backend - disable polling completely
+    // Set loading to false immediately and don't poll
+    setLoading(false);
+    setError(null);
+    
+    // Return early - don't set up any polling
+    return;
+    
+    // OLD CODE BELOW - DISABLED
+    /*
     let retryCount = 0;
-    const MAX_RETRIES = 30; // Stop trying after 60 seconds (30 retries * 2 seconds)
+    const MAX_RETRIES = 3; // Stop trying after 6 seconds (3 retries * 2 seconds)
+    
+    // Immediately set loading to false - new OrbitSim doesn't need backend
+    setLoading(false);
     
     const pollState = async () => {
       try {
         const response = await axios.get<SimState>(`${API_BASE}/state`, {
-          timeout: 180000, // 180 second timeout for large responses
+          timeout: 2000, // 2 second timeout - fail fast
           validateStatus: () => true, // Don't throw on any status code
           // Add signal for cancellation if component unmounts
         });
@@ -78,12 +91,10 @@ export function useSimPolling() {
         
         if (isCorsError) {
           // Backend not available or CORS issue - silently handle
-          if (retryCount >= 3) {
-            setError(null);
-            setLoading(false);
-            return; // Stop polling
-          }
-          return; // Continue polling but don't log error
+          // New OrbitSim doesn't need backend, so stop immediately
+          setError(null);
+          setLoading(false);
+          return; // Stop polling immediately
         }
         
         if (error.response?.status === 503) {
@@ -93,66 +104,26 @@ export function useSimPolling() {
           }
         } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error') || error.code === 'ECONNREFUSED') {
           // Network error - backend might not be running
-          // New OrbitSim doesn't need backend, so stop polling gracefully
-          if (retryCount >= 3) {
-            setError(null); // Don't show error - new OrbitSim is self-contained
-            setLoading(false);
-            return; // Stop polling
-          }
+          // New OrbitSim doesn't need backend, so stop polling immediately
+          setError(null); // Don't show error - new OrbitSim is self-contained
+          setLoading(false);
+          return; // Stop polling immediately
         } else if (error.response?.status === 500) {
-          // Backend error - new OrbitSim doesn't need backend, so stop polling gracefully
-          if (retryCount >= 3) {
-            // Don't show error - new OrbitSim is self-contained
-            setError(null);
-            setLoading(false);
-            return; // Stop polling
-          }
+          // Backend error - new OrbitSim doesn't need backend, so stop polling immediately
+          setError(null);
+          setLoading(false);
+          return; // Stop polling immediately
         } else if (error.code === 'ECONNABORTED' || error.code === 5 || error.message?.includes('timeout')) {
           // Error code 5 is ECONNABORTED (timeout)
-          const errorDetails = {
-            code: error.code,
-            message: error.message,
-            response: error.response?.status,
-            responseSize: error.response?.data ? JSON.stringify(error.response.data).length : 0,
-            url: error.config?.url,
-            timeout: error.config?.timeout,
-            timestamp: new Date().toISOString(),
-            retryCount: retryCount,
-          };
-          
-          // Persist to localStorage so user can see it even after crash
-          let savedToStorage = false;
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              const errorLog = JSON.parse(localStorage.getItem('orbitalCompute_errorLog') || '[]');
-              errorLog.push(errorDetails);
-              // Keep only last 10 errors
-              if (errorLog.length > 10) {
-                errorLog.shift();
-              }
-              localStorage.setItem('orbitalCompute_errorLog', JSON.stringify(errorLog));
-              localStorage.setItem('orbitalCompute_lastError', JSON.stringify(errorDetails));
-              savedToStorage = true;
-            }
-          } catch (e) {
-            // Silently fail localStorage operations
-          }
-          
-          // Show error message
-          if (retryCount >= 3) {
-            setError("Request timeout. Backend may be slow to respond.");
-          }
-          if (retryCount >= MAX_RETRIES) {
-            setLoading(false);
-          }
+          // New OrbitSim doesn't need backend, so stop immediately
+          setError(null);
+          setLoading(false);
+          return; // Stop polling immediately
         } else {
-          // Only show error after multiple failures
-          if (retryCount >= 5) {
-            setError(error.message || "Failed to fetch simulation state");
-          }
-          if (retryCount >= MAX_RETRIES) {
-            setLoading(false);
-          }
+          // Any other error - new OrbitSim doesn't need backend, so stop immediately
+          setError(null);
+          setLoading(false);
+          return; // Stop polling immediately
         }
       }
     };
@@ -176,6 +147,7 @@ export function useSimPolling() {
       clearInterval(interval);
       clearInterval(simInterval);
     };
+    */
   }, [setState, setLoading, setError]);
 }
 

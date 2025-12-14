@@ -16,6 +16,7 @@ import { evalConstellation } from '../ai/constellationEval';
 import { mix } from '../util/math';
 import { runMultiYearDeployment } from './yearSteppedDeployment';
 import type { StrategyMode } from './satelliteClasses';
+import { getDebugStateEntry } from './debugState';
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -96,16 +97,46 @@ export function runSimulationFromPlans(
 
   // CRITICAL FIX: Run ALL scenarios to populate debug state for each
   // This ensures we have data for BASELINE, ORBITAL_BEAR, and ORBITAL_BULL
+  // OPTIMIZATION: Run scenarios asynchronously to avoid blocking UI
   const startYear = baseConfig.startYear;
   const endYear = baseConfig.startYear + yearPlans.length - 1;
   const scenariosToRun: Array<"BASELINE" | "ORBITAL_BEAR" | "ORBITAL_BULL"> = ["BASELINE", "ORBITAL_BEAR", "ORBITAL_BULL"];
   
   // Run each scenario and populate debug state
-  scenariosToRun.forEach(scenarioMode => {
-    runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
-  });
+  // OPTIMIZATION: Run other scenarios asynchronously to avoid blocking
+  if (typeof window !== 'undefined') {
+    // Browser: run other scenarios asynchronously (non-blocking)
+    // Use requestIdleCallback if available for better performance
+    const scheduleOtherScenarios = (callback: () => void) => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(callback, { timeout: 2000 });
+      } else {
+        setTimeout(callback, 100);
+      }
+    };
+    
+    scheduleOtherScenarios(() => {
+      scenariosToRun.forEach(scenarioMode => {
+        try {
+          runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
+        } catch (error) {
+          console.error(`[SimulationRunner] Error running scenario ${scenarioMode}:`, error);
+        }
+      });
+    });
+  } else {
+    // SSR: run synchronously (but this shouldn't happen in client components)
+    scenariosToRun.forEach(scenarioMode => {
+      try {
+        runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
+      } catch (error) {
+        console.error(`[SimulationRunner] Error running scenario ${scenarioMode}:`, error);
+      }
+    });
+  }
   
   // Use the selected scenario for the timeline (for backward compatibility)
+  // CRITICAL: Run the main scenario synchronously so we have data for the timeline
   const scenarioMode = baseConfig.scenarioMode ?? "BASELINE";
   const deploymentResults = runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
 
@@ -218,7 +249,6 @@ export function runSimulationFromPlans(
     
     if (typeof window !== 'undefined') {
       try {
-        const { getDebugStateEntry } = require('./debugState');
         const debugEntry = getDebugStateEntry(year, scenarioMode);
         
         if (debugEntry && 
@@ -334,7 +364,6 @@ export function runSimulationFromPlans(
     
     if (typeof window !== 'undefined' && (window as any).getDebugState) {
       try {
-        const { getDebugStateEntry } = require('./debugState');
         const debugEntry = getDebugStateEntry(year, scenarioMode);
         
         if (debugEntry && 
@@ -391,7 +420,6 @@ export function runSimulationFromPlans(
     let scenarioDiagnostics: Partial<YearStep> = {};
     if (typeof window !== 'undefined' && (window as any).getDebugState) {
       try {
-        const { getDebugStateEntry } = require('./debugState');
         const debugEntry = getDebugStateEntry(year, scenarioMode);
         if (debugEntry) {
           scenarioDiagnostics = {

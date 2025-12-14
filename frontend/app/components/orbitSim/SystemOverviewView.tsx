@@ -6,7 +6,7 @@ import { debugScenarioData } from "../../lib/orbitSim/selectors/scenarioHelpers"
 import OpexStreamgraph from "./OpexStreamgraph";
 import CarbonRiver from "./CarbonRiver";
 import PowerComputeFrontier from "./PowerComputeFrontier";
-import CostComputeChart from "./CostComputeChart";
+import ComputePerDollarChart from "./ComputePerDollarChart";
 import LatencyChart from "./LatencyChart";
 import CrossoverChart from "./CrossoverChart";
 
@@ -68,16 +68,16 @@ export default function SystemOverviewView() {
         </div>
       </div>
 
-      {/* 1. Cost / Compute Curve */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="cost-compute">
+      {/* 1. Compute Per Dollar */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="compute-per-dollar">
         <div className="text-[10px] sm:text-xs font-semibold text-slate-100 mb-1">
-          Cost / Compute Curve
+          Compute Per Dollar
         </div>
         <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
-          Ground vs Orbit vs Mix - Shows crossover point and cost trajectory. Hover to see values.
+          PFLOPs per $1B - Higher is better. Shows when orbital efficiency crosses above ground.
         </div>
-        <div className="h-[300px] sm:h-[600px] w-full" key={`cost-${config.scenarioMode}`}>
-          <CostComputeChart timeline={timeline} scenarioMode={config.scenarioMode} />
+        <div className="h-[300px] sm:h-[600px] w-full" key={`compute-per-dollar-${config.scenarioMode}`}>
+          <ComputePerDollarChart timeline={timeline} scenarioMode={config.scenarioMode} />
         </div>
       </div>
 

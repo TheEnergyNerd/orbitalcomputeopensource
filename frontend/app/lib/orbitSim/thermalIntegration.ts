@@ -465,9 +465,11 @@ export function updateThermalState(
   
   const thermal_drift_C_per_hr = temp_change_C / dt_hours;
   
+  // CRITICAL FIX: Utilization can NEVER exceed 100% (physically impossible)
+  // Per Anno feedback: "radiator_utilization_percent: 146.3% is physically impossible"
   const radiator_utilization_percent = radiator_capacity_kw > 1e-6
-    ? Math.max(0, Math.min(200, (heatGen_kw / radiator_capacity_kw) * 100))
-    : (heatGen_kw > 0 ? 200 : 0);
+    ? Math.max(0, Math.min(100, (heatGen_kw / radiator_capacity_kw) * 100)) // CRITICAL: Cap at 100%
+    : (heatGen_kw > 0 ? 100 : 0);
   
   const backhaul_utilization_percent = backhaul_capacity_tbps > 1e-9
     ? Math.max(0, Math.min(100, (backhaul_used_tbps_from_flows / backhaul_capacity_tbps) * 100))

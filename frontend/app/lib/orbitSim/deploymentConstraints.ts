@@ -1,13 +1,15 @@
 /**
  * Deployment Constraints Module
  * 
- * Implements three hard physics/engineering constraints on orbital compute growth:
+ * Implements hard physics/engineering constraints on orbital compute growth:
  * 1. Launch Economics (mass and cost gating)
  * 2. Heat Rejection (utilization ceiling)
  * 3. Autonomous Maintenance (failure accumulation and recovery limits)
+ * 4. Spectrum/Downlink Bandwidth (RF spectrum limits)
  */
 
 import type { StrategyMode } from "./satelliteClasses";
+import { applySpectrumConstraint } from "./spectrumConstraint";
 
 // ============================================================================
 // 1. LAUNCH ECONOMICS CONSTRAINTS
@@ -178,6 +180,9 @@ export function calculateLaunchConstraints(
 export interface HeatConstraints {
   utilizationMax: number; // Utilization_max(t) = Q_rad_max(t) / Q_gen(t)
   heatLimited: boolean;  // Whether heat is the limiting factor
+  thermalComplexityFactor?: number; // Complexity factor for large radiators
+  failureRateMultiplier?: number;   // Failure rate multiplier for complex thermal
+  costMultiplier?: number;          // Cost multiplier for complex thermal
 }
 
 /**
@@ -209,8 +214,16 @@ export function calculateMaxHeatRejection(
   const EMISSIVITY = 0.9; // Typical radiator emissivity
   const OPERATING_TEMP_K = 300; // 27°C operating temperature
   
-  // Radiator area per satellite (varies by class and strategy)
-  let radiatorAreaM2 = satelliteClass === "A" ? 5.0 : 12.0; // m²
+  // REALITY CHECK: Radiator area per satellite with thermal constraints
+  // Body-mounted: max 20 m², Deployable: max 100 m²
+  // Start conservative with body-mounted radiators
+  const MAX_BODY_MOUNTED_M2 = 20;
+  const MAX_DEPLOYABLE_M2 = 100;
+  const hasDeployable = year >= 2028;
+  const maxRadiatorM2 = hasDeployable ? MAX_DEPLOYABLE_M2 : MAX_BODY_MOUNTED_M2;
+  
+  let radiatorAreaM2 = satelliteClass === "A" ? 5.0 : 12.0; // m² (initial estimate)
+  radiatorAreaM2 = Math.min(radiatorAreaM2, maxRadiatorM2); // Cap at thermal limit
   
   // Strategy adjustments
   if (strategy === "CARBON") {
@@ -232,8 +245,19 @@ export function calculateMaxHeatRejection(
   return Q_rad_max_KW;
 }
 
+// ============================================================================
+// CHIP TDP CONSTANTS (Per Anno feedback: 500-600W per chip)
+// ============================================================================
+export const CHIP_TDP_WATTS = 500; // Anno's guidance: 500-600W per chip
+export const CHIPS_PER_SATELLITE = 10; // Reasonable for a compute sat
+export const CHIP_COMPUTE_TFLOPS = 500; // Space-hardened, ~3-5 year lag from consumer
+
 /**
  * Calculate heat-limited utilization ceiling
+ * CRITICAL FIX: Enforce hard ceiling at 100% - utilization can NEVER exceed 100%
+ * 
+ * Also applies thermal complexity risk factor per Anno feedback:
+ * "Radiating surface area is crazy rn. You're implying a very very very complex heat management system."
  */
 export function calculateHeatUtilizationCeiling(
   satelliteClass: "A" | "B",
@@ -244,12 +268,67 @@ export function calculateHeatUtilizationCeiling(
   const Q_gen = calculateHeatGeneration(powerKW);
   const Q_rad_max = calculateMaxHeatRejection(satelliteClass, powerKW, strategy, year);
   
+  // CRITICAL: Utilization can NEVER exceed 100% (physically impossible)
   const utilizationMax = Math.min(1.0, Q_rad_max / Q_gen);
   const heatLimited = utilizationMax < 1.0;
+  
+  // THERMAL COMPLEXITY RISK FACTOR (per Anno feedback)
+  // Large radiators = complex thermal systems = higher failure rate and cost
+  const RADIATOR_COMPLEXITY_THRESHOLD_M2 = 50; // m² per satellite
+  const radiatorAreaPerSat = calculateMaxHeatRejection(satelliteClass, powerKW, strategy, year) / 0.3; // Approximate area
+  let complexityFactor = 1.0;
+  let failureRateMultiplier = 1.0;
+  let costMultiplier = 1.0;
+  
+  if (radiatorAreaPerSat > RADIATOR_COMPLEXITY_THRESHOLD_M2) {
+    const complexityRatio = radiatorAreaPerSat / RADIATOR_COMPLEXITY_THRESHOLD_M2;
+    
+    // Increase failure rate for complex thermal systems (10% per complexity unit above threshold)
+    failureRateMultiplier = 1 + 0.1 * (complexityRatio - 1);
+    
+    // Increase cost for complex deployable radiators (20% per complexity unit above threshold)
+    costMultiplier = 1 + 0.2 * (complexityRatio - 1);
+  }
   
   return {
     utilizationMax,
     heatLimited,
+    thermalComplexityFactor: complexityFactor,
+    failureRateMultiplier,
+    costMultiplier,
+  };
+}
+
+/**
+ * Apply thermal constraint derating to compute
+ * CRITICAL FIX: If thermal utilization > 100%, derate compute to what thermal can support
+ * Per Anno feedback: "radiator_utilization_percent: 146.3% is physically impossible"
+ */
+export function applyThermalConstraintDerating(
+  computePFLOPs: number,
+  heatGenKW: number,
+  maxHeatRejectionKW: number
+): { deratedComputePFLOPs: number; thermalDerating: number; thermalConstrained: boolean } {
+  // Calculate utilization (should never exceed 100%)
+  const utilization = maxHeatRejectionKW > 0 ? heatGenKW / maxHeatRejectionKW : 1.0;
+  
+  // CRITICAL: If utilization > 100%, we MUST derate compute
+  if (utilization > 1.0) {
+    // Derate compute proportionally to what thermal can support
+    const thermalDerating = 1.0 / utilization; // e.g., 146% utilization → 68% derating
+    const deratedComputePFLOPs = computePFLOPs * thermalDerating;
+    
+    return {
+      deratedComputePFLOPs,
+      thermalDerating,
+      thermalConstrained: true,
+    };
+  }
+  
+  return {
+    deratedComputePFLOPs: computePFLOPs,
+    thermalDerating: 1.0,
+    thermalConstrained: false,
   };
 }
 
@@ -404,8 +483,17 @@ export interface EffectiveComputeResult {
     heat: number;               // Maximum compute allowed by heat rejection
     backhaul: number;           // Maximum compute allowed by backhaul (for now = rawCompute)
     autonomy: number;           // Maximum satellites sustainable by autonomy
+    spectrum: number;           // Maximum compute allowed by downlink capacity
   };
-  dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "NONE";
+  dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "SPECTRUM" | "NONE";
+  // Spectrum constraint data
+  spectrum?: {
+    downlinkCapacityTbps: number;
+    downlinkUsedTbps: number;
+    downlinkUtilizationPercent: number;
+    spectrumConstrained: boolean;
+    spectrumDerating: number;
+  };
 }
 
 /**
@@ -440,13 +528,32 @@ export function calculateConstrainedEffectiveCompute(
   const heatA = calculateHeatUtilizationCeiling("A", powerPerA, strategy, year);
   const heatB = calculateHeatUtilizationCeiling("B", powerPerB, strategy, year);
   
-  // Weighted average heat utilization
+  // Calculate heat generation and max rejection for thermal derating
+  const heatGenA = calculateHeatGeneration(powerPerA);
+  const heatGenB = calculateHeatGeneration(powerPerB);
+  const maxRejectionA = calculateMaxHeatRejection("A", powerPerA, strategy, year);
+  const maxRejectionB = calculateMaxHeatRejection("B", powerPerB, strategy, year);
+  
+  // CRITICAL FIX: Apply thermal constraint derating if utilization > 100%
+  // Per Anno feedback: "radiator_utilization_percent: 146.3% is physically impossible"
+  const thermalDeratingA = applyThermalConstraintDerating(
+    rawComputePFLOPs * (satelliteCountA / (satelliteCountA + satelliteCountB || 1)),
+    heatGenA * satelliteCountA,
+    maxRejectionA * satelliteCountA
+  );
+  const thermalDeratingB = applyThermalConstraintDerating(
+    rawComputePFLOPs * (satelliteCountB / (satelliteCountA + satelliteCountB || 1)),
+    heatGenB * satelliteCountB,
+    maxRejectionB * satelliteCountB
+  );
+  
+  // Weighted average heat utilization (capped at 100%)
   const totalSats = satelliteCountA + satelliteCountB;
   const heatUtilization = totalSats > 0
-    ? (satelliteCountA * heatA.utilizationMax + satelliteCountB * heatB.utilizationMax) / totalSats
+    ? Math.min(1.0, (satelliteCountA * heatA.utilizationMax + satelliteCountB * heatB.utilizationMax) / totalSats)
     : 1.0;
   
-  const heatLimited = heatA.heatLimited || heatB.heatLimited;
+  const heatLimited = heatA.heatLimited || heatB.heatLimited || thermalDeratingA.thermalConstrained || thermalDeratingB.thermalConstrained;
   
   // 3. Maintenance constraints
   const maintenanceConstraints = calculateMaintenanceConstraints(
@@ -469,10 +576,18 @@ export function calculateConstrainedEffectiveCompute(
     ? Math.min(1.0, rawComputePFLOPs / backhaul_compute_limit)
     : 1.0;
   
-  // 5. Calculate effective compute (thermal throttling already applied in thermal integration)
-  // For now, use the old method but this will be replaced by thermal integration
-  const effectiveCompute = rawComputePFLOPs *
-    heatUtilization *
+  // 5. Calculate effective compute with thermal derating applied
+  // CRITICAL FIX: Apply thermal derating if utilization > 100%
+  const computeAfterThermalDerating = (thermalDeratingA.deratedComputePFLOPs + thermalDeratingB.deratedComputePFLOPs);
+  
+  // 6. Apply spectrum/downlink constraint (NEW)
+  const spectrumResult = applySpectrumConstraint(
+    computeAfterThermalDerating,
+    year
+  );
+  
+  // Effective compute after all constraints: thermal → spectrum → backhaul → maintenance
+  const effectiveCompute = spectrumResult.exportableComputePFLOPs *
     backhaulUtilization *
     maintenanceConstraints.survivalFraction;
   
@@ -504,6 +619,9 @@ export function calculateConstrainedEffectiveCompute(
     maintenanceConstraints.recoverable / (maintenanceConstraints.failureRate || 0.001)
   );
   
+  // Spectrum ceiling: maximum compute allowed by downlink capacity
+  const spectrumCeiling = spectrumResult.exportableComputePFLOPs;
+  
   // Determine dominant constraint
   // The dominant constraint is the one that limits growth the most
   const constraintLimits = {
@@ -511,6 +629,7 @@ export function calculateConstrainedEffectiveCompute(
     HEAT: heatCeiling / (rawComputePFLOPs / (satelliteCountA + satelliteCountB || 1)), // Convert to satellite count
     BACKHAUL: backhaulCeiling / (rawComputePFLOPs / (satelliteCountA + satelliteCountB || 1)),
     AUTONOMY: autonomyCeiling,
+    SPECTRUM: spectrumCeiling / (rawComputePFLOPs / (satelliteCountA + satelliteCountB || 1)),
   };
   
   // Find the minimum (most limiting) constraint
@@ -518,10 +637,11 @@ export function calculateConstrainedEffectiveCompute(
     constraintLimits.LAUNCH,
     constraintLimits.HEAT,
     constraintLimits.BACKHAUL,
-    constraintLimits.AUTONOMY
+    constraintLimits.AUTONOMY,
+    constraintLimits.SPECTRUM
   );
   
-  let dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "NONE" = "NONE";
+  let dominantConstraint: "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "SPECTRUM" | "NONE" = "NONE";
   if (minConstraint === constraintLimits.LAUNCH) {
     dominantConstraint = "LAUNCH";
   } else if (minConstraint === constraintLimits.HEAT) {
@@ -530,6 +650,8 @@ export function calculateConstrainedEffectiveCompute(
     dominantConstraint = "BACKHAUL";
   } else if (minConstraint === constraintLimits.AUTONOMY) {
     dominantConstraint = "AUTONOMY";
+  } else if (minConstraint === constraintLimits.SPECTRUM) {
+    dominantConstraint = "SPECTRUM";
   }
   
   return {
@@ -552,8 +674,16 @@ export function calculateConstrainedEffectiveCompute(
       heat: heatCeiling,
       backhaul: backhaulCeiling,
       autonomy: autonomyCeiling,
+      spectrum: spectrumCeiling,
     },
     dominantConstraint,
+    spectrum: {
+      downlinkCapacityTbps: spectrumResult.downlinkCapacityTbps,
+      downlinkUsedTbps: spectrumResult.downlinkUsedTbps,
+      downlinkUtilizationPercent: spectrumResult.downlinkUtilizationPercent,
+      spectrumConstrained: spectrumResult.spectrumConstrained,
+      spectrumDerating: spectrumResult.spectrumDerating,
+    },
   };
 }
 

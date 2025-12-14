@@ -50,8 +50,9 @@ export default function PowerPerSatChart({
       .range([0, innerWidth]);
 
     const maxPower = d3.max(data, d => d.powerKw) ?? 1;
+    // REALITY CHECK: Change Y-axis max from 1.1 MW to 100 kW
     const yScale = d3.scaleLinear()
-      .domain([0, Math.max(maxPower * 1.1, 1000)])
+      .domain([0, Math.max(maxPower * 1.1, 100)]) // Changed from 1000 to 100 kW
       .range([innerHeight, 0])
       .nice();
 
@@ -106,12 +107,14 @@ export default function PowerPerSatChart({
       .style("fill", "#94a3b8")
       .text("Power per Satellite (kW)");
 
-    // Add 1MW target line
+    // REALITY CHECK: Add thermal constraint lines showing max feasible power
+    // Body-mounted: max 4 kW (20 m² × 0.2 kW/m² / 0.85 heat fraction)
+    const maxBodyMountedKw = 4;
     g.append("line")
       .attr("x1", 0)
       .attr("x2", innerWidth)
-      .attr("y1", yScale(1000))
-      .attr("y2", yScale(1000))
+      .attr("y1", yScale(maxBodyMountedKw))
+      .attr("y2", yScale(maxBodyMountedKw))
       .attr("stroke", "#10b981")
       .attr("stroke-width", 1.5)
       .attr("stroke-dasharray", "4,4")
@@ -119,11 +122,51 @@ export default function PowerPerSatChart({
 
     g.append("text")
       .attr("x", innerWidth - 5)
-      .attr("y", yScale(1000) - 5)
+      .attr("y", yScale(maxBodyMountedKw) - 5)
       .style("text-anchor", "end")
-      .style("font-size", "9px")
+      .style("font-size", isMobile ? "8px" : "9px")
       .style("fill", "#10b981")
-      .text("1 MW Target");
+      .text("Body-mounted max (4 kW)");
+
+    // Deployable: max 20 kW (100 m² × 0.2 kW/m² / 0.85 heat fraction)
+    const maxDeployableKw = 20;
+    g.append("line")
+      .attr("x1", 0)
+      .attr("x2", innerWidth)
+      .attr("y1", yScale(maxDeployableKw))
+      .attr("y2", yScale(maxDeployableKw))
+      .attr("stroke", "#f59e0b")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4,4")
+      .attr("opacity", 0.6);
+
+    g.append("text")
+      .attr("x", innerWidth - 5)
+      .attr("y", yScale(maxDeployableKw) - 5)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#f59e0b")
+      .text("Deployable max (20 kW)");
+
+    // Advanced deployable: max 50 kW (very ambitious)
+    const maxAdvancedKw = 50;
+    g.append("line")
+      .attr("x1", 0)
+      .attr("x2", innerWidth)
+      .attr("y1", yScale(maxAdvancedKw))
+      .attr("y2", yScale(maxAdvancedKw))
+      .attr("stroke", "#ef4444")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4,4")
+      .attr("opacity", 0.6);
+
+    g.append("text")
+      .attr("x", innerWidth - 5)
+      .attr("y", yScale(maxAdvancedKw) - 5)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#ef4444")
+      .text("Bleeding edge (50 kW)");
 
     // Line chart
     const line = d3.line<PowerPerSatPoint>()

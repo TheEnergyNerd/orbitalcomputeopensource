@@ -149,9 +149,10 @@ export default function CostCrossoverChart({
     g.append("path")
       .datum(data)
       .attr("fill", "none")
-      .attr("stroke", "#ff8c00")
-      .attr("stroke-width", 2)
-      .attr("stroke-dasharray", "5,5")
+      .attr("stroke", "#ff7070")
+      .attr("stroke-width", 2.5)
+      .attr("stroke-dasharray", "12,6")
+      .attr("stroke-opacity", 0.95)
       .attr("d", lineGround);
 
     // Add axes
@@ -204,7 +205,7 @@ export default function CostCrossoverChart({
 
     const legendData = [
       { label: "Orbit", color: "#00f0ff", dash: false },
-      { label: "Ground", color: "#ff8c00", dash: true },
+      { label: "Ground", color: "#ff7070", dash: true },
     ];
 
     legendData.forEach((item, i) => {
@@ -218,8 +219,9 @@ export default function CostCrossoverChart({
           .attr("y1", 6)
           .attr("y2", 6)
           .attr("stroke", item.color)
-          .attr("stroke-width", 2)
-          .attr("stroke-dasharray", "5,5");
+          .attr("stroke-width", 2.5)
+          .attr("stroke-dasharray", "12,6")
+          .attr("stroke-opacity", 0.95);
       } else {
         legendItem.append("line")
           .attr("x1", 0)

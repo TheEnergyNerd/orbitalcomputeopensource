@@ -661,64 +661,75 @@ interface PhysicsSandboxProps {
 
 // Calculate safe defaults based on year (accounting for improvement rate)
 const calculateSafeDefaults = (year: string) => {
-    const yearsFrom2024 = parseInt(year || '2033') - 2024;
-    const mooresLawMultiplier = Math.pow(2, yearsFrom2024 / 2.5); // 2.5 year doubling
-    const gflopsPerWatt = 3 * mooresLawMultiplier;
+    // Calculate thermally-safe defaults
+    // Start with a conservative bus power that's definitely thermally feasible
+    const yearNum = parseInt(year || '2033');
+    const hasDeployable = yearNum >= 2028;
+    const MAX_BODY_MOUNTED_M2 = 20;
+    const MAX_DEPLOYABLE_M2 = 100;
+    const maxRadiatorArea = hasDeployable ? MAX_DEPLOYABLE_M2 : MAX_BODY_MOUNTED_M2;
     
-    // Start with reasonable bus power
-    const busPowerKw = 250;
-    const computePerSat_TFLOPS = (busPowerKw * 1000 * gflopsPerWatt) / 1000;
-    
-    // Calculate required radiator area for thermal balance
-    // Heat generated = busPower * 0.85
-    // Heat rejected = emissivity * SB * (T^4 - T_sink^4) / 1000 * area
-    // We want heat rejected > heat generated with 20% margin
-    const emissivity = 0.90;
+    // Start with a very conservative bus power (much lower to avoid constraints)
+    const busPowerKw = 20; // Very conservative: 20kW (much lower to ensure no constraint violations)
+    const emissivity = 0.90; // High emissivity for better heat rejection
     const radiatorTempC = 25; // Slightly higher temp for better rejection
+    
+    // Calculate required radiator area for thermal balance with 20% margin
     const T_rad_K = radiatorTempC + 273.15;
     const heatGenPerSat_kW = busPowerKw * 0.85;
     const heatRejectionPerM2_kW = emissivity * STEFAN_BOLTZMANN * 
       (Math.pow(T_rad_K, 4) - Math.pow(T_SINK, 4)) / 1000;
     const requiredRadiatorArea = (heatGenPerSat_kW * 1.2) / heatRejectionPerM2_kW; // 20% margin
     
-    // Calculate required backhaul capacity
-    // Compute output = compute * BITS_PER_FLOP
-    const computeOutputPerSat_Gbps = computePerSat_TFLOPS * 1e12 * BITS_PER_FLOP / 1e9;
-    // We want backhaul capacity to be 1.2x compute output (20% headroom)
-    const requiredBackhaul_Gbps = computeOutputPerSat_Gbps * 1.2;
-    const linkCapacityGbps = 150; // Current tech
-    const requiredOpticalTerminals = Math.ceil(requiredBackhaul_Gbps / linkCapacityGbps);
+    // Cap at thermal limits
+    const safeRadiatorArea = Math.min(Math.ceil(requiredRadiatorArea), maxRadiatorArea);
+    
+    // If required area exceeds max, reduce bus power to fit
+    let finalBusPowerKw = busPowerKw;
+    if (requiredRadiatorArea > maxRadiatorArea) {
+      // Calculate max power that fits in available radiator area
+      const maxHeatRejection_kW = heatRejectionPerM2_kW * maxRadiatorArea;
+      const maxHeatGen_kW = maxHeatRejection_kW / 1.2; // 20% margin
+      finalBusPowerKw = maxHeatGen_kW / 0.85; // Convert back to bus power
+    }
+    
+    // Conservative backhaul defaults to avoid constraint violations
+    // Backhaul capacity scales with optical terminals and link capacity
+    // Use lower values to ensure we don't exceed backhaul capacity
+    const conservativeOpticalTerminals = 4; // Lower end (1-16 range)
+    const conservativeLinkCapacityGbps = 50; // Lower end (10-200 range)
     
     return {
       year: year,
-      radiatorAreaPerSat: Math.ceil(requiredRadiatorArea), // Round up for safety
+      // Thermally-safe defaults that pass all checks
+      radiatorAreaPerSat: safeRadiatorArea,
       emissivity: emissivity,
       radiatorTempC: radiatorTempC,
-      busPowerKw: busPowerKw,
-      mooresLawDoublingYears: 2.5,
-      opticalTerminals: Math.max(requiredOpticalTerminals, 4), // At least 4 terminals
-      linkCapacityGbps: linkCapacityGbps,
-      groundStations: 80,
-      fleetSize: 5000,
-      failureRatePercent: 2.5,      // Conservative failure rate
-      servicerDrones: 60,           // Plenty of repair capacity
-      launchesPerYear: 36,
-      satsPerLaunch: 50,
-      launchCostPerKg: 200, // Match baseline scenario: base_cost_per_kg_to_leo = 200 for baseline
+      busPowerKw: finalBusPowerKw,
+      mooresLawDoublingYears: 3.25, // Middle of 1.5-5 range
+      opticalTerminals: conservativeOpticalTerminals, // Conservative: 4 (lower end)
+      linkCapacityGbps: conservativeLinkCapacityGbps, // Conservative: 50 Gbps (lower end)
+      groundStations: 100, // Middle of 20-150 range (slightly higher for better backhaul)
+      fleetSize: 5500, // Middle of 1000-10000 range
+      failureRatePercent: 5.25, // Middle of 0.5-10 range
+      servicerDrones: 50, // Middle of 0-100 range
+      launchesPerYear: 29, // Middle of 6-52 range
+      satsPerLaunch: 55, // Middle of 10-100 range
+      launchCostPerKg: 260, // Middle of 20-500 range
       launchCostImprovementRate: 0.08, // Match baseline: launchCostDeclinePerYear = 0.92 means 8% decline per year
-      satelliteBaseCost: 180000,
+      satelliteBaseCost: 275000, // Middle of 50k-500k range (275k)
       // Compute / Silicon
-      processNode: 5,               // 5nm - good balance of efficiency and maturity
-      chipTdp: 300,                 // 300W per chip
-      radiationHardening: 1,        // 0=soft, 1=standard, 2=full
-      memoryPerNode: 128,           // 128GB HBM per satellite
+      processNode: 8, // Middle of 3-14 range (rounded to integer)
+      chipTdp: 300, // Middle of 100-500 range
+      radiationHardening: 1, // Middle of 0-2 range
+      memoryPerNode: 256, // Middle of 64-512 range (standard memory size)
       // Power / Solar
-      solarEfficiency: 32,          // 32% triple-junction cells
-      degradationRate: 1.5,         // 1.5% per year
-      batteryBuffer: 45,            // 45 min battery (covers 35 min eclipse + margin)
-      powerMargin: 20,              // 20% power headroom
-      batteryDensity: 300,          // 300 Wh/kg (solid state)
-      batteryCost: 120,             // $120/kWh
+      solarEfficiency: 35, // Middle of 25-45 range
+      degradationRate: 1.75, // Middle of 0.5-3 range
+      batteryBuffer: 40, // Increased to pass eclipse check (needs >= 35)
+      powerMargin: 25, // Increased to pass eclipse check (needs >= 25)
+      batteryDensity: 275, // Middle of 150-400 range
+      batteryCost: 175, // Middle of 50-300 range
     };
 };
 
@@ -1110,7 +1121,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             label="Bus Power"
             value={params.busPowerKw}
             onChange={(v) => updateParam('busPowerKw', v)}
-            min={50} max={500} unit=" kW"
+            min={20} max={500} unit=" kW"
             disabled={hasSimulationStarted}
           />
           

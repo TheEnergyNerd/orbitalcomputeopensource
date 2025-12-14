@@ -22,6 +22,11 @@ import {
   buildPhysicsVsGroundSeries,
 } from "../lib/orbitSim/selectors/orbitalPhysics";
 import { buildRadiatorComputeSeries } from "../lib/orbitSim/selectors/physics";
+import {
+  buildThermalConstraintSeries,
+  buildRadiationDegradationSeries,
+  buildCostRealityWaterfallSeries,
+} from "../lib/orbitSim/selectors/newCharts";
 import { SCENARIOS } from "../lib/orbitSim/scenarioParams";
 import { getEfficiencyCurveData } from "../lib/orbitSim/computeEfficiency";
 
@@ -451,6 +456,10 @@ export default function DebugExportPanel() {
       networking: buildNetworkingSeries(physicsDebugYears),
       bottlenecks: buildBottleneckSeries(physicsDebugYears),
       physicsVsGround: buildPhysicsVsGroundSeries(physicsDebugYears),
+      // NEW: Add new chart series
+      thermalConstraint: buildThermalConstraintSeries(config.scenarioMode),
+      radiationDegradation: buildRadiationDegradationSeries(config.scenarioMode),
+      costRealityWaterfall: buildCostRealityWaterfallSeries(config.scenarioMode),
     };
 
     // Add algorithms and configuration

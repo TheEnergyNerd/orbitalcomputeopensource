@@ -104,7 +104,7 @@ const MIN_TEMP_CORE_C = MIN_TEMP_SPACE_C + 1; // Space floor + 1°C margin
  * Step physics forward one year
  * NO FORCED EQUILIBRIUM - Physics determines actual behavior
  */
-export function stepPhysics(state: PhysicsState, satellite_count: number = 1, scenarioMode?: string): PhysicsOutput {
+export function stepPhysics(state: PhysicsState, satellite_count: number = 1, scenarioMode?: string, year?: number): PhysicsOutput {
   // RULE 2: TRUE THERMAL INERTIA (scaled to fleet size)
   // CRITICAL FIX: Thermal mass should be realistic for satellite mass, not space station level
   // Per audit: Thermal mass was 100 MJ/°C (space station) but should be ~15 kJ/°C for 15 kg satellite
@@ -242,11 +242,21 @@ export function stepPhysics(state: PhysicsState, satellite_count: number = 1, sc
 
   // 5) TRUE RADIATOR UTILIZATION (FIXED: use heatGen_kw / thermalCapacityKw)
   // CRITICAL FIX: Utilization = heat generation / thermal capacity, not power / capacity
-  const radiator_utilization = computeRadiatorUtilization(
+  const raw_radiator_utilization = computeRadiatorUtilization(
     radiatorArea_m2,
     state.radiator_kw_per_m2,
     heatGen_kw // FIXED: Use heat generation, not total power
   );
+  
+  // CRITICAL FIX: If utilization > 100%, we MUST derate compute
+  // Calculate derating factor BEFORE capping utilization for display
+  let thermalDeratingFactor = 1.0;
+  if (raw_radiator_utilization > 100) {
+    thermalDeratingFactor = 100 / raw_radiator_utilization; // e.g., 146% → 68% derating
+  }
+  
+  // Cap utilization at 100% for display (physically impossible to exceed)
+  const radiator_utilization = Math.min(100, raw_radiator_utilization);
   
   // 6) SAFE MODE: HARD SAFE BOUNDS (apply clamps AFTER equilibrium calculation)
   if (isSafeMode) {
@@ -436,16 +446,29 @@ export function stepPhysics(state: PhysicsState, satellite_count: number = 1, sc
   const backhaulLimitedFlops = state.backhaul_capacity_tbps * FLOPS_PER_TBPS;
   
   // 11) EFFECTIVE COMPUTE = MIN(thermal-limited, backhaul-limited, raw)
-  // CRITICAL FIX: Ensure effective <= raw (logical constraint)
-  const compute_exportable_flops = Math.min(
-    compute_raw_flops, // CRITICAL: Raw compute is the absolute maximum
+  // CRITICAL FIX: Apply thermal derating if utilization > 100%
+  // This ensures compute is actually reduced when thermal is exceeded
+  let thermalDeratedCompute = compute_raw_flops;
+  if (raw_radiator_utilization > 100) {
+    thermalDeratedCompute = compute_raw_flops * thermalDeratingFactor;
+    console.log(`[THERMAL HARD CAP] Year ${year || 'unknown'}: Utilization ${raw_radiator_utilization.toFixed(1)}% → Derating compute by ${((1-thermalDeratingFactor)*100).toFixed(1)}%`);
+  }
+  
+  // Apply thermal derating to thermal-limited compute
+  const thermalLimitedComputeFlopsDeratedWithCap = Math.min(
     thermalLimitedComputeFlopsDerated,
+    thermalDeratedCompute
+  );
+  
+  const compute_exportable_flops = Math.min(
+    thermalDeratedCompute, // CRITICAL: Use thermally derated compute
+    thermalLimitedComputeFlopsDeratedWithCap,
     backhaulLimitedFlops
   );
 
   // RULE 4: EFFECTIVE COMPUTE IS THERMAL + BACKHAUL LIMITED, BUT NEVER EXCEEDS RAW
   // CRITICAL FIX: Enforce compute_effective_flops <= compute_raw_flops
-  const compute_effective_flops = Math.min(compute_exportable_flops, compute_raw_flops);
+  const compute_effective_flops = Math.min(compute_exportable_flops, thermalDeratedCompute);
   const sustained_compute_flops = compute_effective_flops;
   
   // CRITICAL FIX: If effective << raw, scale down power (idle silicon uses less power)

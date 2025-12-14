@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { getDebugState, getConstraintTimeline, exportDebugData } from "../../lib/orbitSim/debugState";
-import AutoDesignSafetyControls from "./AutoDesignSafetyControls";
-import type { RiskMode } from "../../lib/orbitSim/thermalIntegration";
+import { getDebugState, getConstraintTimeline, scenarioModeToKey, getDebugStateEntry, type DebugStateEntry } from "../../lib/orbitSim/debugState";
+import { useSimulationStore } from "../../store/simulationStore";
 import CeilingStackChart from "./CeilingStackChart";
 import FailureReplacementChart from "./FailureReplacementChart";
 import ThermalUtilizationGauge from "./ThermalUtilizationGauge";
@@ -17,21 +16,45 @@ import PowerStrandedChart from "./PowerStrandedChart";
 import ThermalRejectionMargin from "./ThermalRejectionMargin";
 import RadiatorScalingChart from "./RadiatorScalingChart";
 
+
 export default function ConstraintsRiskView() {
   const pathname = usePathname();
-  const [debugState, setDebugState] = useState(getDebugState());
+  const { config } = useSimulationStore();
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [showGraphOverlay, setShowGraphOverlay] = useState(false);
-  const [autoDesignMode, setAutoDesignMode] = useState(true);
-  const [riskMode, setRiskMode] = useState<RiskMode>("SAFE");
   
-  // Refresh debug state periodically
+  // Get scenario-specific debug state (flat structure for charts)
+  const debugState = useMemo(() => {
+    const fullDebugState = getDebugState();
+    const scenarioKey = scenarioModeToKey(config.scenarioMode);
+    const perYear = fullDebugState.perScenario[scenarioKey] || {};
+    
+    // Convert perScenario structure to flat structure for backward compatibility with charts
+    // Charts access debugState[year] directly, so we create a flat structure
+    const flatState: any = {
+      perScenario: fullDebugState.perScenario, // Keep for type compatibility
+      errors: fullDebugState.errors || [],
+    };
+    
+    // Add all years from the scenario as flat keys
+    Object.keys(perYear).forEach(yearStr => {
+      const year = Number(yearStr);
+      if (!isNaN(year)) {
+        flatState[year] = perYear[year];
+      }
+    });
+    
+    return flatState;
+  }, [config.scenarioMode]);
+  
+  // Refresh debug state periodically and when timeline changes
+  const { timeline } = useSimulationStore();
   useEffect(() => {
     const interval = setInterval(() => {
-      setDebugState(getDebugState());
+      // Force re-computation of debugState
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [config.scenarioMode, timeline.length]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -55,24 +78,11 @@ export default function ConstraintsRiskView() {
     .sort((a, b) => a - b);
   
   const currentYear = years[years.length - 1] || 2025;
-  const currentStateRaw = debugState[currentYear];
-  // Type guard: ensure it's a DebugStateEntry
-  const currentState = (currentStateRaw && 
-    typeof currentStateRaw === 'object' && 
-    'year' in currentStateRaw && 
-    typeof currentStateRaw.year === 'number'
-  ) ? currentStateRaw : undefined;
+  const currentState = getDebugStateEntry(currentYear, config.scenarioMode);
   
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 pt-24 sm:pt-28">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Auto-Design Safety Controls */}
-        <AutoDesignSafetyControls
-          autoDesignMode={autoDesignMode}
-          riskMode={riskMode}
-          onAutoDesignModeChange={setAutoDesignMode}
-          onRiskModeChange={setRiskMode}
-        />
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -81,9 +91,8 @@ export default function ConstraintsRiskView() {
               Structural limits on orbital compute growth
             </p>
           </div>
-          {/* Debug buttons hidden - only show on /data route */}
           {pathname === '/data' && (
-            <div className="flex gap-2 pointer-events-auto z-50 relative">
+            <div className="flex gap-2 pointer-events-auto z-50 relative flex-wrap items-center">
               <button
                 onClick={(e) => {
                   e.preventDefault();
@@ -123,7 +132,7 @@ export default function ConstraintsRiskView() {
               </span>
             </div>
             <div className="text-red-200 text-sm space-y-1 max-h-32 overflow-y-auto">
-              {debugState.errors.slice(0, 5).map((error, idx) => (
+              {debugState.errors.slice(0, 5).map((error: { year: number; error: string }, idx: number) => (
                 <div key={idx}>
                   Year {error.year}: {error.error}
                 </div>

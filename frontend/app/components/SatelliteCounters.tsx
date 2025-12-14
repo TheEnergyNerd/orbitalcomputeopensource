@@ -5,17 +5,23 @@ import { useSimStore } from "../store/simStore";
 import { useSimulationStore } from "../store/simulationStore";
 import { getDebugStateEntry, scenarioModeToKey } from "../lib/orbitSim/debugState";
 import { getClassAPower, getClassBPower, getClassACompute, getClassBCompute } from "../lib/orbitSim/satelliteClasses";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 /**
  * Mandatory numeric counters that must always be visible
  * Even when rendering all satellites, human eyes cannot estimate density accurately
  */
 export function SatelliteCounters() {
+  // CRITICAL FIX: All hooks must be called before any conditional returns
+  const [mounted, setMounted] = useState(false);
   const satellites = useOrbitSim((s) => s.satellites);
   const routes = useOrbitSim((s) => s.routes);
   const simState = useSimStore((s) => s.state);
   const { config, timeline } = useSimulationStore();
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Calculate render percentage (from SatellitesOptimized logic)
   const renderInfo = useMemo(() => {
@@ -189,7 +195,35 @@ export function SatelliteCounters() {
       activeRoutes,
       satellitesPerShell,
     };
-  }, [satellites, routes]);
+  }, [satellites, routes, timeline, config]);
+  
+  // Don't render until mounted to prevent hydration mismatch
+  // Show placeholder with "0" to match initial client state
+  if (!mounted) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 panel-glass rounded-lg p-4 shadow-xl border border-white/10 min-w-[280px]">
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase">Orbital System Status</h3>
+        <div className="space-y-2 text-xs">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Total Satellites:</span>
+            <span className="text-white font-mono font-semibold">0</span>
+          </div>
+          <div className="flex justify-between items-center pl-2 border-l-2 border-cyan-500/30">
+            <span className="text-gray-400 text-[10px]">LEO:</span>
+            <span className="text-cyan-400 font-mono">0</span>
+          </div>
+          <div className="flex justify-between items-center pl-2 border-l-2 border-green-500/30">
+            <span className="text-gray-400 text-[10px]">MEO:</span>
+            <span className="text-green-400 font-mono">0</span>
+          </div>
+          <div className="flex justify-between items-center pl-2 border-l-2 border-purple-500/30">
+            <span className="text-gray-400 text-[10px]">GEO:</span>
+            <span className="text-purple-400 font-mono">0</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="fixed bottom-4 right-4 z-50 panel-glass rounded-lg p-4 shadow-xl border border-white/10 min-w-[280px]">

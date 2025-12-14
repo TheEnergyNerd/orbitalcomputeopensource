@@ -25,11 +25,14 @@ import DualClassStackChart from "./DualClassStackChart";
 import { getStrategyByYear } from "./SimpleModeView";
 import MassEfficiencyWaterfall from "./MassEfficiencyWaterfall";
 import MooresLawOfMass from "./MooresLawOfMass";
-import { ExportAllChartsButton } from "./ChartExportButton";
 import ShellUtilizationChart from "./ShellUtilizationChart";
 import OrbitalPowerChart from "./OrbitalPowerChart";
 import PowerPerSatChart from "./PowerPerSatChart";
 import BatteryTechChart from "./BatteryTechChart";
+import ThermalConstraintEnvelopeChart from "./ThermalConstraintEnvelopeChart";
+import RadiationDegradationChart from "./RadiationDegradationChart";
+import CostRealityWaterfallChart from "./CostRealityWaterfallChart";
+import LaunchConstraintTimelineChart from "./LaunchConstraintTimelineChart";
 
 /**
  * Physics & Limits View
@@ -65,9 +68,6 @@ export default function PhysicsEngineeringView() {
         <div>
           <h1 className="text-lg sm:text-xl font-bold text-white mb-2">Physics & Limits</h1>
           <p className="text-xs sm:text-sm text-slate-400">What does the actual physics look like?</p>
-        </div>
-        <div className="flex-shrink-0">
-          <ExportAllChartsButton />
         </div>
       </div>
 
@@ -295,6 +295,56 @@ export default function PhysicsEngineeringView() {
         </div>
       </div>
 
+      {/* NEW: Thermal Constraint Envelope Chart */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="thermal-constraint-envelope">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Thermal Constraint Envelope
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Power vs Radiator Area with feasibility zones. Shows why power is limited by thermal constraints.
+        </div>
+        <div className="h-[400px] sm:h-[500px] w-full">
+          <ThermalConstraintEnvelopeChart
+            currentYear={highlightedYear || timeline[timeline.length - 1].year}
+            scenarioMode={config.scenarioMode}
+            currentPowerKw={powerPerSatData[powerPerSatData.length - 1]?.powerKw}
+            currentRadiatorAreaM2={radiatorData[radiatorData.length - 1]?.radiatorAreaM2}
+          />
+        </div>
+      </div>
+
+      {/* NEW: Radiation Degradation Over Time Chart */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="radiation-degradation">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Radiation Degradation Over Time
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Shows how compute performance degrades due to radiation exposure (ECC overhead + degradation). LEO/MEO/GEO comparison.
+        </div>
+        <div className="h-[400px] sm:h-[500px] w-full">
+          <RadiationDegradationChart
+            currentYear={highlightedYear || timeline[timeline.length - 1].year}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
+      {/* NEW: Cost Reality Waterfall Chart */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="cost-reality-waterfall">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Cost Reality Waterfall
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Shows how realistic constraints add costs: radiation shielding, thermal systems, replacement rate, ECC overhead, redundancy.
+        </div>
+        <div className="h-[400px] sm:h-[500px] w-full">
+          <CostRealityWaterfallChart
+            currentYear={highlightedYear || timeline[timeline.length - 1].year}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
       {/* D. Moore's Law of Mass (TFLOPS per kg) */}
       <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="moores-law-mass">
         <div className="text-xs font-semibold text-slate-100 mb-1">
@@ -305,6 +355,22 @@ export default function PhysicsEngineeringView() {
         </div>
         <div className="h-[300px] sm:h-[500px] w-full">
           <MooresLawOfMass scenarioMode={config.scenarioMode} />
+        </div>
+      </div>
+
+      {/* NEW: Launch Constraint Timeline Chart */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="launch-constraint-timeline">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Launch Constraint Timeline
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Shows deployment rate limited by launch capacity. Desired vs Launch-constrained vs Starship era acceleration.
+        </div>
+        <div className="h-[400px] sm:h-[500px] w-full">
+          <LaunchConstraintTimelineChart
+            currentYear={highlightedYear || timeline[timeline.length - 1].year}
+            scenarioMode={config.scenarioMode}
+          />
         </div>
       </div>
     </div>

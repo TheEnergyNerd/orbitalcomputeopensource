@@ -5,7 +5,7 @@
  * Used for debugging, validation, and export.
  */
 
-export type DominantConstraint = "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "NONE";
+export type DominantConstraint = "LAUNCH" | "HEAT" | "BACKHAUL" | "AUTONOMY" | "SPECTRUM" | "NONE";
 export type StrategyMode = "COST" | "LATENCY" | "CARBON" | "BALANCED";
 
 export interface DebugStateEntry {
@@ -17,6 +17,7 @@ export interface DebugStateEntry {
   heatCeiling: number;
   backhaulCeiling: number;
   autonomyCeiling: number;
+  spectrumCeiling?: number; // Maximum compute allowed by downlink capacity
   
   // Actual deployed
   satellitesAdded: number;
@@ -89,6 +90,12 @@ export interface DebugStateEntry {
   backhaul_bandwidth_used: number; // Gbps
   backhaul_bw_per_PFLOP: number; // Gbps per PFLOP
   // REMOVED: utilization_backhaul_raw (fake utilization field)
+  
+  // --- Spectrum/Downlink Reality ---
+  downlink_capacity_tbps?: number; // Total downlink capacity (Tbps)
+  downlink_used_tbps?: number; // Used downlink bandwidth (Tbps)
+  downlink_utilization_percent?: number; // Downlink utilization (0-100%)
+  spectrum_constrained?: boolean; // Whether spectrum is the limiting constraint
   
   // --- Autonomy & Maintenance Reality ---
   maintenance_debt: number; // cumulative unrecovered failures

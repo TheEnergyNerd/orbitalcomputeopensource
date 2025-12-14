@@ -9,9 +9,9 @@ import { ChartTooltip } from "./ChartTooltip";
 
 interface KpiCardProps {
   title: string;
-  timeline: YearStep[];
-  groundKey: "costPerComputeGround" | "latencyGroundMs" | "opexGround" | "carbonGround" | "opexGroundBaseline" | "carbonGroundBaseline";
-  mixKey: "costPerComputeMix" | "latencyMixMs" | "opexMix" | "carbonMix";
+  timeline: (YearStep & { computePerDollarGround?: number; computePerDollarMix?: number })[];
+  groundKey: "costPerComputeGround" | "latencyGroundMs" | "opexGround" | "carbonGround" | "opexGroundBaseline" | "carbonGroundBaseline" | "computePerDollarGround";
+  mixKey: "costPerComputeMix" | "latencyMixMs" | "opexMix" | "carbonMix" | "computePerDollarMix";
   unitsFormatter: (v: number) => string;
   isLowerBetter?: boolean;
   showBothCurves?: boolean; // For OPEX and Carbon: show both ground and mix curves
@@ -44,6 +44,7 @@ export default function KpiCard({
   const [crossoverGlow, setCrossoverGlow] = useState(0); // 0-1 glow intensity
   const [crossoverPulse, setCrossoverPulse] = useState(0); // 0-1 pulse intensity (for dot)
   const [hasPulsed, setHasPulsed] = useState(false); // Track if we've already pulsed
+  const [hoverState, setHoverState] = useState<{ x: number; year: number; groundValue: number; mixValue: number } | null>(null);
   // Responsive chart dimensions - use container dimensions properly
   const [dimensions, setDimensions] = useState(() => {
     if (typeof window === 'undefined') return { width: 200, height: 100, isMobile: false };
@@ -93,8 +94,8 @@ export default function KpiCard({
   const crossoverYear = useMemo(() => {
     if (title === "Cost / Compute" || title === "Annual OPEX") {
       // CRITICAL FIX: mixKey is orbital/mix costs, groundKey is ground costs
-      const orbitalCosts = timeline.map(s => ({ year: s.year, cost: s[mixKey] as number }));
-      const groundCosts = timeline.map(s => ({ year: s.year, cost: s[groundKey] as number }));
+      const orbitalCosts = timeline.map(s => ({ year: s.year, cost: (s as any)[mixKey] as number }));
+      const groundCosts = timeline.map(s => ({ year: s.year, cost: (s as any)[groundKey] as number }));
       const result = calculateCostCrossover(orbitalCosts, groundCosts);
       return result.crossover_year;
     } else if (title === "Carbon") {
@@ -192,8 +193,8 @@ export default function KpiCard({
   const chartData = useMemo(() => {
     return timeline.map(step => ({
       year: step.year,
-      groundValue: step[groundKey] as number,
-      mixValue: step[mixKey] as number,
+      groundValue: (step as any)[groundKey] as number,
+      mixValue: (step as any)[mixKey] as number,
     }));
   }, [timeline, groundKey, mixKey]);
 
@@ -313,10 +314,10 @@ export default function KpiCard({
       ctx.fill();
     }
 
-    // Draw ground line (red) - dashed, thinner, less prominent
-    ctx.strokeStyle = groundColor;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]); // Dashed line
+    // Draw ground line (red) - brighter, thicker, longer dashes for visibility
+    ctx.strokeStyle = "#ff7070"; // Brighter coral red for better visibility
+    ctx.lineWidth = 2.5; // Thicker line
+    ctx.setLineDash([12, 6]); // Longer dashes, shorter gaps
     ctx.beginPath();
     chartData.forEach((d, idx) => {
       const x = chartPadding.left + (plotWidth / (chartData.length - 1)) * idx;
@@ -379,6 +380,46 @@ export default function KpiCard({
     });
     ctx.stroke();
     ctx.shadowBlur = 0; // Reset shadow
+
+    // Draw hover indicator (vertical line and dots) if hovering
+    if (hoverState) {
+      const hoverIndex = chartData.findIndex(d => d.year === hoverState.year);
+      if (hoverIndex >= 0) {
+        const x = chartPadding.left + (plotWidth / (chartData.length - 1)) * hoverIndex;
+        
+        // Vertical line
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, chartPadding.top);
+        ctx.lineTo(x, chartPadding.top + plotHeight);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Ground dot
+        const normalizedGround = (hoverState.groundValue - yMin) / range;
+        const yGround = chartPadding.top + plotHeight - (normalizedGround * plotHeight);
+        ctx.fillStyle = "#ff7070";
+        ctx.beginPath();
+        ctx.arc(x, yGround, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Mix dot
+        const normalizedMix = (hoverState.mixValue - yMin) / range;
+        const yMix = chartPadding.top + plotHeight - (normalizedMix * plotHeight);
+        ctx.fillStyle = mixColor;
+        ctx.beginPath();
+        ctx.arc(x, yMix, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
 
     // Draw crossover annotation line (vertical line at crossover year)
     if (crossoverYear && title === "Cost / Compute") {
@@ -480,7 +521,7 @@ export default function KpiCard({
         ctx.setLineDash([]);
       }
     }
-  }, [timeline, groundKey, mixKey, groundColor, mixColor, chartData, forecastBands, forecastKey, isCrossoverActive, crossoverGlow, crossoverYear, crossoverPulse, title]);
+  }, [timeline, groundKey, mixKey, groundColor, mixColor, chartData, forecastBands, forecastKey, isCrossoverActive, crossoverGlow, crossoverYear, crossoverPulse, title, hoverState, chartWidth, chartHeight]);
 
   if (!timeline || timeline.length === 0) return null;
 
@@ -490,18 +531,27 @@ export default function KpiCard({
   const mixValueDisplay = mixValue ?? 0;
   const savings = savingsKey && lastStep ? (lastStep[savingsKey] as number) : null;
 
-  // Chart tooltip helper
+  // Chart tooltip helper - use actual chart padding from useEffect
   const getValueAtPosition = (x: number, y: number) => {
     if (!canvasRef.current || !chartData || chartData.length === 0) return null;
-    const chartPadding = { top: 8, right: 16, bottom: 24, left: 10 };
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const chartPadding = { 
+      top: 12, 
+      right: 20, 
+      bottom: isMobile ? 28 : 35,
+      left: 40 
+    };
     const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
-    const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
     
-    const index = Math.round(((x - chartPadding.left) / plotWidth) * (chartData.length - 1));
-    if (index >= 0 && index < chartData.length) {
+    // Clamp x to valid range
+    const clampedX = Math.max(chartPadding.left, Math.min(chartWidth - chartPadding.right, x));
+    const index = Math.round(((clampedX - chartPadding.left) / plotWidth) * (chartData.length - 1));
+    const clampedIndex = Math.max(0, Math.min(chartData.length - 1, index));
+    
+    if (clampedIndex >= 0 && clampedIndex < chartData.length) {
       return {
-        year: chartData[index].year,
-        value: chartData[index].mixValue
+        year: chartData[clampedIndex].year,
+        value: chartData[clampedIndex].mixValue
       };
     }
     return null;
@@ -539,7 +589,21 @@ export default function KpiCard({
         <ChartTooltip 
           canvasRef={canvasRef} 
           data={chartData.map(d => ({ year: d.year, value: d.mixValue }))} 
-          getValueAtPosition={getValueAtPosition} 
+          groundData={chartData.map(d => ({ year: d.year, value: d.groundValue }))}
+          getValueAtPosition={getValueAtPosition}
+          unitsFormatter={unitsFormatter}
+          onHoverChange={(state) => {
+            if (state) {
+              setHoverState({
+                x: state.x,
+                year: state.year,
+                groundValue: state.groundValue,
+                mixValue: state.mixValue
+              });
+            } else {
+              setHoverState(null);
+            }
+          }}
         />
       </div>
       <div className="flex justify-between items-center mb-1 text-[10px]">

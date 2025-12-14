@@ -1,8 +1,10 @@
 /**
  * Power → Compute Scaling Curve (Authoritative Model)
- * Efficiency(t) = 12.5 W/TFLOP × 0.85^((t - 2025)/2)
- * ~15% efficiency gain every 2 years
+ * UPDATED: Now uses plateau model for thermal efficiency
+ * Thermal efficiency improves but plateaus due to physics limits
  */
+
+import { getThermalWastePerTFLOP } from './mooresLawPlateau';
 
 export interface ComputeEfficiencyCurve {
   year: number;
@@ -11,17 +13,17 @@ export interface ComputeEfficiencyCurve {
 }
 
 const BASE_EFFICIENCY_W_PER_TFLOP = 12.5; // 2025 baseline
-const EFFICIENCY_DECAY_RATE = 0.85; // 15% improvement every 2 years
 const BASE_YEAR = 2025;
 
 /**
  * Calculate efficiency at a given year
- * Efficiency(t) = 12.5 W/TFLOP × 0.85^((t - 2025)/2)
+ * UPDATED: Uses plateau model instead of unbounded exponential
+ * Efficiency plateaus as we approach physics limits
  */
 export function getEfficiencyAtYear(year: number): number {
-  const yearsSinceBase = year - BASE_YEAR;
-  const wattsPerTflop = BASE_EFFICIENCY_W_PER_TFLOP * Math.pow(EFFICIENCY_DECAY_RATE, yearsSinceBase / 2);
-  return wattsPerTflop;
+  // Use thermal efficiency plateau model
+  // This accounts for physics limits (Carnot limit, material limits)
+  return getThermalWastePerTFLOP(year) * 2; // Convert to W/TFLOP (thermal waste is ~50% of total power)
 }
 
 /**

@@ -15,16 +15,23 @@ const Sparkline = ({
   groundData, 
   mixData, 
   groundColor = '#ef4444', 
-  mixColor = '#10b981' 
+  mixColor = '#10b981',
+  years,
+  onHover,
+  formatFn
 }: { 
   groundData: number[]; 
   mixData: number[]; 
   groundColor?: string; 
   mixColor?: string;
+  years?: number[];
+  onHover?: (hoverState: { year: number; groundValue: number; mixValue: number; x: number; y: number; formatFn?: (v: number) => string } | null) => void;
+  formatFn?: (v: number) => string;
 }) => {
   const height = 80;  // Taller for better visibility
   const width = 280;
   const padding = 8;
+  const [hoverState, setHoverState] = useState<{ index: number; x: number; y: number } | null>(null);
   
   // Filter valid values
   const validGround = groundData.filter(v => v != null && !isNaN(v) && isFinite(v));
@@ -72,18 +79,69 @@ const Sparkline = ({
   const groundPath = toPath(groundData);
   const mixPath = toPath(mixData);
 
+  // Handle mouse move
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Convert x to data index
+    const plotWidth = width - padding * 2;
+    const relativeX = x - padding;
+    const index = Math.round((relativeX / plotWidth) * (groundData.length - 1));
+    const clampedIndex = Math.max(0, Math.min(groundData.length - 1, index));
+    
+    if (clampedIndex >= 0 && clampedIndex < groundData.length) {
+      const groundValue = groundData[clampedIndex];
+      const mixValue = mixData[clampedIndex];
+      const year = years?.[clampedIndex] ?? clampedIndex + 2025;
+      
+      setHoverState({ index: clampedIndex, x: e.clientX, y: e.clientY });
+      
+      if (onHover && !isNaN(groundValue) && !isNaN(mixValue)) {
+        onHover({
+          year,
+          groundValue,
+          mixValue,
+          x: e.clientX,
+          y: e.clientY,
+          formatFn
+        });
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoverState(null);
+    if (onHover) {
+      onHover(null);
+    }
+  };
+
+  // Calculate hover position for visual indicator
+  const hoverX = hoverState ? padding + (hoverState.index / Math.max(1, groundData.length - 1)) * (width - padding * 2) : null;
+  const hoverGroundValue = hoverState !== null ? groundData[hoverState.index] : null;
+  const hoverMixValue = hoverState !== null ? mixData[hoverState.index] : null;
+
   return (
-    <svg width={width} height={height} style={{ display: 'block' }}>
-      {/* Ground line - dashed red */}
+    <svg 
+      width={width} 
+      height={height} 
+      style={{ display: 'block', cursor: 'crosshair' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Ground line - dashed red, brighter and thicker for visibility */}
       {groundPath && (
         <path
           d={groundPath}
           fill="none"
-          stroke={groundColor}
-          strokeWidth="2"
-          strokeDasharray="6 4"
+          stroke="#ff7070"
+          strokeWidth="2.5"
+          strokeDasharray="12 6"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeOpacity="0.95"
         />
       )}
       {/* Mix line - solid green (drawn on top) */}
@@ -96,6 +154,43 @@ const Sparkline = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+      )}
+      
+      {/* Hover indicator - vertical line and dots */}
+      {hoverX !== null && hoverGroundValue !== null && hoverMixValue !== null && 
+       !isNaN(hoverGroundValue) && !isNaN(hoverMixValue) && isFinite(hoverGroundValue) && isFinite(hoverMixValue) && (
+        <>
+          {/* Vertical line */}
+          <line
+            x1={hoverX}
+            y1={padding}
+            x2={hoverX}
+            y2={height - padding}
+            stroke="rgba(255, 255, 255, 0.3)"
+            strokeWidth="1"
+            strokeDasharray="4,4"
+          />
+          
+          {/* Ground dot */}
+          <circle
+            cx={hoverX}
+            cy={height - padding - ((hoverGroundValue - min) / range) * (height - padding * 2)}
+            r="4"
+            fill="#ff7070"
+            stroke="#fff"
+            strokeWidth="1.5"
+          />
+          
+          {/* Mix dot */}
+          <circle
+            cx={hoverX}
+            cy={height - padding - ((hoverMixValue - min) / range) * (height - padding * 2)}
+            r="4"
+            fill={mixColor}
+            stroke="#fff"
+            strokeWidth="1.5"
+          />
+        </>
       )}
     </svg>
   );
@@ -110,7 +205,10 @@ const MetricCard = ({
   sparkMix, 
   savings, 
   unit = '',
-  tooltip
+  tooltip,
+  years,
+  onHover,
+  formatFn
 }: {
   title: string;
   groundValue: string; 
@@ -120,6 +218,9 @@ const MetricCard = ({
   savings: number; 
   unit?: string;
   tooltip?: string;
+  years?: number[];
+  onHover?: (hoverState: { year: number; groundValue: number; mixValue: number; x: number; y: number; formatFn?: (v: number) => string } | null) => void;
+  formatFn?: (v: number) => string;
 }) => {
   const savingsPositive = savings > 0;
   
@@ -161,7 +262,13 @@ const MetricCard = ({
       
       {/* Sparkline */}
       <div style={{ marginBottom: '16px' }}>
-        <Sparkline groundData={sparkGround} mixData={sparkMix} />
+        <Sparkline 
+          groundData={sparkGround} 
+          mixData={sparkMix}
+          years={years}
+          formatFn={formatFn}
+          onHover={onHover}
+        />
       </div>
       
       {/* Values row */}
@@ -240,6 +347,17 @@ const formatCost = (v: number | null | undefined) => {
   return `$${v.toFixed(0)}/PFLOP`;
 };
 
+const formatComputePerDollar = (costPerPFLOP: number | null | undefined) => {
+  if (costPerPFLOP == null || isNaN(costPerPFLOP) || costPerPFLOP <= 0) return '--';
+  const computePerBillion = 1e9 / costPerPFLOP;
+  if (computePerBillion >= 1e6) {
+    return `${(computePerBillion / 1e6).toFixed(1)}M PFLOPs/$1B`;
+  } else if (computePerBillion >= 1e3) {
+    return `${(computePerBillion / 1e3).toFixed(0)}K PFLOPs/$1B`;
+  }
+  return `${computePerBillion.toFixed(0)} PFLOPs/$1B`;
+};
+
 const formatLatency = (v: number | null | undefined) => {
   if (v == null || isNaN(v)) return '--ms';
   return `${v.toFixed(0)}ms`;
@@ -276,6 +394,14 @@ export default function SimulationMetrics({
 }: SimulationMetricsProps) {
   const scenarioKey = scenarioModeToKey(scenarioMode);
   const [sandboxParams, setSandboxParams] = useState<unknown>(null);
+  const [tooltip, setTooltip] = useState<{ 
+    year: number; 
+    groundValue: number; 
+    mixValue: number; 
+    x: number; 
+    y: number;
+    formatFn?: (v: number) => string;
+  } | null>(null);
   
   useEffect(() => {
     const checkSandbox = () => {
@@ -386,12 +512,15 @@ export default function SimulationMetrics({
         gap: '16px',
       }}>
         <MetricCard
-          title="Cost / Compute"
-          groundValue={formatCost(currentCostGround)}
-          mixValue={formatCost(currentCostMix)}
-          sparkGround={costGround}
-          sparkMix={costMix}
+          title="Compute Per Dollar"
+          groundValue={formatComputePerDollar(currentCostGround)}
+          mixValue={formatComputePerDollar(currentCostMix)}
+          sparkGround={costGround.map(c => c > 0 ? 1e9 / c : 0)}
+          sparkMix={costMix.map(c => c > 0 ? 1e9 / c : 0)}
           savings={costSavings}
+          years={years}
+          onHover={setTooltip}
+          formatFn={(v) => formatComputePerDollar(1e9 / (v > 0 ? v : 1))}
         />
         
         <MetricCard
@@ -401,6 +530,9 @@ export default function SimulationMetrics({
           sparkGround={latencyGround}
           sparkMix={latencyMix}
           savings={latencySavings}
+          years={years}
+          onHover={setTooltip}
+          formatFn={formatLatency}
         />
         
         <MetricCard
@@ -411,6 +543,9 @@ export default function SimulationMetrics({
           sparkMix={opexMix}
           savings={opexSavings}
           tooltip="Includes deployment and replacement costs (CAPEX + OPEX)"
+          years={years}
+          onHover={setTooltip}
+          formatFn={formatOpex}
         />
         
         <MetricCard
@@ -420,7 +555,39 @@ export default function SimulationMetrics({
           sparkGround={carbonGround}
           sparkMix={carbonMix}
           savings={carbonSavings}
+          years={years}
+          onHover={setTooltip}
+          formatFn={formatCarbon}
         />
+        
+        {/* Tooltip */}
+        {tooltip && tooltip.formatFn && (
+          <div
+            style={{
+              position: 'fixed',
+              left: tooltip.x + 10,
+              top: tooltip.y - 50,
+              zIndex: 1000,
+              padding: '8px 12px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: '1px solid rgba(100, 116, 139, 0.3)',
+              borderRadius: '6px',
+              fontSize: '12px',
+              pointerEvents: 'none',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            <div style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: '4px' }}>
+              {tooltip.year}
+            </div>
+            <div style={{ color: '#ff7070', marginBottom: '2px' }}>
+              Ground: {tooltip.formatFn(tooltip.groundValue)}
+            </div>
+            <div style={{ color: '#10b981' }}>
+              Mix: {tooltip.formatFn(tooltip.mixValue)}
+            </div>
+          </div>
+        )}
     </div>
   );
 }

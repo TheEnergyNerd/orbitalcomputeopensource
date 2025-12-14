@@ -20,40 +20,52 @@ export interface ScenarioParams {
   autonomyLevel: number;              // Autonomy level
   backhaulPerSatTBps: number;         // Backhaul capacity per satellite
   launchCarbonPerKg: number;          // Carbon per kg to LEO
+  // Scenario multipliers for differentiation
+  launchCadenceMultiplier: number;    // Multiplier for launch cadence (affects fleet size)
+  busPowerMultiplier: number;         // Multiplier for bus power (affects kW/sat)
+  lifetimeMultiplier: number;         // Multiplier for satellite lifetime (affects retirements)
 }
 
 export const SCENARIOS: ScenarioParams[] = [
   {
     key: "baseline",
-    // REBALANCED: Slightly more bullish for crossover ~2033-2034 (between old 2032 and current 2036)
-    orbitInitialCostMultiple: 2.2,    // Was 2.5 → slightly lower (more optimistic)
-    orbitLearningRate: 0.08,          // Was 0.07 → slightly faster learning
-    groundLearningRate: 0.015,        // 1.5% cheaper per year (unchanged)
-    computePerKwGrowth: 1.12,         // +12% compute-per-kW/year (unchanged)
-    powerGrowthPerYear: 0.015,        // +1.5% power/year (unchanged)
-    techGrowthPerYear: 1.20,          // Was 1.15 → faster tech growth
-    launchCostDeclinePerYear: 0.92,   // Was 0.94 → faster decline
-    demandGrowthPerYear: 1.35,        // +35% demand/year (unchanged)
-    failureRateBase: 0.02,
-    autonomyLevel: 1.5,
-    backhaulPerSatTBps: 0.5,
-    launchCarbonPerKg: 300,
+    // LESS OPTIMISTIC: Slightly shifted toward bear case (~10% reduction)
+    orbitInitialCostMultiple: 3.5,    // Was 3.25 - Slightly higher initial cost
+    orbitLearningRate: 0.065,          // Was 0.07 - Slightly slower learning
+    groundLearningRate: 0.020,        // Unchanged
+    computePerKwGrowth: 1.10,         // Was 1.115 - Slightly slower efficiency gains
+    powerGrowthPerYear: 0.0068,       // Was 0.0075 - Slightly slower power scaling
+    techGrowthPerYear: 1.19,          // Was 1.215 - Slightly slower tech growth
+    launchCostDeclinePerYear: 0.93,   // Was 0.92 - Slightly slower cost decline
+    demandGrowthPerYear: 1.25,        // Was 1.275 - Slightly lower demand growth
+    failureRateBase: 0.045,            // Unchanged
+    autonomyLevel: 1.65,               // Unchanged
+    backhaulPerSatTBps: 0.55,          // Unchanged
+    launchCarbonPerKg: 475,           // Unchanged
+    // Scenario multipliers - Reduced by ~10%
+    launchCadenceMultiplier: 0.90,    // Was 1.0 - 10% fewer launches
+    busPowerMultiplier: 0.92,         // Was 1.0 - 8% slower power scaling
+    lifetimeMultiplier: 1.0,           // Unchanged
   },
   {
     key: "orbitalBear",
-    // ULTRA-BEAR: "Space is Hard" - Only 1.5 GW by 2040 (99% less than baseline)
-    orbitInitialCostMultiple: 5.0,    // Was 2.8 - Orbit starts 5x ground cost (Starship fails)
-    orbitLearningRate: 0.02,          // Was 0.05 - Almost no learning (2% per year)
-    groundLearningRate: 0.025,         // Was 0.015 - Ground improves faster (2.5% per year)
-    computePerKwGrowth: 1.05,          // Was 1.08 - Minimal efficiency gains (5% per year)
-    powerGrowthPerYear: 0.005,         // Was 0.02 - Minimal power scaling (0.5% per year)
-    techGrowthPerYear: 1.03,           // Was 1.06 - Moore's Law slows dramatically (3% per year)
-    launchCostDeclinePerYear: 0.99,    // Was 0.98 - Only 1% decline/year (Starship fails)
-    demandGrowthPerYear: 1.15,         // Was 1.30 - Lower demand for orbital (15% per year)
-    failureRateBase: 0.08,             // Was 0.05 - High failure rate (radiation worse than expected)
-    autonomyLevel: 0.3,               // Was 0.5 - Low autonomy (needs constant ground control)
-    backhaulPerSatTBps: 0.1,           // Was 0.2 - Bandwidth constrained (0.1 TBps per sat)
-    launchCarbonPerKg: 800,            // Was 600 - Dirtier launches (no Starship)
+    // LESS PESSIMISTIC: More realistic downside (25-35% of base instead of 12%)
+    orbitInitialCostMultiple: 4.5,    // Was 5.0 - Slightly less pessimistic
+    orbitLearningRate: 0.03,          // Was 0.02 - Slightly better learning (3% per year)
+    groundLearningRate: 0.025,         // Unchanged
+    computePerKwGrowth: 1.06,         // Was 1.05 - Slightly better efficiency gains
+    powerGrowthPerYear: 0.006,        // Was 0.005 - Slightly better power scaling
+    techGrowthPerYear: 1.05,          // Was 1.03 - Slightly better tech growth
+    launchCostDeclinePerYear: 0.97,   // Was 0.99 - Slightly better cost decline
+    demandGrowthPerYear: 1.18,        // Was 1.15 - Slightly higher demand growth
+    failureRateBase: 0.07,            // Was 0.08 - Slightly lower failure rate
+    autonomyLevel: 0.5,               // Was 0.3 - Better autonomy
+    backhaulPerSatTBps: 0.15,         // Was 0.1 - Better bandwidth
+    launchCarbonPerKg: 700,            // Was 800 - Less carbon intensive
+    // Scenario multipliers - Less aggressive reduction
+    launchCadenceMultiplier: 0.6,     // Was 0.5 - 40% reduction instead of 50%
+    busPowerMultiplier: 0.75,         // Was 0.7 - 25% reduction instead of 30%
+    lifetimeMultiplier: 0.75,         // Was 0.7 - 5.25 years instead of 5
   },
   {
     key: "orbitalBull",
@@ -70,6 +82,10 @@ export const SCENARIOS: ScenarioParams[] = [
     autonomyLevel: 3.0,
     backhaulPerSatTBps: 1.0,
     launchCarbonPerKg: 150,
+    // Scenario multipliers - BULL: aggressive
+    launchCadenceMultiplier: 1.5,      // 50% more launches
+    busPowerMultiplier: 1.3,           // Faster power scaling (200 kW by 2040 instead of 150)
+    lifetimeMultiplier: 1.3,           // 9 years instead of 7
   },
 ];
 

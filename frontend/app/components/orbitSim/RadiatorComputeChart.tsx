@@ -150,6 +150,64 @@ export default function RadiatorComputeChart({
       .style("fill", "#94a3b8")
       .text("Total Radiative Surface Area (km²)");
 
+    // REALITY CHECK: Add feasibility zones (green/yellow/red)
+    // Body-mounted feasible: 0-20 m²
+    const maxBodyMountedM2 = 20;
+    const bodyMountedZone = g.append("rect")
+      .attr("x", 0)
+      .attr("y", yScale(maxBodyMountedM2 * 1e6)) // Convert to m² for scale
+      .attr("width", innerWidth)
+      .attr("height", innerHeight - yScale(maxBodyMountedM2 * 1e6))
+      .attr("fill", "#10b981")
+      .attr("opacity", 0.1);
+
+    // Deployable required: 20-100 m²
+    const maxDeployableM2 = 100;
+    const deployableZone = g.append("rect")
+      .attr("x", 0)
+      .attr("y", yScale(maxDeployableM2 * 1e6))
+      .attr("width", innerWidth)
+      .attr("height", yScale(maxBodyMountedM2 * 1e6) - yScale(maxDeployableM2 * 1e6))
+      .attr("fill", "#f59e0b")
+      .attr("opacity", 0.1);
+
+    // Bleeding edge: 100+ m²
+    const bleedingEdgeZone = g.append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", innerWidth)
+      .attr("height", yScale(maxDeployableM2 * 1e6))
+      .attr("fill", "#ef4444")
+      .attr("opacity", 0.1);
+
+    // Add zone labels
+    g.append("text")
+      .attr("x", innerWidth - 10)
+      .attr("y", yScale(maxBodyMountedM2 * 1e6) - 5)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#10b981")
+      .style("font-weight", 600)
+      .text("Body-mounted feasible");
+
+    g.append("text")
+      .attr("x", innerWidth - 10)
+      .attr("y", yScale(maxDeployableM2 * 1e6) - 5)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#f59e0b")
+      .style("font-weight", 600)
+      .text("Deployable required");
+
+    g.append("text")
+      .attr("x", innerWidth - 10)
+      .attr("y", 15)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#ef4444")
+      .style("font-weight", 600)
+      .text("Bleeding edge");
+
     // Draw points - Convert PFLOPs to ExaFLOPS for positioning
     g.selectAll("circle")
       .data(data)
