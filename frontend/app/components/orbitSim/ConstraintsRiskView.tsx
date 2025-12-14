@@ -6,11 +6,13 @@ import {
   buildUtilizationSeries,
   buildReliabilitySeries,
   buildLaunchMassSeries,
+  buildDebrisCollisionSeries,
 } from "../../lib/orbitSim/selectors/constraints";
 import type { ScenarioMode } from "../../lib/orbitSim/simulationConfig";
 import ConstraintUtilizationChart from "./ConstraintUtilizationChart";
 import ReliabilityChart from "./ReliabilityChart";
 import LaunchMassChart from "./LaunchMassChart";
+import DebrisCollisionChart from "./DebrisCollisionChart";
 
 /**
  * Constraints & Risk View
@@ -26,6 +28,7 @@ export default function ConstraintsRiskView() {
   const utilizationData = useMemo(() => buildUtilizationSeries(config.scenarioMode), [config.scenarioMode]);
   const reliabilityData = useMemo(() => buildReliabilitySeries(config.scenarioMode), [config.scenarioMode]);
   const launchMassData = useMemo(() => buildLaunchMassSeries(config.scenarioMode), [config.scenarioMode]);
+  const debrisCollisionData = useMemo(() => buildDebrisCollisionSeries(config.scenarioMode), [config.scenarioMode]);
 
   if (utilizationData.length === 0) {
     return (
@@ -114,6 +117,23 @@ export default function ConstraintsRiskView() {
           <div className="h-[300px] sm:h-[350px] w-full">
             <LaunchMassChart
               data={launchMassData}
+              currentYear={highlightedYear}
+              scenarioMode={config.scenarioMode}
+            />
+          </div>
+        </div>
+
+        {/* 5. Debris & Collision Risk */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-4" data-chart="debris-collision">
+          <div className="text-xs font-semibold text-slate-100 mb-1">
+            Debris & Collision Risk
+          </div>
+          <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+            Debris accumulation, collision probability, and conjunction maneuvers. Hover to see values.
+          </div>
+          <div className="h-[300px] sm:h-[350px] w-full">
+            <DebrisCollisionChart
+              data={debrisCollisionData}
               currentYear={highlightedYear}
               scenarioMode={config.scenarioMode}
             />

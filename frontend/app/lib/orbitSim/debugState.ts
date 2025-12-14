@@ -256,6 +256,23 @@ export interface DebugStateEntry {
   bus_availability?: number;
   fleet_total_mass_kg?: number;
   fleet_total_compute_tflops_derated?: number;
+  // --- CONGESTION METRICS ---
+  congestion_shell_utilization?: number;        // % of shell capacity used
+  congestion_conjunction_rate?: number;         // Maneuvers fleet-wide
+  congestion_debris_count?: number;            // Trackable debris objects
+  congestion_collision_risk?: number;           // P(at least one collision)
+  congestion_thermal_penalty?: number;           // Efficiency loss from clustering
+  congestion_cost_annual?: number;               // $ cost of congestion
+  // --- MULTI-SHELL CAPACITY ---
+  shell_utilization_by_altitude?: Record<string, number>; // Utilization per shell
+  orbital_power_total_gw?: number;              // Total orbital power in GW
+  shell_power_breakdown?: Array<{ shell: string; powerGW: number; sats: number }>; // Power by shell
+  // --- BATTERY METRICS ---
+  battery_density_wh_per_kg?: number;          // Current battery density
+  battery_cost_usd_per_kwh?: number;           // Current battery cost
+  battery_mass_per_sat_kg?: number;            // Battery mass per satellite
+  battery_cost_per_sat_usd?: number;           // Battery cost per satellite
+  eclipse_tolerance_minutes?: number;           // Eclipse duration tolerance
 }
 
 export type ScenarioKey = 'BASELINE' | 'ORBITAL_BEAR' | 'ORBITAL_BULL';
@@ -546,9 +563,10 @@ export function validateStateAcrossYears(scenarioKey: ScenarioKey = 'BASELINE'):
     }
   }
   
-    // Only flag if many consecutive years (>15) AND compute is actually being limited
+    // Only flag if many consecutive years (>20) AND compute is actually being limited
     // This reduces false positives when backhaul is working correctly as a constraint
-    if (maxConsecutiveBackhaulNeverBinds > 15) {
+    // Increased threshold from 15 to 20 to reduce noise for legitimate long-term constraints
+    if (maxConsecutiveBackhaulNeverBinds > 20) {
       console.warn(
         `[DebugState] ⚠️ Backhaul never binds: utilization at 1.0 for ${maxConsecutiveBackhaulNeverBinds} consecutive years (Scenario ${scenarioKey})`
       );

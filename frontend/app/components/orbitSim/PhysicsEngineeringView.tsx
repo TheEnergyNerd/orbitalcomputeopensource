@@ -8,7 +8,13 @@ import {
   buildRadiatorComputeSeries,
   buildThermalSeries,
   buildSolarUptimeSeries,
+  buildOrbitalPowerSeries,
+  buildPowerPerSatSeries,
+  buildBatteryTechSeries,
 } from "../../lib/orbitSim/selectors/physics";
+import {
+  buildShellUtilizationSeries,
+} from "../../lib/orbitSim/selectors/constraints";
 import MassBreakdownChart from "./MassBreakdownChart";
 import RadiatorComputeChart from "./RadiatorComputeChart";
 import ThermalChart from "./ThermalChart";
@@ -19,6 +25,11 @@ import DualClassStackChart from "./DualClassStackChart";
 import { getStrategyByYear } from "./SimpleModeView";
 import MassEfficiencyWaterfall from "./MassEfficiencyWaterfall";
 import MooresLawOfMass from "./MooresLawOfMass";
+import { ExportAllChartsButton } from "./ChartExportButton";
+import ShellUtilizationChart from "./ShellUtilizationChart";
+import OrbitalPowerChart from "./OrbitalPowerChart";
+import PowerPerSatChart from "./PowerPerSatChart";
+import BatteryTechChart from "./BatteryTechChart";
 
 /**
  * Physics & Limits View
@@ -35,6 +46,10 @@ export default function PhysicsEngineeringView() {
   const radiatorData = useMemo(() => buildRadiatorComputeSeries(config.scenarioMode), [config.scenarioMode]);
   const thermalData = useMemo(() => buildThermalSeries(config.scenarioMode), [config.scenarioMode]);
   const solarData = useMemo(() => buildSolarUptimeSeries(config.scenarioMode), [config.scenarioMode]);
+  const orbitalPowerData = useMemo(() => buildOrbitalPowerSeries(config.scenarioMode), [config.scenarioMode]);
+  const powerPerSatData = useMemo(() => buildPowerPerSatSeries(config.scenarioMode), [config.scenarioMode]);
+  const batteryTechData = useMemo(() => buildBatteryTechSeries(config.scenarioMode), [config.scenarioMode]);
+  const shellUtilizationData = useMemo(() => buildShellUtilizationSeries(config.scenarioMode), [config.scenarioMode]);
 
   if (!timeline || timeline.length === 0) {
     return (
@@ -52,6 +67,7 @@ export default function PhysicsEngineeringView() {
           <p className="text-xs sm:text-sm text-slate-400">What does the actual physics look like?</p>
         </div>
         <div className="flex-shrink-0">
+          <ExportAllChartsButton />
         </div>
       </div>
 
@@ -178,7 +194,78 @@ export default function PhysicsEngineeringView() {
       {/* Extra spacing between Power vs Compute and Compute Over Time charts */}
       <div className="h-4 sm:h-6"></div>
 
-      {/* 8. Dual Class Stack Chart */}
+      {/* 8. Shell Utilization / Congestion */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="shell-utilization">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Shell Utilization / Congestion
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          How full each orbital shell is over time. 80% = congestion threshold, 100% = capacity.
+        </div>
+        <div className="h-[300px] sm:h-[350px] w-full">
+          <ShellUtilizationChart
+            data={shellUtilizationData}
+            currentYear={highlightedYear}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
+      {/* 9. Orbital Power (GW) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="orbital-power">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Orbital Power (GW)
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Total orbital power scaling to 150 GW by 2040. Hover to see values.
+        </div>
+        <div className="h-[300px] sm:h-[350px] w-full">
+          <OrbitalPowerChart
+            data={orbitalPowerData}
+            currentYear={highlightedYear}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
+      {/* 10. Power per Satellite (kW) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="power-per-sat">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Power per Satellite (kW)
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Power scaling from 100kW to 1MW per satellite. Hover to see values.
+        </div>
+        <div className="h-[300px] sm:h-[350px] w-full">
+          <PowerPerSatChart
+            data={powerPerSatData}
+            currentYear={highlightedYear}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
+      {/* 11. Battery Tech Curve */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="battery-tech">
+        <div className="text-xs font-semibold text-slate-100 mb-1">
+          Battery Tech Curve
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-slate-500 mb-2">
+          Battery density (Wh/kg) and cost ($/kWh) progression over time. Hover to see values.
+        </div>
+        <div className="h-[300px] sm:h-[350px] w-full">
+          <BatteryTechChart
+            data={batteryTechData}
+            currentYear={highlightedYear}
+            scenarioMode={config.scenarioMode}
+          />
+        </div>
+      </div>
+
+      {/* Extra spacing */}
+      <div className="h-4 sm:h-6"></div>
+
+      {/* 12. Dual Class Stack Chart */}
       <div className="rounded-2xl border border-slate-800 bg-slate-950/85 px-3 sm:px-4 py-3" data-chart="dual-class-stack">
         <div className="text-xs font-semibold text-slate-100 mb-1">
           Compute Over Time (Class A + Class B)

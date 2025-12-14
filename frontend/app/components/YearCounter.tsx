@@ -66,12 +66,6 @@ export default function YearCounter({ activeSurface }: YearCounterProps) {
           Deploy 1 year
         </button>
         <button
-          onClick={() => extendYears(2)}
-          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition"
-        >
-          +2 years
-        </button>
-        <button
           onClick={() => {
             const event = new CustomEvent('open-ai-router');
             window.dispatchEvent(event);

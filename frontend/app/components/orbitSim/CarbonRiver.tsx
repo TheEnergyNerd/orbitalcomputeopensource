@@ -101,9 +101,13 @@ export default function CarbonRiver({
       .ticks(isMobile ? 5 : 10);
     const formatYAxis = (d: d3.NumberValue) => {
       const val = Number(d);
-      if (val >= 1e6) return `${(val / 1e6).toFixed(1)}T`;
-      if (val >= 1e3) return `${(val / 1e3).toFixed(1)}k`;
-      return `${val.toFixed(0)}`;
+      // Format per CHART_AUDIT_AND_CONGESTION.md: use T/B/M format
+      if (val >= 1e15) return `${(val / 1e15).toFixed(0)}P tCO₂`;
+      if (val >= 1e12) return `${(val / 1e12).toFixed(0)}T tCO₂`;
+      if (val >= 1e9) return `${(val / 1e9).toFixed(0)}B tCO₂`;
+      if (val >= 1e6) return `${(val / 1e6).toFixed(0)}M tCO₂`;
+      if (val >= 1e3) return `${(val / 1e3).toFixed(0)}k tCO₂`;
+      return `${val.toFixed(0)} tCO₂`;
     };
     const yAxis = d3.axisLeft(yScale)
       .tickFormat(formatYAxis);

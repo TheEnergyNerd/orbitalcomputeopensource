@@ -111,9 +111,10 @@ export default function ThermalChart({
     yTempAxisGroup.selectAll("line, path")
       .style("stroke", "#475569");
 
-    // Add right y-axis (heat)
+    // Add right y-axis (heat ceiling - in kW, not °C)
+    // FIX: Per CHART_AUDIT_AND_CONGESTION.md, right axis shows heat ceiling in kW
     const yHeatAxis = d3.axisRight(yHeatScale)
-      .tickFormat(d => `${Number(d).toFixed(0)} kW`);
+      .tickFormat(d => `${Number(d).toFixed(1)} kW`);
     const yHeatAxisGroup = g.append("g")
       .attr("transform", `translate(${innerWidth}, 0)`)
       .call(yHeatAxis);

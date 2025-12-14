@@ -76,7 +76,13 @@ export default function MultiScenarioChart({
         } else if (metric.includes("%")) {
           return `${(Number(d) * 100).toFixed(0)}%`;
         } else if (metric.includes("tCO₂")) {
-          return `${(Number(d) / 1000).toFixed(0)}k`;
+          // FIX: Use proper T/B/M formatting instead of just dividing by 1000
+          const val = Number(d);
+          if (val >= 1e12) return `${(val / 1e12).toFixed(0)}T`;
+          if (val >= 1e9) return `${(val / 1e9).toFixed(0)}B`;
+          if (val >= 1e6) return `${(val / 1e6).toFixed(0)}M`;
+          if (val >= 1e3) return `${(val / 1e3).toFixed(0)}k`;
+          return `${val.toFixed(0)}`;
         }
         return `${Number(d).toFixed(1)}`;
       });

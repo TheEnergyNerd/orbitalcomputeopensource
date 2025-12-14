@@ -29,6 +29,22 @@ export interface SolarUptimePoint {
   groundSolarPlusStorageUptime: number;
 }
 
+export interface OrbitalPowerPoint {
+  year: number;
+  powerGW: number;
+}
+
+export interface PowerPerSatPoint {
+  year: number;
+  powerKw: number;
+}
+
+export interface BatteryTechPoint {
+  year: number;
+  densityWhPerKg: number;
+  costUsdPerKwh: number;
+}
+
 /**
  * Build mass breakdown series from debug state
  */
@@ -153,6 +169,59 @@ export function buildSolarUptimeSeries(
     year: entry.year,
     orbitUptime: entry.space_solar_uptime_percent ?? 0,
     groundSolarPlusStorageUptime: entry.solar_plus_storage_uptime_percent ?? 0,
+  }));
+}
+
+/**
+ * Build orbital power (GW) series from debug state
+ */
+export function buildOrbitalPowerSeries(
+  scenarioMode?: string
+): OrbitalPowerPoint[] {
+  const scenarioKey = scenarioModeToKey(scenarioMode);
+  const entries = getDebugStateEntries(scenarioKey)
+    .sort((a, b) => a.year - b.year);
+
+  return entries.map(entry => ({
+    year: entry.year,
+    powerGW: entry.orbital_power_total_gw ?? (entry.power_total_kw ?? 0) / 1000000,
+  }));
+}
+
+/**
+ * Build power per satellite (kW) series from debug state
+ */
+export function buildPowerPerSatSeries(
+  scenarioMode?: string
+): PowerPerSatPoint[] {
+  const scenarioKey = scenarioModeToKey(scenarioMode);
+  const entries = getDebugStateEntries(scenarioKey)
+    .sort((a, b) => a.year - b.year);
+
+  return entries.map(entry => {
+    const totalPowerKw = entry.power_total_kw ?? 0;
+    const totalSats = entry.satellitesTotal ?? 1;
+    return {
+      year: entry.year,
+      powerKw: totalSats > 0 ? totalPowerKw / totalSats : 0,
+    };
+  });
+}
+
+/**
+ * Build battery tech curve series from debug state
+ */
+export function buildBatteryTechSeries(
+  scenarioMode?: string
+): BatteryTechPoint[] {
+  const scenarioKey = scenarioModeToKey(scenarioMode);
+  const entries = getDebugStateEntries(scenarioKey)
+    .sort((a, b) => a.year - b.year);
+
+  return entries.map(entry => ({
+    year: entry.year,
+    densityWhPerKg: entry.battery_density_wh_per_kg ?? 0,
+    costUsdPerKwh: entry.battery_cost_usd_per_kwh ?? 0,
   }));
 }
 

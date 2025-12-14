@@ -1,204 +1,257 @@
-# Orbital Compute Simulator - Complete Context Document
+# Orbital Compute Control Room - Project Context
 
 ## Project Overview
 
-This is a **physics-validated orbital compute simulator** that models the economics, physics, and deployment of large-scale orbital datacenters. The project simulates how orbital compute could compete with ground-based datacenters, with scenarios ranging from conservative (BEAR) to optimistic (BULL) based on Elon Musk/Casey Handmer engineering philosophies.
+**Orbital Compute Control Room** is an interactive 3D simulation and visualization dashboard that models the economics, physics, and deployment of orbital compute infrastructure (satellites) versus ground-based hyperscale data centers. The project demonstrates how orbital compute can become cost-competitive with ground infrastructure by 2032, with significant advantages in latency, carbon emissions, and scalability.
 
-## Architecture
+## Core Concept
 
-### Frontend (Next.js 14 + TypeScript)
-- **Location**: `frontend/`
-- **Framework**: Next.js 14 with App Router
+The simulation models:
+- **Orbital Compute**: Satellites in LEO/MEO providing compute services
+- **Ground Compute**: Traditional hyperscale data centers
+- **Economics**: Cost per PFLOP, OPEX, carbon emissions, latency
+- **Physics**: Thermal constraints, backhaul bandwidth, maintenance, power/solar, compute/silicon
+- **Deployment**: Year-by-year satellite deployment from 2025-2040
+
+**Key Thesis**: With Starship-era launch economics and manufacturing learning curves, orbital compute becomes cheaper than ground by 2032, with 50%+ carbon savings and 40%+ latency improvements.
+
+## Tech Stack
+
+### Frontend
+- **Framework**: Next.js 14.0.4 (App Router)
+- **Language**: TypeScript
+- **3D Visualization**: Three.js (React Three Fiber) + Drei
+- **Charts**: D3.js, Recharts
+- **State Management**: Zustand
 - **Styling**: Tailwind CSS
-- **Charts**: D3.js for custom visualizations
-- **3D Visualization**: Three.js for orbital visualizations
+- **Build Tool**: Next.js built-in webpack
 
-### Backend (Python FastAPI)
-- **Location**: `backend/`
-- **Framework**: FastAPI
-- **Orbital Mechanics**: Uses SPICE kernels (de421.bsp) for accurate orbital calculations
-- **Services**: Celestrak TLE fetching, orbital modeling
+### Key Dependencies
+- `three`, `@react-three/fiber`, `@react-three/drei` - 3D globe visualization
+- `d3`, `d3-geo` - Data visualization and charting
+- `zustand` - State management
+- `framer-motion` - Animations
+- `jszip` - Chart export functionality
+
+## Project Structure
+
+```
+frontend/app/
+├── components/          # React components
+│   ├── orbitSim/       # Main simulation UI components
+│   ├── three/          # 3D globe components
+│   └── ...
+├── lib/
+│   └── orbitSim/       # Core simulation logic
+│       ├── yearSteppedDeployment.ts  # Main simulation engine
+│       ├── scenarioParams.ts         # Scenario definitions
+│       ├── selectors/                # Data selectors for charts
+│       ├── debugState.ts             # Debug state management
+│       └── ...
+├── store/              # Zustand stores
+│   ├── simulationStore.ts    # Main simulation state
+│   ├── orbitSimStore.ts      # Orbital simulation state
+│   └── ...
+└── page.tsx            # Main entry point
+```
 
 ## Key Features
 
-### 1. Physics-Validated Simulation
-- **Thermal Physics**: Stefan-Boltzmann heat rejection, thermal equilibrium solving
-- **Mass Budgeting**: Power-coupled mass model (solar, battery, radiator scale with power)
-- **Compute Scaling**: Moore's Law-based compute density growth
-- **Battery Economics**: Class A (eclipse batteries) vs Class B (safe mode only)
+### 1. **3D Globe Visualization** (`app/three/`)
+- Interactive Earth with satellite orbits
+- Real-time satellite positioning
+- Shell visualization (LEO_340, LEO_550, LEO_1100, MEO_8000, MEO_20000, GEO)
+- Ground data center markers
+- Route visualization between satellites and ground
 
-### 2. Scenario Modeling
-Three scenarios with different assumptions:
-- **BASELINE**: Conservative assumptions
-- **ORBITAL_BEAR**: Pessimistic (slower tech progress, higher costs)
-- **ORBITAL_BULL**: Optimistic (Starship-class satellites, aggressive scaling)
+### 2. **Simulation Engine** (`lib/orbitSim/yearSteppedDeployment.ts`)
+- Year-by-year deployment calculation (2025-2040)
+- Physics-based constraints (thermal, backhaul, maintenance, power, compute)
+- Economics modeling (cost/compute, OPEX, carbon)
+- Multi-shell capacity and congestion modeling
+- Battery technology progression
+- Debris accumulation and collision risk
 
-### 3. Chart Visualizations
-Multiple chart types across different views:
-- **Futures Tab**: Cost/compute, OPEX, carbon, adoption share, fleet growth, cost crossover, compute efficiency
-- **Physics Tab**: Power-compute frontier, mass breakdown, radiator area vs compute, thermal balance
-- **Constraints Tab**: Utilization gauges, failure/recovery timelines
+### 3. **Charts & Visualizations** (`components/orbitSim/`)
+- **Cost/Compute Curve**: Shows orbital vs ground cost per PFLOP
+- **Carbon River**: Annual carbon emissions (ground vs mix)
+- **Power Compute Frontier**: Power vs compute relationship
+- **Shell Utilization**: Multi-shell capacity utilization
+- **Debris & Collision Risk**: Debris accumulation and collision probability
+- **Battery Tech**: Battery density and cost progression
+- **Simulation Metrics**: Cost, latency, OPEX, carbon with sparklines
 
-## Recent Major Changes (December 2024)
+### 4. **Physics Sandbox** (`components/orbitSim/PhysicsSandbox.tsx`)
+- Interactive physics calculator
+- 6 sections: Thermal, Backhaul, Maintenance, Cost Assumptions, Compute/Silicon, Power/Solar
+- Real-time constraint validation
+- Parameters override simulation when applied
 
-### Physics & Scale Overhaul
-Applied 4 critical fixes to align with Elon Musk/Casey Handmer engineering thesis:
+### 5. **Scenarios** (`lib/orbitSim/scenarioParams.ts`)
+- **BASELINE**: Cost crossover in 2032
+- **ORBITAL_BULL**: More aggressive (crossover ~2029-2030)
+- **ORBITAL_BEAR**: Conservative (crossover ~2036+)
 
-1. **Fixed Aggregation Math (10x Bug)**
-   - `power_total_kw = satellitesTotal * bus_power_kw` (simple multiplication)
-   - Carbon intensity: `(total_carbon_kg * 1000) / (orbitEnergyServedTwh * 1e9)`
+## Core Simulation Logic
 
-2. **Scaled Up to Starship Class**
-   - ORBITAL_BULL: `basePowerPerSatKw = 50.0 kW` (scaling to 100kW+)
-   - Mass scales automatically with power through physics bus design
+### Main Entry Point
+`lib/orbitSim/yearSteppedDeployment.ts` - `calculateYearDeployment()`
 
-3. **Linked Compute to Moore's Law**
-   - `baseComputeTflopsPerSat = 500.0 TFLOPS` (starting 2025)
-   - Growth: 1.5x/year (BULL), 1.4x/year (BEAR), 1.45x/year (BASELINE)
-   - Hard-linked: `compute_raw_flops = satellitesTotal * bus_compute_tflops_nominal * 1e12`
+This function:
+1. Calculates satellite deployment for a given year
+2. Applies physics constraints (thermal, backhaul, maintenance)
+3. Calculates economics (cost/compute, OPEX, carbon)
+4. Tracks multi-shell capacity and congestion
+5. Stores results in debug state
 
-4. **Enforced Battery Economics**
-   - Class A (Standard LEO): `battery_kwh = bus_power_kw * 0.6` (35 min eclipse)
-   - Class B (Dawn-Dusk SSO): `battery_kwh = bus_power_kw * 0.1` (safe mode only)
-   - Cost: `battery_kwh * 1000` ($1k/kWh)
-   - Mass: `battery_kwh / 0.2` (200Wh/kg)
+### Key Calculations
 
-### New Futures Tab Charts
-Added 3 new charts to the Futures (Scenarios) tab:
-1. **Fleet Growth (Stacked Area)**: Shows constellation buildout by orbital shell (LOW, MID, SSO)
-2. **Orbit vs Ground Cost Crossover**: Highlights when orbit becomes cheaper than ground
-3. **Compute Efficiency Trajectory**: Bar chart showing PFLOPS/kW with Moore's Law reference
+**Power Progression**: 150 kW (2025) → 1 MW (2040) per satellite
+**Compute Efficiency**: Moore's Law progression (techGrowthPerYear: 1.25)
+**Launch Costs**: Decline from ~$200/kg (2025) to ~$20/kg (2040)
+**Cost/Compute**: Starts at 1.8× ground, declines with learning rate (10% per year)
 
-## File Structure
+### Physics Constraints
 
-### Core Simulation Logic
-- `frontend/app/lib/orbitSim/yearSteppedDeployment.ts`: Main year-by-year simulation orchestration
-- `frontend/app/lib/orbitSim/physicsEngine.ts`: Physics state machine and thermal calculations
-- `frontend/app/lib/orbitSim/physics/designBus.ts`: Satellite bus design from first principles
-- `frontend/app/lib/orbitSim/debugState.ts`: Centralized debug state storage
+1. **Thermal**: Stefan-Boltzmann law, radiator area, emissivity
+2. **Backhaul**: Optical terminals, link capacity, ground stations
+3. **Maintenance**: Failure rate, servicer drones, replacement cadence
+4. **Power/Solar**: Solar efficiency, degradation, battery sizing
+5. **Compute/Silicon**: Process node, radiation hardening, memory bandwidth
 
-### Chart Components
-- `frontend/app/components/orbitSim/ScenariosView.tsx`: Futures tab with scenario comparisons
-- `frontend/app/components/orbitSim/MultiScenarioChart.tsx`: Generic multi-scenario line chart
-- `frontend/app/components/orbitSim/FleetGrowthChart.tsx`: Stacked area chart for fleet growth
-- `frontend/app/components/orbitSim/CostCrossoverChart.tsx`: Cost crossover with annotations
-- `frontend/app/components/orbitSim/ComputeEfficiencyChart.tsx`: Efficiency bars with Moore's Law
+## State Management
 
-### Data Selectors
-- `frontend/app/lib/orbitSim/selectors/scenarios.ts`: Scenario data aggregation
-- `frontend/app/lib/orbitSim/selectors/physics.ts`: Physics data for charts
-- `frontend/app/lib/orbitSim/selectors/frontier.ts`: Power-compute frontier data
+### Zustand Stores
+- `simulationStore.ts`: Main simulation state (timeline, config, plans)
+- `orbitSimStore.ts`: Orbital simulation state (satellites, routes)
+- `simStore.ts`: Legacy simulation state
+- `tutorialStore.ts`: Tutorial state
 
-## Key Data Structures
+### Debug State
+`lib/orbitSim/debugState.ts` - Single source of truth for simulation data
+- Stores per-year, per-scenario debug entries
+- Used by charts, KPI strip, side panels
+- Exported via `DebugExportPanel.tsx`
 
-### DebugStateEntry
-Central data structure for all simulation outputs:
-```typescript
-interface DebugStateEntry {
-  year: number;
-  satellitesTotal: number;
-  power_total_kw: number;
-  compute_raw_flops: number; // FLOPS
-  compute_effective_flops: number; // FLOPS
-  compute_exportable_PFLOPs: number;
-  cost_per_compute_orbit: number; // $/PFLOP
-  cost_per_compute_ground: number; // $/PFLOP
-  carbon_orbit: number; // g CO2/kWh
-  carbon_ground: number; // g CO2/kWh
-  shellOccupancy: { LOW: number; MID: number; SSO: number };
-  temp_radiator_C: number;
-  temp_core_C: number;
-  heatGen_kw: number;
-  heatReject_kw: number;
-  radiatorArea: number; // m²
-  // ... many more fields
-}
-```
+## Recent Work (Latest Session)
 
-### Scenario Parameters
-```typescript
-interface ScenarioParams {
-  orbitInitialCostMultiple: number;
-  orbitLearningRate: number;
-  computePerKwGrowth: number;
-  powerGrowthPerYear: number;
-  techGrowthPerYear: number;
-  launchCostDeclinePerYear: number;
-  // ...
-}
-```
+### Fixed Issues
+1. **Power Discrepancy**: Fixed `orbital_power_total_gw` to match KPI (235 GW)
+2. **OPEX Calculation**: Changed from 5% fleet value to operational costs ($15k/sat/year)
+3. **Time Series orbital_power**: Fixed fallback calculation
+4. **Side Panel Breakdown**: Now uses debug state shell breakdown
+5. **Side Panel Compute**: Added fallback to class counts
+6. **Collision Risk**: Fixed 900,000% display bug (clamped to 0-100%)
 
-## Chart Data Ranges
+### Updated Parameters
+- **Baseline Scenario**: Updated for 2032 cost crossover
+  - `orbitInitialCostMultiple`: 2.2 → 1.8
+  - `orbitLearningRate`: 0.08 → 0.10
+  - `launchCostDeclinePerYear`: 0.94 → 0.90
+  - `techGrowthPerYear`: 1.20 → 1.25
 
-For determining axis scales, use `listChartDataRanges.ts`:
-- **Compute Over Time Class A/B**: PFLOPs (typically 0 to millions)
-- **Power vs Compute Class A/B**: Power in kW, Compute in PFLOPs
-- **Radiator Area vs Compute**: Area in m², Compute in PFLOPs
-- **Power Compute Frontier**: Power in MW, Compute in PFLOPs
+## Important Files
 
-## Build & Development
+### Core Simulation
+- `lib/orbitSim/yearSteppedDeployment.ts` - Main simulation engine
+- `lib/orbitSim/scenarioParams.ts` - Scenario parameters
+- `lib/orbitSim/debugState.ts` - Debug state management
+- `lib/orbitSim/congestionModel.ts` - Congestion and debris modeling
+- `lib/orbitSim/batteryModel.ts` - Battery progression curves
 
-### Frontend
+### UI Components
+- `components/orbitSim/SimpleModeView.tsx` - Main view
+- `components/orbitSim/PhysicsSandbox.tsx` - Physics calculator
+- `components/orbitSim/GlobalKPIStrip.tsx` - Top KPI bar
+- `components/SatelliteCounters.tsx` - Side panel metrics
+- `components/orbitSim/SimulationMetrics.tsx` - Metrics panel
+
+### Charts
+- `components/orbitSim/CostComputeChart.tsx` - Cost/compute curve
+- `components/orbitSim/CarbonRiver.tsx` - Carbon emissions
+- `components/orbitSim/PowerComputeFrontier.tsx` - Power vs compute
+- `components/orbitSim/ShellUtilizationChart.tsx` - Shell utilization
+- `components/orbitSim/DebrisCollisionChart.tsx` - Debris and collision
+
+### Selectors (Data Transformations)
+- `lib/orbitSim/selectors/economics.ts` - Cost and OPEX series
+- `lib/orbitSim/selectors/carbonStreams.ts` - Carbon series
+- `lib/orbitSim/selectors/physics.ts` - Physics series
+- `lib/orbitSim/selectors/constraints.ts` - Constraint series
+
+### 3D Visualization
+- `three/OrbitalScene.tsx` - Main 3D scene
+- `three/SatellitesGPUInstanced.tsx` - Satellite rendering
+- `three/OrbitalShells.tsx` - Shell visualization
+- `three/OrbitalDataSync.tsx` - Syncs simulation data to 3D
+
+## Data Flow
+
+1. **User Interaction** → Updates `simulationStore` (year plans, scenario)
+2. **Simulation Runner** → Calls `calculateYearDeployment()` for each year
+3. **Debug State** → Stores results per year, per scenario
+4. **Selectors** → Transform debug state to chart data
+5. **Components** → Render charts, KPI strip, side panels
+6. **3D Globe** → Syncs satellite positions from `orbitSimStore`
+
+## Key Concepts
+
+### Satellite Classes
+- **Class A**: Standard satellites, LEO (340-550km)
+- **Class B**: Dawn-dusk SSO satellites, LEO_1100 (600-800km)
+
+### Orbital Shells
+- **LEO_340**: 340km altitude, 30k capacity
+- **LEO_550**: 550km altitude, 80k capacity
+- **LEO_1100**: 1100km altitude (SSO), 50k capacity
+- **MEO_8000**: 8000km altitude, 40k capacity
+- **MEO_20000**: 20000km altitude, 20k capacity
+- **GEO**: 35786km altitude, 500 capacity
+
+### Physics Sandbox
+- Allows users to override physics parameters
+- Parameters stored in `window.__physicsSandboxParams`
+- Overrides applied in `yearSteppedDeployment.ts`
+- Validates constraints before allowing deployment
+
+## Development Workflow
+
+### Running the App
 ```bash
 cd frontend
-npm install
-npm run dev  # Development server
+npm run dev  # Starts on localhost:3000
+```
+
+### Building
+```bash
 npm run build  # Production build
 ```
 
-### Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
+### Common Issues
+- **404 errors**: Clear `.next` cache and restart dev server
+- **Extension errors**: Ignore Firefox extension errors (not app errors)
+- **Type errors**: Run `npm run build` to check TypeScript errors
 
-## Known Issues & Notes
+## Current State
 
-1. **Removed Export Buttons**: The "Download All Charts", "Print to PDF", and "Save Charts as PNGs" buttons have been removed from ScenariosView.tsx as requested.
+- ✅ All critical bugs fixed
+- ✅ Data consistency across KPI, charts, side panels
+- ✅ Physics sandbox integrated
+- ✅ Baseline scenario updated for 2032 crossover
+- ✅ Charts rendering correctly
+- ✅ 3D globe working
 
-2. **Type Safety**: Fixed type error in DetailPanel.tsx where `activeSurface` was compared to "deployment" (now uses "world").
+## Next Steps (If Needed)
 
-3. **Chart Responsiveness**: Charts are responsive with 300px height on mobile, 600px on desktop for Futures tab.
+1. Scale to 150 GW target (currently ~235 GW)
+2. Further OPEX refinement if needed
+3. Additional chart improvements
+4. Performance optimizations for large satellite counts
 
-4. **Data Validation**: The simulation includes physics validation checks (temperature gradients, heat balance, compute efficiency sanity checks).
+## Notes
 
-## Key Constants & Formulas
-
-### Thermal Physics
-- Stefan-Boltzmann constant: `σ = 5.67e-8 W/m²K⁴`
-- Emissivity: `ε = 0.9`
-- Radiator capacity: `Q = A × ε × σ × (T_rad⁴ - T_space⁴)`
-
-### Mass Budget
-- Solar: `M_solar = P_kW × 5 kg/kW` (Elon/Handmer optimistic: 200 W/kg)
-- Battery: `M_battery = kWh / 0.2` (200 Wh/kg)
-- Radiator: `M_radiator = A_m² × 5 kg/m²`
-
-### Compute Scaling
-- Base compute (2025): `500 TFLOPS/satellite`
-- Moore's Law growth: `1.4x - 1.5x per year`
-- Hard link: `compute_raw_flops = satellitesTotal × bus_compute_tflops_nominal × 1e12`
-
-## Next Steps for New Chat
-
-1. **Chart Axis Scaling**: Use `listChartDataRanges.ts` to determine appropriate scales for the 4 charts mentioned
-2. **Scenario Selector**: Consider adding scenario selector to new Futures charts (currently shows BASELINE only)
-3. **Performance**: Monitor build times and optimize if needed
-4. **Testing**: Add unit tests for physics calculations and data selectors
-
-## Important Files to Review
-
-- `frontend/app/lib/orbitSim/yearSteppedDeployment.ts`: Core simulation logic
-- `frontend/app/lib/orbitSim/physics/designBus.ts`: Satellite bus design
-- `frontend/app/components/orbitSim/ScenariosView.tsx`: Futures tab UI
-- `frontend/app/lib/orbitSim/debugState.ts`: Data storage structure
-- `frontend/app/lib/orbitSim/selectors/scenarios.ts`: Data selectors for charts
-
-## Contact Points
-
-- Physics model: `yearSteppedDeployment.ts` and `physicsEngine.ts`
-- Chart rendering: Components in `frontend/app/components/orbitSim/`
-- Data access: Selectors in `frontend/app/lib/orbitSim/selectors/`
+- Scenario is locked to BASELINE (no user selection)
+- Physics sandbox parameters override simulation when applied
+- Debug state is single source of truth for all metrics
+- Charts use selectors to transform debug state data
+- 3D visualization uses representative rendering for performance (>2000 satellites)

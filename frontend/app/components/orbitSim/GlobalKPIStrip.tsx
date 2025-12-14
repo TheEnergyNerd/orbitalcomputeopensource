@@ -162,25 +162,25 @@ export default function GlobalKPIStrip({
       }
 
       // Power from debug state (convert kW to MW)
-      // CRITICAL FIX: Always try to calculate from satellite counts first if available,
-      // as power_total_kw may be 0 due to survival_fraction even when satellites exist
-      const classASats = currentDebugEntry.classA_satellites_alive ?? 0;
-      const classBSats = currentDebugEntry.classB_satellites_alive ?? 0;
-      
-      if (classASats > 0 || classBSats > 0) {
-        // Calculate power from satellite counts using tech curves (this is the ground truth)
-        // Use the actual year from debug entry, not searchYear
-        const entryYear = currentDebugEntry.year ?? searchYear;
-        const powerPerA = getClassAPower(entryYear);
-        const powerPerB = getClassBPower(entryYear);
-        const totalPowerKW = (classASats * powerPerA) + (classBSats * powerPerB);
-        totalPowerMW = totalPowerKW / 1000;
+      // PREFERRED: Use power_total_kw from debug state (this uses the actual power progression)
+      // This is the most accurate as it comes from yearSteppedDeployment which uses the progression curve
+      if (currentDebugEntry.power_total_kw !== undefined && currentDebugEntry.power_total_kw > 0) {
+        totalPowerMW = currentDebugEntry.power_total_kw / 1000;
       } else {
-        // Fallback 1: Use power_total_kw from debug state
-        totalPowerMW = (currentDebugEntry.power_total_kw ?? 0) / 1000;
+        // Fallback: Calculate from satellite counts using tech curves
+        const classASats = currentDebugEntry.classA_satellites_alive ?? 0;
+        const classBSats = currentDebugEntry.classB_satellites_alive ?? 0;
         
-        // Fallback 2: Try class power values if still 0
-        if (totalPowerMW === 0) {
+        if (classASats > 0 || classBSats > 0) {
+          // Calculate power from satellite counts using tech curves (this is the ground truth)
+          // Use the actual year from debug entry, not searchYear
+          const entryYear = currentDebugEntry.year ?? searchYear;
+          const powerPerA = getClassAPower(entryYear);
+          const powerPerB = getClassBPower(entryYear);
+          const totalPowerKW = (classASats * powerPerA) + (classBSats * powerPerB);
+          totalPowerMW = totalPowerKW / 1000;
+        } else {
+          // Fallback 2: Try class power values if still 0
           const classAPower = currentDebugEntry.classA_power_kw ?? 0;
           const classBPower = currentDebugEntry.classB_power_kw ?? 0;
           totalPowerMW = (classAPower + classBPower) / 1000;

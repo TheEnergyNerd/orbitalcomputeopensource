@@ -108,6 +108,15 @@ export default function LaunchMassChart({
       .style("font-size", isMobile ? "10px" : "12px")
       .style("fill", "#94a3b8")
       .text("Mass (kg)");
+    
+    // Add clarification: Ceiling = max satellites × avg mass (launch capacity limit)
+    g.append("text")
+      .attr("transform", `translate(${innerWidth - 10},${innerHeight - 10})`)
+      .style("text-anchor", "end")
+      .style("font-size", isMobile ? "8px" : "9px")
+      .style("fill", "#64748b")
+      .style("font-style", "italic")
+      .text("Ceiling = Launch capacity (satellites × avg mass)");
 
     // Create line generators
     const usedLine = d3.line<LaunchMassPoint>()

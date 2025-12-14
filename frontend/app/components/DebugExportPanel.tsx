@@ -6,8 +6,7 @@ import { useSimStore } from "../store/simStore";
 import { useOrbitalUnitsStore } from "../store/orbitalUnitsStore";
 import { calculateComputeFromPower } from "../lib/orbitSim/computeEfficiency";
 import { getOrbitalCostPerTFLOP } from "../lib/orbitSim/orbitalCostModel";
-import { usePathname } from "next/navigation";
-import { getDebugState, type DebugStateEntry } from "../lib/orbitSim/debugState";
+import { getDebugState, getDebugStateEntry, scenarioModeToKey, type DebugStateEntry } from "../lib/orbitSim/debugState";
 import {
   buildComputeDensitySeries,
   buildMassFractionsSeries,
@@ -27,12 +26,7 @@ import { SCENARIOS } from "../lib/orbitSim/scenarioParams";
 import { getEfficiencyCurveData } from "../lib/orbitSim/computeEfficiency";
 
 export default function DebugExportPanel() {
-  const pathname = usePathname();
-  
-  // Only show on /data route
-  if (pathname !== "/data") {
-    return null;
-  }
+  // Always show the export button (removed pathname restriction)
   const { timeline, config } = useSimulationStore();
   const { satellites, routes } = useOrbitSim();
   const simState = useSimStore((s) => s.state);
@@ -76,32 +70,47 @@ export default function DebugExportPanel() {
       }
     });
 
-    // Calculate total orbital power (100kW per satellite = 0.1 MW)
-    const totalOrbitalPowerMW = satellites.length * 0.1;
+    // Get debug entry for current year (single source of truth - same as KPI strip)
+    const scenarioKey = scenarioModeToKey(config.scenarioMode);
+    const currentDebugEntry = getDebugStateEntry(currentYear, config.scenarioMode);
+    
+    // Calculate total orbital power from debug state (same method as KPI strip)
+    let totalOrbitalPowerMW = 0;
+    let totalOrbitalComputePFLOPs = 0;
+    
+    if (currentDebugEntry && currentDebugEntry.power_total_kw !== undefined && currentDebugEntry.power_total_kw > 0) {
+      // Use power from debug state (most accurate - uses power progression curve)
+      totalOrbitalPowerMW = currentDebugEntry.power_total_kw / 1000;
+      
+      // FIX: Use compute_raw_flops (physics-constrained capacity) for snapshot export
+      // This matches the physics.radiatorCompute[year].computePFlops value
+      // compute_raw_flops is the actual capacity after thermal/backhaul constraints, not exportable
+      if (currentDebugEntry.compute_raw_flops !== undefined && currentDebugEntry.compute_raw_flops > 0) {
+        totalOrbitalComputePFLOPs = currentDebugEntry.compute_raw_flops / 1e15;
+      } else if (currentDebugEntry.compute_effective_flops !== undefined) {
+        totalOrbitalComputePFLOPs = currentDebugEntry.compute_effective_flops / 1e15;
+      } else if (currentDebugEntry.compute_exportable_flops !== undefined) {
+        totalOrbitalComputePFLOPs = currentDebugEntry.compute_exportable_flops / 1e15;
+      }
+    } else {
+      // Fallback: Use satellite counts (shouldn't happen if debug state is populated)
+      totalOrbitalPowerMW = satellites.length * 0.1;
+      const powerWatts = totalOrbitalPowerMW * 1e6;
+      totalOrbitalComputePFLOPs = calculateComputeFromPower(powerWatts, currentYear);
+    }
 
-    // Calculate total orbital compute using power-first model
-    const powerWatts = totalOrbitalPowerMW * 1e6; // Convert MW to watts
-    const totalOrbitalComputePFLOPs = calculateComputeFromPower(powerWatts, currentYear);
-
-    // Get utilization multiplier (simplified - would need actual strategy from simulation)
-    const utilizationMultiplier = 0.82; // Cost strategy default
+    // FIX: Calculate effective compute from debug state utilization
+    // Use backhaul_utilization_percent if available, otherwise default to 0.82
+    const utilizationMultiplier = currentDebugEntry?.backhaul_utilization_percent !== undefined
+      ? Math.max(0, 1 - (currentDebugEntry.backhaul_utilization_percent / 100)) // Convert % to multiplier
+      : 0.82; // Default fallback
     const effectiveComputeAfterUtilization = totalOrbitalComputePFLOPs * utilizationMultiplier;
 
-    // Get current debug entry (single source of truth)
-    const currentDebugEntryRaw = debugState[currentYear];
-    // Type guard: ensure it's a DebugStateEntry
-    const currentDebugEntry = (currentDebugEntryRaw && 
-      typeof currentDebugEntryRaw === 'object' && 
-      'year' in currentDebugEntryRaw && 
-      typeof currentDebugEntryRaw.year === 'number'
-    ) ? currentDebugEntryRaw : undefined;
-    
-    // Ground compute from debug state or timeline (convert TWh to PFLOPs)
-    const totalGroundComputePFLOPs = currentDebugEntry?.compute_effective_flops 
-      ? currentDebugEntry.compute_effective_flops / 1e15 // Convert FLOPS to PFLOPs
-      : (timeline.length > 0 && timeline[timeline.length - 1]?.netGroundComputeTwh
-        ? timeline[timeline.length - 1].netGroundComputeTwh * 1e3
-        : 0);
+    // FIX: Ground compute should come from time_series.ground_compute[year], not compute_effective_flops
+    // compute_effective_flops is orbital compute, not ground
+    const totalGroundComputePFLOPs = timeline.length > 0 && timeline[timeline.length - 1]?.netGroundComputeTwh
+      ? timeline[timeline.length - 1].netGroundComputeTwh * 1e3 // Convert TWh to PFLOPs (1 TWh = 1000 PFLOPs)
+      : 0;
 
     // Costs from debug state (single source of truth)
     const orbitTotalCost = currentDebugEntry?.annual_opex_orbit || 0;
@@ -154,12 +163,32 @@ export default function DebugExportPanel() {
       orbit_energy_share_twh: currentDebugEntry.orbit_energy_share_twh,
     } : null;
 
+    // Calculate power per satellite (from debug state) - snapshot value
+    const powerPerSatKwSnapshot = currentDebugEntry && currentDebugEntry.satellitesTotal > 0
+      ? (currentDebugEntry.power_total_kw || 0) / currentDebugEntry.satellitesTotal
+      : 0;
+    
+    // Get shell utilization and congestion metrics from debug state
+    const shellUtilization = currentDebugEntry?.shell_utilization_by_altitude || {};
+    const debrisCount = currentDebugEntry?.congestion_debris_count || 0;
+    const collisionRisk = currentDebugEntry?.congestion_collision_risk || 0;
+    const congestionCost = currentDebugEntry?.congestion_cost_annual || 0;
+    const orbitalPowerGWSnapshot = currentDebugEntry?.orbital_power_total_gw || (totalOrbitalPowerMW / 1000);
+    
+    // Battery metrics from debug state
+    const batteryDensity = currentDebugEntry?.battery_density_wh_per_kg || 0;
+    const batteryCost = currentDebugEntry?.battery_cost_usd_per_kwh || 0;
+    const batteryMassPerSat = currentDebugEntry?.battery_mass_per_sat_kg || 0;
+    const batteryCostPerSat = currentDebugEntry?.battery_cost_per_sat_usd || 0;
+    const eclipseTolerance = currentDebugEntry?.eclipse_tolerance_minutes || 0;
+
     // Snapshot data
     const snapshot = {
       year: currentYear,
       total_satellites: satellites.length,
       satellites_per_shell: satellitesPerShell,
       total_orbital_power_MW: totalOrbitalPowerMW,
+      total_orbital_power_GW: orbitalPowerGWSnapshot, // Added per CHART_AUDIT_AND_CONGESTION.md
       total_orbital_compute_PFLOPs: totalOrbitalComputePFLOPs,
       effective_compute_after_utilization: effectiveComputeAfterUtilization,
       total_ground_compute_PFLOPs: totalGroundComputePFLOPs,
@@ -172,6 +201,17 @@ export default function DebugExportPanel() {
       congestion_index: congestionIndex,
       routing_distribution: routingDistribution,
       scenario_diagnostics: scenarioDiagnostics,
+      // Added per CHART_AUDIT_AND_CONGESTION.md
+      power_per_sat_kw: powerPerSatKwSnapshot,
+      shell_utilization: shellUtilization,
+      debris_count: debrisCount,
+      collision_risk_annual: collisionRisk,
+      congestion_cost_usd: congestionCost,
+      battery_density_wh_per_kg: batteryDensity,
+      battery_cost_usd_per_kwh: batteryCost,
+      battery_mass_per_sat_kg: batteryMassPerSat,
+      battery_cost_per_sat_usd: batteryCostPerSat,
+      eclipse_tolerance_minutes: eclipseTolerance,
     };
 
     // Time-series data
@@ -197,6 +237,20 @@ export default function DebugExportPanel() {
     const orbitCostsPerCompute: (number | null)[] = [];
     const orbitComputeShares: (number | null)[] = [];
     const orbitEnergyShares: (number | null)[] = [];
+    // Added per CHART_AUDIT_AND_CONGESTION.md
+    const powerPerSatKw: number[] = [];
+    const orbitalPowerGW: number[] = [];
+    const shellUtilizationLEO340: number[] = [];
+    const shellUtilizationLEO550: number[] = [];
+    const shellUtilizationLEO1100: number[] = [];
+    const shellUtilizationMEO: number[] = [];
+    const debrisByYear: number[] = [];
+    const congestionCostByYear: number[] = [];
+    const batteryDensityByYear: number[] = [];
+    const batteryCostByYear: number[] = [];
+    const costPerKgToLeo: number[] = [];
+    const costPerSatUsd: number[] = [];
+    const launchMassPerYearKg: number[] = [];
 
     // Build time-series from debug state (single source of truth)
     // Use debug state years, fallback to timeline if debug state is empty
@@ -245,11 +299,33 @@ export default function DebugExportPanel() {
         orbitCostsPerCompute.push(debugEntry.orbit_cost_per_compute ?? null);
         orbitComputeShares.push(debugEntry.orbit_compute_share ?? null);
         orbitEnergyShares.push(debugEntry.orbit_energy_share_twh ?? null);
+        
+        // Added per CHART_AUDIT_AND_CONGESTION.md
+        const satCount = debugEntry.satellitesTotal || 0;
+        powerPerSatKw.push(satCount > 0 ? (debugEntry.power_total_kw || 0) / satCount : 0);
+        orbitalPowerGW.push(debugEntry.orbital_power_total_gw || (debugEntry.power_total_kw || 0) / 1000000);
+        shellUtilizationLEO340.push(debugEntry.shell_utilization_by_altitude?.LEO_340 || 0);
+        shellUtilizationLEO550.push(debugEntry.shell_utilization_by_altitude?.LEO_550 || 0);
+        shellUtilizationLEO1100.push(debugEntry.shell_utilization_by_altitude?.LEO_1100 || 0);
+        shellUtilizationMEO.push((debugEntry.shell_utilization_by_altitude?.MEO_8000 || 0) + (debugEntry.shell_utilization_by_altitude?.MEO_20000 || 0));
+        debrisByYear.push(debugEntry.congestion_debris_count || 0);
+        congestionCostByYear.push(debugEntry.congestion_cost_annual || 0);
+        batteryDensityByYear.push(debugEntry.battery_density_wh_per_kg || 0);
+        batteryCostByYear.push(debugEntry.battery_cost_usd_per_kwh || 0);
+        costPerKgToLeo.push(debugEntry.cost_per_kg_to_leo || 0);
+        costPerSatUsd.push(debugEntry.costPerSatellite || 0);
+        launchMassPerYearKg.push(debugEntry.launchMassThisYearKg || 0);
       } else if (timelineStep) {
         // Fallback to timeline data
         orbitalCompute.push((timelineStep.orbitalComputeTwh || 0) * 1e3);
         groundCompute.push((timelineStep.netGroundComputeTwh || 0) * 1e3);
-        orbitalPower.push((timelineStep.podsTotal || 0) * 0.1);
+        // FIX: Use orbitalPowerGW from timeline if available, otherwise estimate from podsTotal
+        // podsTotal * 0.1 gives MW, but we need to use actual power progression
+        // Try to get power from timeline step if available, otherwise use a better estimate
+        const timelinePowerMW = (timelineStep as any).orbitalPowerMW 
+          || (timelineStep as any).power_total_kw / 1000
+          || ((timelineStep.podsTotal || 0) * 0.15); // Better estimate: 150 kW per pod average
+        orbitalPower.push(timelinePowerMW);
         orbitCost.push((timelineStep.opexMix || 0) - (timelineStep.opexGround || 0));
         groundCost.push(timelineStep.opexGround || 0);
         orbitLatency.push(timelineStep.latencyMixMs || 65);
@@ -292,6 +368,21 @@ export default function DebugExportPanel() {
         orbitCostsPerCompute.push(null);
         orbitComputeShares.push(null);
         orbitEnergyShares.push(null);
+        
+        // Added per CHART_AUDIT_AND_CONGESTION.md - push nulls for missing data
+        powerPerSatKw.push(0);
+        orbitalPowerGW.push(0);
+        shellUtilizationLEO340.push(0);
+        shellUtilizationLEO550.push(0);
+        shellUtilizationLEO1100.push(0);
+        shellUtilizationMEO.push(0);
+        debrisByYear.push(0);
+        congestionCostByYear.push(0);
+        batteryDensityByYear.push(0);
+        batteryCostByYear.push(0);
+        costPerKgToLeo.push(0);
+        costPerSatUsd.push(0);
+        launchMassPerYearKg.push(0);
       }
     });
 
@@ -320,6 +411,22 @@ export default function DebugExportPanel() {
         orbit_compute_share: orbitComputeShares,
         orbit_energy_share_twh: orbitEnergyShares,
       },
+      // Added per CHART_AUDIT_AND_CONGESTION.md
+      power_per_sat_kw: powerPerSatKw,
+      orbital_power_gw: orbitalPowerGW,
+      shell_utilization_by_year: {
+        LEO_340: shellUtilizationLEO340,
+        LEO_550: shellUtilizationLEO550,
+        LEO_1100: shellUtilizationLEO1100,
+        MEO: shellUtilizationMEO,
+      },
+      debris_by_year: debrisByYear,
+      congestion_cost_by_year: congestionCostByYear,
+      battery_density: batteryDensityByYear,
+      battery_cost: batteryCostByYear,
+      cost_per_kg_to_leo: costPerKgToLeo,
+      cost_per_sat_usd: costPerSatUsd,
+      launch_mass_per_year_kg: launchMassPerYearKg,
     };
 
     // Build physics series from debug state

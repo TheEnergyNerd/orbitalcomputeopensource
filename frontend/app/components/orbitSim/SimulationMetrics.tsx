@@ -109,7 +109,8 @@ const MetricCard = ({
   sparkGround, 
   sparkMix, 
   savings, 
-  unit = '' 
+  unit = '',
+  tooltip
 }: {
   title: string;
   groundValue: string; 
@@ -118,6 +119,7 @@ const MetricCard = ({
   sparkMix: number[]; 
   savings: number; 
   unit?: string;
+  tooltip?: string;
 }) => {
   const savingsPositive = savings > 0;
   
@@ -137,8 +139,24 @@ const MetricCard = ({
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
         marginBottom: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
       }}>
-        {title}
+        <span>{title}</span>
+        {tooltip && (
+          <span 
+            title={tooltip}
+            style={{
+              color: '#64748b',
+              fontSize: '10px',
+              cursor: 'help',
+              opacity: 0.7,
+            }}
+          >
+            ⓘ
+          </span>
+        )}
       </div>
       
       {/* Sparkline */}
@@ -392,6 +410,7 @@ export default function SimulationMetrics({
           sparkGround={opexGround}
           sparkMix={opexMix}
           savings={opexSavings}
+          tooltip="Includes deployment and replacement costs (CAPEX + OPEX)"
         />
         
         <MetricCard

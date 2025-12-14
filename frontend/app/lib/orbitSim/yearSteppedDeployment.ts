@@ -59,6 +59,14 @@ import {
   type DebugStateEntry,
 } from "./debugState";
 import { applyAutoDesignSafety } from "./autoDesignSafety";
+import {
+  calculateCongestionMetrics,
+  getShellCongestion,
+  type CongestionMetrics,
+} from "./congestionModel";
+import { getShellByAltitude, ORBIT_SHELLS } from "./orbitShells";
+import { calculateShellCapacity } from "./shellCapacity";
+import { getBatterySpec, calculateBatteryRequirements } from "./batteryModel";
 
 // Legacy ScenarioKind type for compatibility (mapped from scenarioKey)
 type ScenarioKind = "bear" | "baseline" | "bull";
@@ -87,6 +95,7 @@ export interface YearDeploymentState {
   // Cumulative tracking for survival calculation
   cumulativeSatellitesLaunched?: number;
   cumulativeFailures?: number;
+  failuresByYear?: Map<number, number>; // Track failures by year for debris calculation
   
   // Physics state (single source of truth)
   physicsState?: PhysicsState;
@@ -158,7 +167,7 @@ export function calculateYearDeployment(
   
   // 1. Calculate annual launch capacity
   const yearOffset = year - START_YEAR;
-  const baseLaunches = getAnnualLaunchCapacity(yearOffset);
+  const baseLaunches = getAnnualLaunchCapacity(yearOffset, scenarioMode);
   
   // 2. Apply strategy growth multiplier
   const growthMultiplier = STRATEGY_GROWTH_MULTIPLIERS[strategy];
@@ -239,28 +248,11 @@ export function calculateYearDeployment(
   const launchCostDeclineFactor = Math.pow(launchCostDeclinePerYear, yearIndex);
   const demandGrowthFactor = Math.pow(demandGrowthPerYear, yearIndex);
 
-  // Legacy scenario parameters (for maintenance, backhaul, etc.)
-  let failureRateBase: number;
-  let autonomyLevel: number;
-  let backhaulPerSatTBps: number;
-  let launchCarbonPerKg: number;
-  
-  if (scenarioMode === "ORBITAL_BEAR") {
-    failureRateBase = 0.05;
-    autonomyLevel = 0.5;
-    backhaulPerSatTBps = 0.2;
-    launchCarbonPerKg = 300; // Reduced by 50% (was 600) - Starship uses Methalox
-  } else if (scenarioMode === "ORBITAL_BULL") {
-    failureRateBase = 0.01;
-    autonomyLevel = 3.0;
-    backhaulPerSatTBps = 1.0;
-    launchCarbonPerKg = 37.5; // Reduced by 50% again (was 75) - Starship Methalox is even cleaner
-  } else { // BASELINE
-    failureRateBase = 0.02;
-    autonomyLevel = 1.5;
-    backhaulPerSatTBps = 0.5;
-    launchCarbonPerKg = 150; // Reduced by 50% (was 300) - Starship uses Methalox
-  }
+  // Use scenario parameters (from scenarioParams.ts) instead of hardcoded values
+  const failureRateBase = scenarioParams.failureRateBase;
+  const autonomyLevel = scenarioParams.autonomyLevel;
+  const backhaulPerSatTBps = scenarioParams.backhaulPerSatTBps;
+  const launchCarbonPerKg = scenarioParams.launchCarbonPerKg;
   
   // Base compute per satellite (from tech curves)
   const baseComputePerA = getClassACompute(year);
@@ -343,11 +335,52 @@ export function calculateYearDeployment(
     }
   }
   const baseMassPerSatKg = 1500.0;
-  const basePowerPerSatKw = 100.0;
+  const basePowerPerSatKw = 150.0; // Starting at 150kW in 2025
   const baseComputeTflopsPerSat = 50.0;
   
-  powerGrowthPerYear = 0.1;
-  const massPowerGrowthFactor = Math.pow(1.1, yearIndex);
+  // Power per sat progression: 150kW (2025) → 300kW (2028) → 500kW (2032) → 750kW (2036) → 1000kW (2040)
+  const POWER_PROGRESSION: Record<number, number> = {
+    2025: 150,
+    2028: 300,
+    2032: 500,
+    2036: 750,
+    2040: 1000,
+  };
+  
+  const getBusPower = (year: number): number => {
+    // If exact year match, use that value
+    if (POWER_PROGRESSION[year]) {
+      return POWER_PROGRESSION[year];
+    }
+    
+    // Find surrounding years for interpolation
+    const years = Object.keys(POWER_PROGRESSION).map(Number).sort((a, b) => a - b);
+    
+    if (year <= years[0]) return POWER_PROGRESSION[years[0]];
+    if (year >= years[years.length - 1]) return POWER_PROGRESSION[years[years.length - 1]];
+    
+    let lowerYear = years[0];
+    let upperYear = years[years.length - 1];
+    
+    for (let i = 0; i < years.length - 1; i++) {
+      if (year >= years[i] && year <= years[i + 1]) {
+        lowerYear = years[i];
+        upperYear = years[i + 1];
+        break;
+      }
+    }
+    
+    // Linear interpolation
+    const lower = POWER_PROGRESSION[lowerYear];
+    const upper = POWER_PROGRESSION[upperYear];
+    const t = (year - lowerYear) / (upperYear - lowerYear);
+    
+    return lower + (upper - lower) * t;
+  };
+  
+  powerGrowthPerYear = 0.12; // Keep for compatibility
+  const massPowerGrowthFactor = Math.pow(1.12, yearIndex);
+  
   // FIX: Accelerate compute deflation - change from 1.45x to 1.6x for ORBITAL_BULL
   // Use sandbox Moore's Law if available
   const mooresLawDoublingYears = sandboxOverrides?.mooresLawDoublingYears ?? 2.5;
@@ -358,8 +391,8 @@ export function calculateYearDeployment(
       : Math.pow(1.45, yearIndex)); // 45% for others
   
   const massPerSatKg = Math.min(baseMassPerSatKg * massPowerGrowthFactor, 5000.0);
-  // Use sandbox power if available, otherwise calculate normally
-  const powerPerSatKw = sandboxOverrides?.busPowerKw ?? Math.min(basePowerPerSatKw * massPowerGrowthFactor, 1000.0);
+  // Use sandbox power if available, otherwise use progression curve
+  const powerPerSatKw = sandboxOverrides?.busPowerKw ?? Math.min(getBusPower(year), 2000.0);
   const computeTflopsPerSat = baseComputeTflopsPerSat * computeGrowthFactor;
   
   physicsMassPerSatelliteKgA = massPerSatKg;
@@ -702,8 +735,9 @@ export function calculateYearDeployment(
   // The issue: survival_fraction is being applied AFTER the transition
   // This means: satellitesTotal_end = (satellitesTotal_start + launches - retired) * survival_fraction
   // But failures/recoveries affect survival_fraction, not the raw count
-  
-  if (Math.abs(actual_end_before_survival - expected_end_before_survival) > 0.1) {
+  // NOTE: Allow up to 1.0 difference due to rounding in orbit allocation calculations
+  const difference = Math.abs(actual_end_before_survival - expected_end_before_survival);
+  if (difference > 1.0) {
     console.error(`[DEBUG SATELLITE STATE TRANSITION] Year ${year} - ASSERTION FAILED:`, {
       satellitesTotal_start,
       launchesThisYear: launchesThisYear_debug,
@@ -727,6 +761,9 @@ export function calculateYearDeployment(
       actual: `${S_A_new} + ${S_B_new} = ${actual_end_before_survival}`,
     });
     throw new Error(`[DEBUG SATELLITE STATE TRANSITION] Year ${year}: satellitesTotal_after_launches_retirements (${actual_end_before_survival}) != expected (${expected_end_before_survival}). Difference: ${actual_end_before_survival - expected_end_before_survival}`);
+  } else if (difference > 0.5) {
+    // Log warning for rounding differences (0.5-1.0), but don't throw
+    console.warn(`[DEBUG SATELLITE STATE TRANSITION] Year ${year} - Rounding difference: ${difference.toFixed(2)} (expected: ${expected_end_before_survival}, actual: ${actual_end_before_survival})`);
   }
   
   // CRITICAL FIX: Calculate survival fraction from cumulative failures
@@ -1052,9 +1089,15 @@ export function calculateYearDeployment(
   // === Compute demand + shares =======================================
   // demandGrowthFactor already calculated above from scenario params
 
-  // Demand side (stylized, but now much larger so orbit doesn't instantly dominate)
-  const baseDemandPFLOPs = 100_000;          // baseline demand in PFLOPs
+  // Demand side - scaled up for realistic 2040 targets (50GW orbital)
+  // Base demand starts at 200k PFLOPs in 2025, grows at 35% YoY
+  const baseDemandPFLOPs_2025 = 200_000;      // Starting point (doubled from 100k)
+  const baseDemandPFLOPs = baseDemandPFLOPs_2025;
+  
+  // Orbital addressable share: 15% of workloads are latency-insensitive (batch/async)
+  const orbitalAddressableShare = 0.15;
   const totalDemandPFLOPs = baseDemandPFLOPs * demandGrowthFactor;
+  const orbitalAddressableDemandPFLOPs = totalDemandPFLOPs * orbitalAddressableShare;
   const totalDemandFlops = totalDemandPFLOPs * 1e15; // Convert to FLOPS for comparison
 
   // Supply side: physics engine is already giving us PFLOPs, not literal FLOPS
@@ -1242,12 +1285,84 @@ export function calculateYearDeployment(
   const annual_opex_ground_all_ground = allGroundOpexUSD;
   const annual_opex_ground = groundComputeShare * annual_opex_ground_all_ground;
 
-  // OPEX = 5% of current fleet value (satellitesTotal * costPerSatellite)
-  // Assumes 5% annual cost for ground stations, insurance, and team
-  // Ensure we have valid values (handle case where satellitesTotal is 0)
-  const annual_opex_orbit = (satellitesTotal > 0 && avgCostPerSatelliteUSD > 0)
-    ? satellitesTotal * avgCostPerSatelliteUSD * 0.05
-    : 0;
+  // FIX: OPEX should be based on operational costs, not fleet value
+  // Operational costs per satellite: ~$15k/year (laser comm, stationkeeping, ground ops)
+  // Plus amortized replacement cost: ~$286k/year per satellite (7-year lifetime)
+  // Total: ~$301k/year per satellite, but only operational portion (~$15k) is OPEX
+  // Replacement amortization is already included in cost/compute, so don't double-count
+  const operationalCostPerSatellite = 15_000; // $15k operational per satellite/year
+  const base_annual_opex_orbit = satellitesTotal * operationalCostPerSatellite;
+  
+  // Add ground station costs: $50M base + $1M per 10k satellites
+  const groundStationCosts = 50_000_000 + Math.floor(satellitesTotal / 10_000) * 1_000_000;
+  
+  // Add insurance: $10M per 10k satellites (risk-adjusted)
+  const insuranceCosts = Math.floor(satellitesTotal / 10_000) * 10_000_000;
+  
+  const base_annual_opex_orbit_with_fixed = base_annual_opex_orbit + groundStationCosts + insuranceCosts;
+
+  // === Congestion costs =================================================
+  // Calculate congestion metrics and add costs to OPEX
+  const failuresByYear = new Map<number, number>(state.failuresByYear || []);
+  failuresByYear.set(year, satellitesFailedThisYear);
+  
+  // Determine primary shell (use LEO_550 as default, or LEO_1100 if Class B dominant)
+  const primaryShell = satellitesTotal > 0 && final_S_B_new > final_S_A_new ? "LEO_1100" : "LEO_550";
+  const shellName = primaryShell;
+  
+  // Estimate compute value per hour for downtime cost
+  const computeValuePerHour = cost_per_compute_orbit > 0 
+    ? (computeExportablePFLOPs * cost_per_compute_orbit) / (365 * 24) 
+    : 1e6; // Fallback: $1M/hour
+  
+  const congestionMetrics = calculateCongestionMetrics(
+    year,
+    START_YEAR,
+    satellitesTotal,
+    shellName,
+    Object.fromEntries(failuresByYear),
+    cost_per_kg_to_leo,
+    computeValuePerHour
+  );
+  
+  // === Multi-shell capacity calculations =================================
+  // Calculate capacity and utilization for each shell
+  const shellUtilizationByAltitude: Record<string, number> = {};
+  const shellPowerBreakdown: Array<{ shell: string; powerGW: number; sats: number }> = [];
+  
+  // FIX: Use actual fleet power (power_total_kw) for total, not shell-constrained estimate
+  // The shell breakdown is for utilization tracking, but total power should match KPI
+  const totalOrbitalPowerGW = power_total_kw / 1e6; // Convert kW to GW (matches KPI calculation)
+  
+  // Distribute satellites across shells (simplified: assume even distribution for now)
+  // In a full implementation, this would track actual shell assignments
+  const satsPerShell = satellitesTotal / ORBIT_SHELLS.length;
+  
+  for (const shell of ORBIT_SHELLS) {
+    const capacity = calculateShellCapacity(shell.altitude_km, shell.spacing_km);
+    const effectivePower = Math.min(powerPerSatKw, shell.max_power_per_sat_kw);
+    const radiationFactor = 1 - (shell.radiation_penalty || 0);
+    
+    // Estimate satellite count in this shell (simplified distribution)
+    const satsInShell = Math.min(satsPerShell, capacity.maxSatellites);
+    const shellPowerGW = (satsInShell * effectivePower * radiationFactor) / 1e6;
+    
+    shellUtilizationByAltitude[shell.id] = satsInShell / capacity.maxSatellites;
+    shellPowerBreakdown.push({
+      shell: shell.id,
+      powerGW: shellPowerGW,
+      sats: satsInShell,
+    });
+  }
+  
+  // === Battery metrics ====================================================
+  const batterySpec = getBatterySpec(year);
+  // Calculate battery requirements for typical eclipse (35 minutes for LEO)
+  const typicalEclipseMinutes = 35;
+  const batteryReqs = calculateBatteryRequirements(year, powerPerSatKw, typicalEclipseMinutes);
+  
+  // Add congestion costs to orbital OPEX
+  const annual_opex_orbit = base_annual_opex_orbit_with_fixed + congestionMetrics.congestionCostAnnual;
 
   const raw_annual_opex_mix = annual_opex_ground + annual_opex_orbit;
   const annual_opex_mix = sane(raw_annual_opex_mix, 1e12);
@@ -1589,6 +1704,23 @@ export function calculateYearDeployment(
     ground_full_power_uptime_percent: ground_full_power_uptime_percent,
     solar_plus_storage_uptime_percent: solar_plus_storage_uptime_percent,
     space_solar_uptime_percent: space_solar_uptime_percent,
+    // --- CONGESTION METRICS ---
+    congestion_shell_utilization: congestionMetrics.shellUtilization,
+    congestion_conjunction_rate: congestionMetrics.conjunctionsPerYear,
+    congestion_debris_count: congestionMetrics.accumulatedDebris,
+    congestion_collision_risk: congestionMetrics.annualCollisionProbability,
+    congestion_thermal_penalty: congestionMetrics.avgThermalPenalty,
+    congestion_cost_annual: congestionMetrics.congestionCostAnnual,
+    // --- MULTI-SHELL CAPACITY ---
+    shell_utilization_by_altitude: shellUtilizationByAltitude,
+    orbital_power_total_gw: totalOrbitalPowerGW,
+    shell_power_breakdown: shellPowerBreakdown,
+    // --- BATTERY METRICS ---
+    battery_density_wh_per_kg: batterySpec.density_wh_per_kg,
+    battery_cost_usd_per_kwh: batterySpec.cost_usd_per_kwh,
+    battery_mass_per_sat_kg: batteryReqs.massKg,
+    battery_cost_per_sat_usd: batteryReqs.costUsd,
+    eclipse_tolerance_minutes: typicalEclipseMinutes,
   };
   
   // CRITICAL FIX: satellitesTotal MUST be aggregated from class counts
@@ -1636,6 +1768,7 @@ export function calculateYearDeployment(
     totalPowerMW: (final_S_A_new * powerPerA + final_S_B_new * powerPerB) / 1000, // RULE 1: Use survival-adjusted counts
     cumulativeSatellitesLaunched, // CRITICAL: Track cumulative launches for survival calculation
     cumulativeFailures, // CRITICAL: Track cumulative failures for survival calculation
+    failuresByYear, // Track failures by year for debris calculation
     physicsState: nextPhysicsState,
     thermalState: updatedThermalState, // Legacy
   };

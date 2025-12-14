@@ -626,8 +626,8 @@ export const CostViz = ({
           fill={costColor}
           style={{ transition: 'width 0.3s ease' }}
         />
-        <text x="0" y="44" fill="#64748b" fontSize="8" fontFamily="monospace">CHEAPER</text>
-        <text x="70" y="44" fill="#64748b" fontSize="8" fontFamily="monospace" textAnchor="end">PRICIER</text>
+        <text x="0" y="44" fill="#64748b" fontSize="7" fontFamily="monospace">CHEAPER</text>
+        <text x="70" y="44" fill="#64748b" fontSize="7" fontFamily="monospace" textAnchor="end">PRICIER</text>
       </g>
       
       {/* Launch frequency */}

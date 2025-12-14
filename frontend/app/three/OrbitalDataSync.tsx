@@ -162,6 +162,7 @@ export function OrbitalDataSync() {
   const updateStartTimeRef = useRef<number>(0);
   const isUpdatingRef = useRef<boolean>(false);
   const updateQueueRef = useRef<Array<() => void>>([]);
+  const failedShellsRef = useRef<Set<string>>(new Set());
   
   // Safety timeout: if isUpdating flag is stuck for more than 5 seconds, reset it
   useEffect(() => {
@@ -866,7 +867,7 @@ export function OrbitalDataSync() {
           let shell: ReturnType<typeof assignSatelliteToShell>;
           if (targetClassB && currentYear >= 2030) {
             // Force SSO for Class B satellites
-            const ssoShell = ORBIT_SHELLS.find(s => s.id === "SSO");
+            const ssoShell = ORBIT_SHELLS.find(s => s.id === "LEO_1100"); // SSO is now LEO_1100 (600-800km)
             if (ssoShell) {
               shell = ssoShell;
               // Removed verbose logging
@@ -882,12 +883,10 @@ export function OrbitalDataSync() {
           
           // Map shell ID to ShellType
           let shellType: ShellType = "LEO";
-          if (shell.id === "MEO") {
+          if (shell.id === "MEO_8000" || shell.id === "MEO_20000") {
             shellType = "MEO";
-          } else if (shell.id === "GEO") {
-            shellType = "GEO";
-          } else if (shell.id === "SSO") {
-            shellType = "SSO";
+          } else if (shell.id === "LEO_1100") {
+            shellType = "SSO"; // LEO_1100 is the SSO shell (600-800km)
           }
           
           // For SSO (Class B), use even distribution index
@@ -897,7 +896,8 @@ export function OrbitalDataSync() {
           
           // Generate satellite position using physically coherent positioning
           // For SSO, pass index for even distribution
-          const position = generateSatellitePosition(shellType, existingPositions, 100, ssoIndex);
+          // Increased maxAttempts from 100 to 200 to handle dense constellations
+          const position = generateSatellitePosition(shellType, existingPositions, 200, ssoIndex);
           
           if (position) {
             // Determine Class B: must be year >= 2030 AND (targeted as Class B OR in SSO shell)
@@ -908,7 +908,7 @@ export function OrbitalDataSync() {
             if (satelliteClass === "B" && shellType !== "SSO") {
               console.warn(`[OrbitalDataSync] ⚠️ Class B satellite assigned to non-SSO shell ${shellType}, forcing SSO`);
               // Regenerate with SSO shell
-              const ssoPosition = generateSatellitePosition("SSO", existingPositions, 100, ssoIndex);
+              const ssoPosition = generateSatellitePosition("SSO", existingPositions, 200, ssoIndex);
               if (ssoPosition) {
                 Object.assign(position, ssoPosition);
               }
@@ -986,7 +986,15 @@ export function OrbitalDataSync() {
               shell: shellType,
             });
           } else {
-            console.warn(`[OrbitalDataSync] ⚠️ Failed to generate position for unit ${unit.id}`);
+            // Only log warning once per shell per batch to reduce noise
+            const shellKey = `${shellType}_${currentYear}`;
+            if (!failedShellsRef.current.has(shellKey)) {
+              failedShellsRef.current.add(shellKey);
+              console.warn(
+                `[OrbitalDataSync] ⚠️ Failed to generate position for unit ${unit.id} ` +
+                `(shell: ${shellType}, existing positions: ${existingPositions.length}, year: ${currentYear})`
+              );
+            }
           }
         } else if (unit.type === "geo_hub" && unit.position) {
           // GEO hub = 1 satellite at GEO altitude

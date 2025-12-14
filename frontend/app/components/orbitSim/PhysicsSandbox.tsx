@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSimulationStore } from '../../store/simulationStore';
 import { useOrbitSim } from '../../state/orbitStore';
 import { getDebugStateEntry } from '../../lib/orbitSim/debugState';
@@ -704,8 +704,8 @@ const calculateSafeDefaults = (year: string) => {
       servicerDrones: 60,           // Plenty of repair capacity
       launchesPerYear: 36,
       satsPerLaunch: 50,
-      launchCostPerKg: 80,
-      launchCostImprovementRate: 0.15, // 15% per year improvement (similar to baseline scenario)
+      launchCostPerKg: 200, // Match baseline scenario: base_cost_per_kg_to_leo = 200 for baseline
+      launchCostImprovementRate: 0.08, // Match baseline: launchCostDeclinePerYear = 0.92 means 8% decline per year
       satelliteBaseCost: 180000,
       // Compute / Silicon
       processNode: 5,               // 5nm - good balance of efficiency and maturity
@@ -725,7 +725,7 @@ const calculateSafeDefaults = (year: string) => {
 const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: PhysicsSandboxProps) => {
   useEffect(() => { injectStyles(); }, []);
   
-  const { timeline, config, recomputeWithPlans } = useSimulationStore();
+  const { timeline, config, recomputeWithPlans, recompute, yearPlans } = useSimulationStore();
   const simTime = useOrbitSim((s) => s.simTime);
   const setSimPaused = useOrbitSim((s) => s.setSimPaused);
   const actualYear = timeline.length > 0 ? timeline[timeline.length - 1]?.year.toString() || currentYear : currentYear;
@@ -834,6 +834,75 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
 
   const results = useMemo(() => calculatePhysics(params), [params]);
   const baselineResults = useMemo(() => calculatePhysics(workingDefaults), []);
+
+  // Track if this is the initial mount to avoid triggering re-run on mount
+  const isInitialMount = useRef(true);
+
+  // CRITICAL FIX: When sandbox params change, update window.__physicsSandboxParams and trigger simulation re-run
+  // This ensures charts and exports reflect the new parameters
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Skip on initial mount - params are already set from initialization
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Debounce simulation re-run to avoid excessive computation
+    const timeoutId = setTimeout(() => {
+      // Update window.__physicsSandboxParams with current params
+      const physicsOverrides = {
+        radiatorArea_m2: params.radiatorAreaPerSat,
+        emissivity: params.emissivity,
+        busPowerKw: params.busPowerKw,
+        radiatorTempC: params.radiatorTempC,
+        opticalTerminals: params.opticalTerminals,
+        linkCapacityGbps: params.linkCapacityGbps,
+        groundStations: params.groundStations,
+        mooresLawDoublingYears: params.mooresLawDoublingYears,
+        launchCostPerKg: params.launchCostPerKg,
+        launchCostImprovementRate: params.launchCostImprovementRate ?? 0.15,
+        satelliteBaseCost: params.satelliteBaseCost,
+        processNode: params.processNode,
+        chipTdp: params.chipTdp,
+        radiationHardening: params.radiationHardening,
+        memoryPerNode: params.memoryPerNode,
+        solarEfficiency: params.solarEfficiency,
+        degradationRate: params.degradationRate,
+        batteryBuffer: params.batteryBuffer,
+        powerMargin: params.powerMargin,
+        batteryDensity: params.batteryDensity,
+        batteryCost: params.batteryCost,
+      };
+
+      (window as { __physicsSandboxParams?: unknown }).__physicsSandboxParams = {
+        params,
+        results,
+        physicsOverrides,
+      };
+
+      // Trigger simulation re-run with current year plans
+      // This will recalculate all time series data with the new physics parameters
+      if (yearPlans && yearPlans.length > 0) {
+        recomputeWithPlans(yearPlans);
+      } else {
+        // Fallback: use recompute if no plans available
+        recompute();
+      }
+
+      // Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent('physics-sandbox-applied', {
+        detail: {
+          params,
+          results,
+          physicsOverrides,
+        }
+      }));
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [params, results, recompute, recomputeWithPlans, yearPlans]);
 
   const handleApplyToGlobe = () => {
     if (!results.allSystemsOK) {
