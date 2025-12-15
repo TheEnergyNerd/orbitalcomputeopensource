@@ -81,28 +81,31 @@ export function buildMassBreakdownSeries(
       });
     } else if (entry.year === entries[entries.length - 1]?.year || entry.year % 5 === 0) {
       // Log every 5 years and last year
-      console.log(`[Mass Breakdown] Year ${entry.year}:`, {
-        solar,
-        radiator,
-        silicon,
-        shielding,
-        structure,
-        total,
-        bus_total_mass_kg: entry.bus_total_mass_kg,
-        allComponents: {
-          solar: entry.bus_solar_mass_kg,
-          radiator: entry.bus_radiator_mass_kg,
-          silicon: entry.bus_silicon_mass_kg,
-          shielding: entry.bus_shielding_mass_kg,
-          structure: entry.bus_structure_mass_kg,
-          powerElectronics: entry.bus_power_electronics_mass_kg,
-          avionics: entry.bus_avionics_mass_kg,
-          battery: entry.bus_battery_mass_kg,
-          adcs: entry.bus_adcs_mass_kg,
+      // Only log in development mode to reduce console noise
+      if (process.env.NODE_ENV === 'development' && entry.year % 5 === 0) {
+        console.log(`[Mass Breakdown] Year ${entry.year}:`, {
+          solar,
+          radiator,
+          silicon,
+          shielding,
+          structure,
+          total,
+          bus_total_mass_kg: entry.bus_total_mass_kg,
+          allComponents: {
+            solar: entry.bus_solar_mass_kg,
+            radiator: entry.bus_radiator_mass_kg,
+            silicon: entry.bus_silicon_mass_kg,
+            shielding: entry.bus_shielding_mass_kg,
+            structure: entry.bus_structure_mass_kg,
+            powerElectronics: entry.bus_power_electronics_mass_kg,
+            avionics: entry.bus_avionics_mass_kg,
+            battery: entry.bus_battery_mass_kg,
+            adcs: entry.bus_adcs_mass_kg,
           propulsion: entry.bus_propulsion_mass_kg,
           other: entry.bus_other_mass_kg,
-        },
-      });
+          },
+        });
+      }
     }
     
     return {

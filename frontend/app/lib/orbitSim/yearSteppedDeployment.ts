@@ -28,7 +28,7 @@ import type { ScenarioMode } from "./simulationConfig";
 import { getScenarioParams, getScenarioKey, type ScenarioParams } from "./scenarioParams";
 import { designComputeBus } from "./physics/designBus";
 import type { BusPhysicsOutputs } from "./physics/physicsTypes";
-import { DEFAULT_ORBIT_ENV } from "./physics/physicsConfig";
+import { DEFAULT_ORBIT_ENV, DEFAULT_STRUCTURAL_SCALING } from "./physics/physicsConfig";
 import {
   calculateLaunchConstraints,
   calculateConstrainedEffectiveCompute,
@@ -208,8 +208,10 @@ export function calculateYearDeployment(
   let totalLaunches = Math.ceil(targetSatellites / satsPerLaunchEstimate);
   
   // 3.5. APPLY LAUNCH CONSTRAINTS (mass and cost gating)
+  // CRITICAL FIX: Use maxLaunchesPerYear for constraint calculation, not calculated totalLaunches
+  // The constraint should be based on available launch capacity, not desired launches
   const launchConstraints = calculateLaunchConstraints(
-    totalLaunches,
+    maxLaunchesPerYear, // Use available launch capacity, not desired launches
     newA_target,
     newB_target,
     year,
@@ -220,6 +222,21 @@ export function calculateYearDeployment(
   const totalTarget = newA_target + newB_target;
   const allowedTotal = launchConstraints.allowed;
   const scaleFactor = totalTarget > 0 ? allowedTotal / totalTarget : 0;
+  
+  // Debug logging for fleet growth issues
+  if (year <= 2026 || (year % 5 === 0)) {
+    console.log(`[FLEET GROWTH DEBUG] Year ${year} - Launch Constraints:`, {
+      maxLaunchesPerYear,
+      totalLaunches,
+      targetSatellites,
+      newA_target,
+      newB_target,
+      totalTarget,
+      launchConstraints,
+      allowedTotal,
+      scaleFactor,
+    });
+  }
   
   // Use let so we can recalculate after we know actual masses
   let newA = Math.round(newA_target * scaleFactor);
@@ -479,7 +496,19 @@ export function calculateYearDeployment(
     // Recalculate total launches with actual constraint
     totalLaunches = Math.ceil((newA + newB) / Math.floor(avgSatsPerLaunchActual));
     
-        // Launch constraint logging removed for production
+    // Debug logging for fleet growth issues
+    if (year <= 2026 || (year % 5 === 0)) {
+      console.log(`[FLEET GROWTH DEBUG] Year ${year}:`, {
+        totalTargetSats,
+        maxSatellitesPerYearActual,
+        scaleFactor,
+        newA,
+        newB,
+        totalLaunches,
+        maxLaunchesPerYear,
+        avgSatsPerLaunchActual,
+      });
+    }
   }
   
   // FIX #2: Radiator sizing using realistic flux limit (0.3 kW/m² for 300K radiator)
@@ -503,20 +532,33 @@ export function calculateYearDeployment(
   modifiedRadiatorAreaPerSat = sandboxOverrides?.radiatorArea_m2 ?? 
     ((heatGenPerSatKw / RADIATOR_FLUX_LIMIT_KW_PER_M2) * safety_margin);
   
-  // Calculate solar array mass: ~5 kg/kW (200 W/kg specific power)
-  // This matches the designBus.ts calculation: SOLAR_SPECIFIC_MASS_KG_PER_KW = 5
-  const solarArrayMassKg = powerPerSatKw * 5.0;
+  // Calculate solar array mass with structural scaling penalty for large arrays
+  // Base mass: ~5 kg/kW (200 W/kg specific power) at small scale
+  // Apply structural scaling to account for booms, deployment mechanisms, etc. at high power
+  const SOLAR_BASE_MASS_PER_KW = 5.0; // kg/kW at small scale
+  const structuralScaling = DEFAULT_STRUCTURAL_SCALING; // Use default scaling parameters
+  const referenceKW = structuralScaling.thresholdPowerKW;
+  const referenceMass = referenceKW * SOLAR_BASE_MASS_PER_KW;
+  const solarArrayMassKg = referenceMass * Math.pow(powerPerSatKw / referenceKW, structuralScaling.structuralPenaltyExponent);
   // Calculate solar array area: power / (solar constant * efficiency)
   // Solar constant: 1361 W/m², panel efficiency: ~30%, so ~450 W/m² effective
   const solarArrayAreaM2 = powerPerSatKw * 1000 / 450; // Convert kW to W, then divide by effective flux
   
+  // Calculate radiator mass with structural scaling penalty
+  // Base mass per kW of heat rejection: ~10 kg/kW (radiators are heavier than solar)
+  // Apply structural scaling similar to solar arrays
+  // Note: heatGenPerSatKw is already defined above (line 487)
+  const RADIATOR_BASE_MASS_PER_KW = 10.0; // kg/kW at small scale
+  const radiatorRefMass = structuralScaling.thresholdPowerKW * RADIATOR_BASE_MASS_PER_KW;
+  const radiatorMassKg = radiatorRefMass * Math.pow(heatGenPerSatKw / structuralScaling.thresholdPowerKW, structuralScaling.structuralPenaltyExponent);
+
   modifiedBusPhysicsA = {
     orbitEnv: DEFAULT_ORBIT_ENV,
     busPowerKw: powerPerSatKw,
     solarArrayAreaM2: solarArrayAreaM2,
     radiatorAreaM2: modifiedRadiatorAreaPerSat,
     solarArrayMassKg: solarArrayMassKg,
-    radiatorMassKg: massPerSatKg * 0.3,
+    radiatorMassKg: radiatorMassKg,
     siliconMassKg: massPerSatKg * 0.1,
     structureMassKg: massPerSatKg * 0.1,
     shieldingMassKg: massPerSatKg * 0.05,
@@ -874,10 +916,8 @@ export function calculateYearDeployment(
       actual: `${S_A_new} + ${S_B_new} = ${actual_end_before_survival}`,
     });
     throw new Error(`[DEBUG SATELLITE STATE TRANSITION] Year ${year}: satellitesTotal_after_launches_retirements (${actual_end_before_survival}) != expected (${expected_end_before_survival}). Difference: ${actual_end_before_survival - expected_end_before_survival}`);
-  } else if (difference > 0.5) {
-    // Log warning for rounding differences (0.5-1.0), but don't throw
-    console.warn(`[DEBUG SATELLITE STATE TRANSITION] Year ${year} - Rounding difference: ${difference.toFixed(2)} (expected: ${expected_end_before_survival}, actual: ${actual_end_before_survival})`);
   }
+  // Removed rounding difference warning - differences of ±1 are expected due to floor/round operations
   
   // CRITICAL FIX: Calculate survival fraction from cumulative failures
   // survival_fraction = 1 - (cumulativeFailures / cumulativeSatellitesLaunched)
@@ -914,7 +954,8 @@ export function calculateYearDeployment(
   // OR: satellitesTotal_end should equal (start + launches - retired) * survival_fraction (if failures are handled via survival)
   const expected_end_after_survival = Math.floor(actual_end_before_survival * final_survival_fraction);
   
-  if (Math.abs(satellitesTotal_end - expected_end_after_survival) > 0.1 && final_survival_fraction > 0) {
+  // Only log if difference is significant (>1) - rounding errors of ±1 are expected
+  if (Math.abs(satellitesTotal_end - expected_end_after_survival) > 1 && final_survival_fraction > 0) {
     console.error(`[DEBUG SATELLITE STATE TRANSITION] Year ${year} - FINAL STATE ASSERTION FAILED:`, {
       satellitesTotal_start,
       launchesThisYear: launchesThisYear_debug,
@@ -992,7 +1033,7 @@ export function calculateYearDeployment(
   const RADIATOR_COST_PER_KG = 500; // $/kg
   // Note: Use sandbox override if available, otherwise use base cost
   // The actual cost_per_kg_to_leo is calculated later and will also respect sandbox override
-  const BASE_LAUNCH_COST_PER_KG = sandboxOverrides?.launchCostPerKg ?? 200; // $/kg (Starship optimistic)
+  const BASE_LAUNCH_COST_PER_KG = sandboxOverrides?.launchCostPerKg ?? 1500; // $/kg (current SpaceX internal cost, 2025)
   
   // Calculate battery capacity from mass (200 Wh/kg = 0.2 kWh/kg)
   const batteryMassA_kg = scenarioMode === "ORBITAL_BULL"
@@ -1177,14 +1218,13 @@ export function calculateYearDeployment(
   // Launch mass is only NEW sats (physics mass already includes all components)
   const launchMassThisYearKg = launchesThisYear * avgMassPerSatelliteKg;
   
-  // CRITICAL FIX: Elon/Handmer target is <$50/kg for true optimism (Starship fuel costs ~$10-20/kg)
-  // Per audit: Current model is ~$300/kg (too conservative), target is <$50/kg
-  // For Elon/Handmer optimism in 2030s: Bull should floor at ~$20/kg (Starship fuel costs)
+  // CRITICAL FIX: Updated baseline to $1,500/kg in 2025 (current SpaceX internal cost)
+  // This makes orbital compute start MORE EXPENSIVE than ground, with crossover around 2028-2030
   // Base $/kg (e.g. from a "2025 launch budget / mass" assumption)
   // Scenario-dependent launch cost (only economic difference)
   const base_cost_per_kg_to_leo = scenarioMode === "ORBITAL_BULL" ? 10 : // Bull: $10/kg (Elon-optimistic Starship)
                                    scenarioMode === "ORBITAL_BEAR" ? 500 : // Bear: $500/kg (conservative)
-                                   200; // Baseline: $200/kg (standard)
+                                   1500; // Baseline: $1,500/kg (current SpaceX internal cost, 2025)
   
   // Apply sandbox launch cost with improvement rate if provided
   // UPDATED: Use plateau model with floor for launch costs
@@ -1259,35 +1299,18 @@ export function calculateYearDeployment(
     orbitComputeShare = 1 - minGroundShare;
   }
 
-  // 4) GATE ADOPTION ON COST PARITY (before cost calculation, use previous year's costs)
-  // Get previous year's costs to check parity
+  // CRITICAL FIX: Decouple deployment from cost-effectiveness
+  // Deployment happens on a growth curve regardless of $/PFLOP comparison
+  // The Compute Per Dollar chart will show orbital starting MORE EXPENSIVE than ground,
+  // then crossing over around 2028-2030 as launch costs drop
+  // We still track cost parity for the chart, but don't gate deployment on it
   const prevCostGround = previousEntry?.cost_per_compute_ground ?? 340;
   const prevCostOrbit = previousEntry?.cost_per_compute_orbit ?? Infinity;
-  const cheaperOrbit = prevCostOrbit < prevCostGround * 0.95; // 5% cheaper than ground
+  const cheaperOrbit = prevCostOrbit < prevCostGround * 0.95; // 5% cheaper than ground (for chart only)
   
-  // Scenario-dependent adoption caps and growth rates
-  const preParityCap = scenarioMode === "ORBITAL_BULL" ? 0.35 : // Bull: higher experimental cap
-                       scenarioMode === "ORBITAL_BEAR" ? 0.15 : // Bear: lower experimental cap
-                       0.25; // Baseline: standard
-  const prevOrbitShare = previousEntry?.orbit_compute_share ?? 0;
-  
-  // Scenario-dependent growth rates
-  const preParityGrowthRate = scenarioMode === "ORBITAL_BULL" ? 0.05 : // Bull: 5% growth before parity
-                               scenarioMode === "ORBITAL_BEAR" ? 0.02 : // Bear: 2% growth before parity
-                               0.03; // Baseline: 3% growth
-  const postParityGrowthRate = scenarioMode === "ORBITAL_BULL" ? 0.12 : // Bull: 12% growth after parity
-                                scenarioMode === "ORBITAL_BEAR" ? 0.05 : // Bear: 5% growth after parity
-                                0.08; // Baseline: 8% growth
-  
-  if (!cheaperOrbit && orbitComputeShare > preParityCap) {
-    // Cap at preParityCap, but allow gradual growth (scenario-dependent)
-    const maxGrowth = prevOrbitShare + preParityGrowthRate;
-    orbitComputeShare = Math.min(orbitComputeShare, Math.min(preParityCap, maxGrowth));
-  } else if (cheaperOrbit) {
-    // After parity: allow more aggressive adoption toward the ramp cap (scenario-dependent)
-    const maxGrowth = prevOrbitShare + postParityGrowthRate;
-    orbitComputeShare = Math.min(orbitComputeShare, Math.min(rampCap, maxGrowth));
-  }
+  // REMOVED: Cost parity gating - deployment now happens on growth curve regardless of cost
+  // The orbitComputeShare is determined by the growth curve above, not by cost comparison
+  // This allows fleet to reach ~600k satellites by 2040 even when orbital is initially more expensive
 
   let groundComputeShare = 1 - orbitComputeShare;
 

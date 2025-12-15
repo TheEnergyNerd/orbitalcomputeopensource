@@ -159,6 +159,7 @@ export default function Home() {
         
         {/* Visual Glossary - show only in world view */}
         {activeSurface === "world" && <VisualGlossary activeSurface={activeSurface} />}
+        
       </>
       </main>
     </div>

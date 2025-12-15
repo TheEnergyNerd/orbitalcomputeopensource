@@ -40,4 +40,15 @@ export const DEFAULT_ORBIT_ENV: OrbitEnv = {
   protonFluxRelative: 1,
 };
 
+// Structural scaling parameters for large arrays
+export interface StructuralScalingParams {
+  thresholdPowerKW: number;        // Power level where penalty kicks in
+  structuralPenaltyExponent: number; // Exponent for superlinear scaling (1.0 = linear, 1.2 = 20% penalty)
+}
+
+export const DEFAULT_STRUCTURAL_SCALING: StructuralScalingParams = {
+  thresholdPowerKW: 50,
+  structuralPenaltyExponent: 1.2,
+};
+
 

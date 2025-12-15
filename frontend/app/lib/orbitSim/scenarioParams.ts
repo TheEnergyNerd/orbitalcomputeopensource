@@ -42,8 +42,8 @@ export const SCENARIOS: ScenarioParams[] = [
     autonomyLevel: 1.65,               // Unchanged
     backhaulPerSatTBps: 0.55,          // Unchanged
     launchCarbonPerKg: 475,           // Unchanged
-    // Scenario multipliers - Reduced by ~10%
-    launchCadenceMultiplier: 0.90,    // Was 1.0 - 10% fewer launches
+    // Scenario multipliers - BASELINE should be 1.0 (no reduction)
+    launchCadenceMultiplier: 1.0,      // BASELINE: full launch cadence
     busPowerMultiplier: 0.92,         // Was 1.0 - 8% slower power scaling
     lifetimeMultiplier: 1.0,           // Unchanged
   },

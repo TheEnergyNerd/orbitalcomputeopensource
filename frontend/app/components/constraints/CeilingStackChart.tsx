@@ -25,7 +25,10 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
     return years.map(year => {
       const entry = debugState[year];
       if (!entry || typeof entry !== 'object' || !('compute_raw_flops' in entry)) {
-        console.warn(`[CeilingStackChart] No entry for year ${year}`);
+        // Only warn if year is a valid number (not NaN)
+        if (!isNaN(year)) {
+          console.warn(`[CeilingStackChart] No entry for year ${year}`);
+        }
         return null;
       }
       

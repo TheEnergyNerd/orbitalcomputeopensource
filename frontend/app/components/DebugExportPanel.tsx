@@ -41,18 +41,17 @@ export default function DebugExportPanel() {
     // Get debug state (single source of truth)
     const debugState = getDebugState();
     
-    // Get all years from debug state
+    // CRITICAL FIX: Get current year from timeline (most recent), not debug state
+    // Timeline is the source of truth for what year the simulation is currently at
+    const currentYear = timeline.length > 0 
+      ? timeline[timeline.length - 1]?.year || config.startYear
+      : config.startYear;
+    
+    // Get all years from debug state for time-series
     const debugYears = Object.keys(debugState)
       .filter(key => key !== 'errors' && !isNaN(Number(key)))
       .map(Number)
       .sort((a, b) => a - b);
-    
-    // Get current year from debug state or timeline
-    const currentYear = debugYears.length > 0 
-      ? debugYears[debugYears.length - 1]
-      : (timeline.length > 0 
-        ? timeline[timeline.length - 1]?.year || config.startYear
-        : config.startYear);
 
     // Count satellites per shell
     const satellitesPerShell: Record<string, number> = {
@@ -188,9 +187,11 @@ export default function DebugExportPanel() {
     const eclipseTolerance = currentDebugEntry?.eclipse_tolerance_minutes || 0;
 
     // Snapshot data
+    // CRITICAL FIX: Use satellitesTotal from debug state (matches UI), not satellites.length (rendered count)
+    const totalSatellitesFromDebug = currentDebugEntry?.satellitesTotal ?? satellites.length;
     const snapshot = {
       year: currentYear,
-      total_satellites: satellites.length,
+      total_satellites: totalSatellitesFromDebug, // Use debug state, not rendered count
       satellites_per_shell: satellitesPerShell,
       total_orbital_power_MW: totalOrbitalPowerMW,
       total_orbital_power_GW: orbitalPowerGWSnapshot, // Added per CHART_AUDIT_AND_CONGESTION.md
@@ -258,19 +259,17 @@ export default function DebugExportPanel() {
     const launchMassPerYearKg: number[] = [];
 
     // Build time-series from debug state (single source of truth)
-    // Use debug state years, fallback to timeline if debug state is empty
-    const yearsToProcess = debugYears.length > 0 ? debugYears : timeline.map(s => s.year);
+    // CRITICAL FIX: Use timeline years as primary source, fallback to debug state
+    // Timeline is the source of truth for what years have been simulated
+    const yearsToProcess = timeline.length > 0 
+      ? timeline.map(s => s.year)
+      : (debugYears.length > 0 ? debugYears : [currentYear]);
     
     yearsToProcess.forEach((year) => {
-      const debugEntryRaw = debugState[year];
+      // CRITICAL FIX: Get debug entry using scenario mode to ensure correct data
+      // This ensures we get the right scenario's data, not stale data
+      const debugEntry = getDebugStateEntry(year, config.scenarioMode);
       const timelineStep = timeline.find(s => s.year === year);
-      
-      // Type guard: ensure it's a DebugStateEntry
-      const debugEntry = (debugEntryRaw && 
-        typeof debugEntryRaw === 'object' && 
-        'year' in debugEntryRaw && 
-        typeof debugEntryRaw.year === 'number'
-      ) ? debugEntryRaw : undefined;
       
       years.push(year);
       

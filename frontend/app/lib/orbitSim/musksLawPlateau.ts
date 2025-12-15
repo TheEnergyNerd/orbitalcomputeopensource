@@ -12,13 +12,13 @@
  * 
  * @param year - Year to calculate for
  * @param baseYear - Base year (default 2025)
- * @param baseCostPerKg - Base cost in base year (default $300/kg)
+ * @param baseCostPerKg - Base cost in base year (default $1,500/kg - current SpaceX internal cost)
  * @returns Cost per kg to LEO in USD
  */
 export function getLaunchCostPerKg(
   year: number,
   baseYear: number = 2025,
-  baseCostPerKg: number = 300
+  baseCostPerKg: number = 1500
 ): number {
   // Cost floor - can't go below this regardless of reuse/scale
   // Based on: propellant ($0.50/kg) + ops ($0.50/kg) + recovery ($0.20/kg) + 
@@ -28,7 +28,9 @@ export function getLaunchCostPerKg(
   
   // Exponential decay toward floor
   // Asymptotic approach: cost = floor + (base - floor) * e^(-rate * years)
-  const decayRate = 0.12; // How fast we approach floor (12% per year)
+  // Updated decay rate to reach ~$100/kg by 2040 from $1,500/kg in 2025
+  // Rate calculated: -ln((100-30)/(1500-30)) / 15 = 0.203 (20.3% per year)
+  const decayRate = 0.203; // How fast we approach floor (20.3% per year to reach ~$100/kg by 2040)
   const yearsFromBase = year - baseYear;
   
   // Asymptotic approach: cost = floor + (base - floor) * e^(-rate * years)
@@ -45,7 +47,7 @@ export function getLaunchCostCurve(
   startYear: number = 2025,
   endYear: number = 2050,
   baseYear: number = 2025,
-  baseCostPerKg: number = 300
+  baseCostPerKg: number = 1500
 ): Array<{year: number, costPerKg: number}> {
   const data = [];
   for (let year = startYear; year <= endYear; year++) {

@@ -13,7 +13,9 @@ import {
   SHIELDING_MASS_FRACTION,
   POWER_ELECTRONICS_MASS_FRACTION,
   DEFAULT_ORBIT_ENV,
+  DEFAULT_STRUCTURAL_SCALING,
   type OrbitEnv,
+  type StructuralScalingParams,
 } from "./physicsConfig";
 import type { BusDesignInputs, BusPhysicsOutputs } from "./physicsTypes";
 import { DEFAULT_RADIATION_MODEL, calculateShieldingMass } from "../radiationModel";
@@ -23,6 +25,33 @@ function computeRadiatorArea(heatKw: number): number {
   const sigma = STEFAN_BOLTZMANN * RADIATOR_EMISSIVITY * RADIATOR_VIEW_FACTOR;
   const deltaT4 = Math.pow(RADIATOR_HOT_K, 4) - Math.pow(RADIATOR_COLD_K, 4);
   return q / (sigma * deltaT4);
+}
+
+/**
+ * Calculate array mass with structural scaling penalty for large arrays
+ * Uses superlinear scaling above threshold to account for booms, deployment mechanisms, etc.
+ * 
+ * @param powerKW - Power requirement in kW
+ * @param baseMassPerKW - Base mass per kW at small scale (kg/kW)
+ * @param params - Structural scaling parameters (threshold and exponent)
+ * @returns Mass in kg with structural penalty applied
+ */
+function calculateArrayMassWithScaling(
+  powerKW: number,
+  baseMassPerKW: number,
+  params: StructuralScalingParams
+): number {
+  const { thresholdPowerKW, structuralPenaltyExponent } = params;
+  
+  // Reference point: threshold power
+  const referenceKW = thresholdPowerKW;
+  const referenceMass = referenceKW * baseMassPerKW;
+  
+  // Scale from reference using power law
+  // At threshold: mass = referenceMass (linear)
+  // Above threshold: mass grows superlinearly
+  // Formula: mass = referenceMass * (powerKW / referenceKW)^exponent
+  return referenceMass * Math.pow(powerKW / referenceKW, structuralPenaltyExponent);
 }
 
 function computeSolarArea(powerKw: number, yearsOfLife: number): number {
@@ -88,14 +117,36 @@ export function designComputeBus(
   // Per audit: Space radiators need fluid loops, pumps, shielding, rigid structures
   // ISS radiators: ~15-20 kg/m², Advanced composite: ~5 kg/m² (optimistic future tech)
   const RADIATOR_AREAL_DENSITY_KG_PER_M2 = 5.0; // kg/m² (optimistic future tech, ISS is 15-20)
-  const radiatorMassKg = radiatorAreaM2 * RADIATOR_AREAL_DENSITY_KG_PER_M2;
   
   const solarArrayAreaM2 = computeSolarArea(siliconPowerKw, yearsOfLife);
   // CRITICAL FIX: Elon/Handmer target is >150 W/kg (6.67 kg/kW), but for true optimism use 5 kg/kW (200 W/kg)
   // Per audit: Current model is ~30 W/kg (too conservative), target is >150 W/kg
   // For Elon/Handmer optimism: Use 5 kg/kW = 200 W/kg specific power
   const SOLAR_SPECIFIC_MASS_KG_PER_KW = 5; // kg/kW (Elon/Handmer optimistic: 200 W/kg)
-  const solarArrayMassKg = siliconPowerKw * SOLAR_SPECIFIC_MASS_KG_PER_KW;
+  
+  // Apply structural scaling penalty for large arrays
+  const structuralScaling = inputs.structuralScaling ?? DEFAULT_STRUCTURAL_SCALING;
+  
+  // Calculate solar array mass with structural penalty
+  const solarArrayMassKg = calculateArrayMassWithScaling(
+    siliconPowerKw,
+    SOLAR_SPECIFIC_MASS_KG_PER_KW,
+    structuralScaling
+  );
+  
+  // Calculate radiator mass: first get base mass from area, then apply structural scaling
+  // Convert area-based to power-based for scaling: approximate power from heat rejection
+  // Heat rejection ≈ 0.3 kW/m² for typical radiator, so power ≈ heatKw
+  // Use heatKw as proxy for array size when applying structural scaling
+  const baseRadiatorMassKg = radiatorAreaM2 * RADIATOR_AREAL_DENSITY_KG_PER_M2;
+  // For radiators, apply scaling based on heat rejection power (which scales with compute power)
+  // Base mass per kW of heat rejection: ~10 kg/kW (radiators are heavier than solar)
+  const RADIATOR_BASE_MASS_PER_KW = 10; // kg/kW at small scale
+  const radiatorMassKg = calculateArrayMassWithScaling(
+    heatKw,
+    RADIATOR_BASE_MASS_PER_KW,
+    structuralScaling
+  );
 
   const payloadMassKg =
     siliconMassKg + radiatorMassKg + solarArrayMassKg;

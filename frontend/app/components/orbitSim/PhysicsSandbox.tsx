@@ -54,6 +54,8 @@ interface PhysicsParams {
   powerMargin?: number;
   batteryDensity?: number;
   batteryCost?: number;
+  structuralPenaltyExponent?: number; // Structural scaling exponent (1.0 = linear, 1.2 = 20% penalty)
+  structuralThresholdKW?: number; // Power level where structural penalty kicks in
 }
 
 interface PhysicsResults {
@@ -92,6 +94,27 @@ interface PhysicsResults {
   powerOK: boolean;
   eclipseHandlingOK: boolean;
   allSystemsOK: boolean;
+  // Structural scaling debug fields
+  solarMassLinear_kg?: number;
+  solarMassPenalized_kg?: number;
+  solarPenaltyPercent?: number;
+  radiatorMassLinear_kg?: number;
+  radiatorMassPenalized_kg?: number;
+  radiatorPenaltyPercent?: number;
+}
+
+/**
+ * Calculate array mass with structural scaling penalty for large arrays
+ */
+function calculateArrayMassWithScaling(
+  powerKW: number,
+  baseMassPerKW: number,
+  thresholdKW: number,
+  exponent: number
+): number {
+  const referenceKW = thresholdKW;
+  const referenceMass = referenceKW * baseMassPerKW;
+  return referenceMass * Math.pow(powerKW / referenceKW, exponent);
 }
 
 const calculatePhysics = (params: PhysicsParams): PhysicsResults => {
@@ -157,8 +180,35 @@ const calculatePhysics = (params: PhysicsParams): PhysicsResults => {
   const survivalRate10yr = Math.pow(Math.max(0.01, 1 - (netAttrition / params.fleetSize)), 10);
   const maintenanceOK = netAttrition <= failuresPerYear * 0.1;
 
-  const radiatorMass_kg = params.radiatorAreaPerSat * 1.2;
-  const solarMass_kg = solarArraySize_m2 * 0.5;
+  // Structural scaling parameters
+  const structuralPenaltyExponent = params.structuralPenaltyExponent ?? 1.2;
+  const structuralThresholdKW = params.structuralThresholdKW ?? 50;
+  
+  // Calculate solar array mass with structural scaling
+  const SOLAR_BASE_MASS_PER_KW = 5; // kg/kW at small scale
+  const solarMassLinear_kg = params.busPowerKw * SOLAR_BASE_MASS_PER_KW;
+  const solarMassPenalized_kg = calculateArrayMassWithScaling(
+    params.busPowerKw,
+    SOLAR_BASE_MASS_PER_KW,
+    structuralThresholdKW,
+    structuralPenaltyExponent
+  );
+  const solarMass_kg = solarMassPenalized_kg;
+  const solarPenaltyPercent = ((solarMassPenalized_kg / solarMassLinear_kg) - 1) * 100;
+  
+  // Calculate radiator mass with structural scaling
+  // Base mass per kW of heat rejection: ~10 kg/kW (radiators are heavier than solar)
+  const RADIATOR_BASE_MASS_PER_KW = 10; // kg/kW at small scale
+  const radiatorMassLinear_kg = heatGenPerSat_kW * RADIATOR_BASE_MASS_PER_KW;
+  const radiatorMassPenalized_kg = calculateArrayMassWithScaling(
+    heatGenPerSat_kW,
+    RADIATOR_BASE_MASS_PER_KW,
+    structuralThresholdKW,
+    structuralPenaltyExponent
+  );
+  const radiatorMass_kg = radiatorMassPenalized_kg;
+  const radiatorPenaltyPercent = ((radiatorMassPenalized_kg / radiatorMassLinear_kg) - 1) * 100;
+  
   const computeMass_kg = (memoryPerNode * 0.5) + (chipPowerPerSat * 0.1);
   const structureMass_kg = 200;
   const shieldingMass_kg = 50 + radiationHardening * 75;
@@ -219,6 +269,13 @@ const calculatePhysics = (params: PhysicsParams): PhysicsResults => {
     computeOK,
     computeMemoryRatio,
     allSystemsOK: thermalOK && backhaulOK && maintenanceOK && computeOK && powerOK,
+    // Structural scaling debug fields
+    solarMassLinear_kg,
+    solarMassPenalized_kg,
+    solarPenaltyPercent,
+    radiatorMassLinear_kg,
+    radiatorMassPenalized_kg,
+    radiatorPenaltyPercent,
   };
 };
 
@@ -766,6 +823,9 @@ const calculateSafeDefaults = (year: string) => {
       powerMargin: 25, // Increased to pass eclipse check (needs >= 25)
       batteryDensity: 275, // Middle of 150-400 range
       batteryCost: 175, // Middle of 50-300 range
+      // Structural scaling parameters
+      structuralPenaltyExponent: 1.2, // Default 20% superlinear penalty
+      structuralThresholdKW: 50, // Default threshold at 50 kW
     };
 };
 
@@ -1157,7 +1217,8 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             label="Bus Power"
             value={params.busPowerKw}
             onChange={(v) => updateParam('busPowerKw', v)}
-            min={2} max={50} unit=" kW"
+            min={1} max={500} step={1} unit=" kW"
+            help="Uncapped to test structural scaling penalties at high power"
             disabled={hasSimulationStarted}
           />
           
@@ -1457,10 +1518,38 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             help="Space-rated cells are 2-3x ground cost"
             disabled={hasSimulationStarted}
           />
+          <Slider
+            label="Structural Scaling Exponent"
+            value={params.structuralPenaltyExponent ?? 1.2}
+            onChange={(v) => updateParam('structuralPenaltyExponent', v)}
+            min={1.0} max={1.5} step={0.05}
+            help="Mass penalty for large arrays. 1.0 = linear, 1.2 = 20% superlinear penalty, 1.5 = severe penalty"
+            disabled={hasSimulationStarted}
+          />
+          <Slider
+            label="Structural Penalty Threshold"
+            value={params.structuralThresholdKW ?? 50}
+            onChange={(v) => updateParam('structuralThresholdKW', v)}
+            min={20} max={200} step={10} unit=" kW"
+            help="Power level where structural penalty kicks in"
+            disabled={hasSimulationStarted}
+          />
           
           <div style={styles.resultBox}>
             <LiveValue label="Battery Mass" value={(results.batteryMass_kg || 0).toFixed(0)} unit=" kg" />
             <LiveValue label="10yr Power" value={(results.degradationAfter10yr * 100).toFixed(0)} unit="%" />
+            {results.solarPenaltyPercent !== undefined && (
+              <LiveValue 
+                label="Solar Penalty" 
+                value={`${results.solarPenaltyPercent.toFixed(1)}%`} 
+              />
+            )}
+            {results.radiatorPenaltyPercent !== undefined && (
+              <LiveValue 
+                label="Radiator Penalty" 
+                value={`${results.radiatorPenaltyPercent.toFixed(1)}%`} 
+              />
+            )}
           </div>
         </Section>
       </div>

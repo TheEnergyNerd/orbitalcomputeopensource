@@ -2,6 +2,8 @@
 
 import type { OrbitEnv } from "./physicsConfig";
 
+import type { StructuralScalingParams } from "./physicsConfig";
+
 export interface BusDesignInputs {
   targetComputeTflops: number;   // nominal TFLOPs per sat before derating
   gpuTflopsPerKg: number;        // silicon performance density
@@ -9,6 +11,7 @@ export interface BusDesignInputs {
   shieldingThicknessMm: number;  // aluminium equivalent
   yearsOfLife: number;           // design life
   satelliteClass?: "A" | "B";    // Class A (Standard LEO) or Class B (Dawn-Dusk SSO)
+  structuralScaling?: StructuralScalingParams; // Optional structural scaling parameters
 }
 
 export interface BusPhysicsOutputs {

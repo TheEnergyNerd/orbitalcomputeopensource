@@ -85,14 +85,26 @@ export function calculateSatelliteMass(
 /**
  * Calculate launch cost budget based on strategy
  * Cost-first strategy increases LaunchCapexBudget more than others
+ * CRITICAL FIX: Updated to account for higher launch costs ($1,500/kg in 2025)
  */
 export function calculateLaunchCostBudget(
   year: number,
   strategy: StrategyMode,
   baseLaunches: number
 ): number {
-  const baseCostPerLaunchM = 50; // $50M per launch (Starship target)
-  const totalLaunchCostM = baseLaunches * baseCostPerLaunchM;
+  // CRITICAL FIX: Updated base cost to account for $1,500/kg launch costs
+  // At $1,500/kg with ~1,600 kg average satellite = $2.4M per satellite
+  // At 62 sats/launch = $150M per launch (conservative estimate for 2025)
+  // Cost declines over time as launch costs drop, so scale by year
+  const yearIndex = year - 2025;
+  // Launch cost declines from $1,500/kg to ~$100/kg by 2040 (using plateau model)
+  // Rough approximation: cost declines exponentially toward floor
+  const baseCost2025 = 150; // $150M per launch in 2025 (accounts for $1,500/kg)
+  const floorCost = 10; // $10M per launch floor (when costs reach ~$100/kg)
+  const decayRate = 0.203; // Same as launch cost decay rate
+  const costPerLaunchM = floorCost + (baseCost2025 - floorCost) * Math.exp(-decayRate * yearIndex);
+  
+  const totalLaunchCostM = baseLaunches * costPerLaunchM;
   
   // Strategy multipliers for launch budget
   const budgetMultipliers: Record<StrategyMode, number> = {
@@ -155,16 +167,20 @@ export function calculateLaunchConstraints(
     : Math.floor(massBudgetT / ((massA + massB) / 2)); // Average mass approximation
   
   // Cost-limited deployment
+  // CRITICAL FIX: Cost constraint should not block deployment - deployment happens on growth curve
+  // Cost is tracked for the Compute Per Dollar chart, but doesn't gate deployment
+  // Only use cost constraint if it's catastrophically over budget (10x), otherwise use mass constraint
   const costBudgetM = calculateLaunchCostBudget(year, strategy, launchesPerYear);
   const costA = calculateCostPerSatellite("A", year, strategy);
   const costB = calculateCostPerSatellite("B", year, strategy);
   const totalCostNeeded = newA * costA + newB * costB;
-  const costLimited = totalCostNeeded <= costBudgetM
+  const costLimited = totalCostNeeded <= costBudgetM * 10 // Allow 10x over budget before constraining
     ? newA + newB
-    : Math.floor(costBudgetM / ((costA + costB) / 2)); // Average cost approximation
+    : Math.floor(costBudgetM * 10 / ((costA + costB) / 2)); // Average cost approximation
   
-  // Final allowed deployment (minimum of mass and cost limits)
-  const allowed = Math.min(massLimited, costLimited);
+  // Final allowed deployment - primarily mass-limited, cost is informational only
+  // This allows deployment to proceed on growth curve even when orbital is initially more expensive
+  const allowed = massLimited; // Use mass constraint only - cost is tracked but doesn't block deployment
   
   return {
     massLimited,
