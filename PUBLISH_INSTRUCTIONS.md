@@ -16,8 +16,8 @@ Run these commands in the repository directory:
 ```bash
 cd /Users/pranav/Coding_Projects/Cursor/orbitalcomputeopensource
 
-# Add the remote (replace YOUR_USERNAME with your GitHub username)
-git remote add origin https://github.com/YOUR_USERNAME/orbitalcomputeopensource.git
+# Add the remote
+git remote add origin https://github.com/TheEnergyNerd/orbitalcomputeopensource.git
 
 # Rename branch to main (if needed)
 git branch -M main

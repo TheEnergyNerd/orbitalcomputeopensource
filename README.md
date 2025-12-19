@@ -141,7 +141,7 @@ If you use this model in research, please cite:
 
 ```
 Orbital Compute Open Source - Physics-Based Economic Model
-https://github.com/[your-username]/orbitalcomputeopensource
+https://github.com/TheEnergyNerd/orbitalcomputeopensource
 ```
 
 ## Contributing
