@@ -747,6 +747,9 @@ export interface YearParams {
   aiWinterEnabled: boolean;
   smrToggleEnabled: boolean;
   fusionToggleEnabled: boolean;
+  
+  // Orbital capacity constraints
+  orbitMaxDeployableComputeGWByYear?: (year: number) => number; // Maximum orbital capacity (from launch/manufacturing constraints)
   smrToggleParams?: SMRToggleParams;
   fusionToggleParams?: SpaceFusionParams;
   powerScalingParams?: PowerScalingParams;

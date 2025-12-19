@@ -10,6 +10,7 @@
 import { computePhysicsCost } from '../physicsCost';
 import { getStaticParams } from '../modes/static';
 import { sanitizeFinite } from '../../utils/sanitize';
+import { computeTrajectory } from '../trajectory';
 
 describe('Efficiency Levels and Chart Data Fixes', () => {
   

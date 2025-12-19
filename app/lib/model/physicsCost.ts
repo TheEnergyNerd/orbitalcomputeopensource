@@ -1188,6 +1188,17 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       smrRampFactor: 0,
       effectiveElectricityCost: regionalResult.averageEnergyCostMwh,
       constraintRelief: { grid: 0, cooling: 0, water: 0, land: 0 },
+      // Ensure backlogGw and avgWaitYears are always set (use supplyMetrics as fallback)
+      backlogGw: regionalResult.supplyMetrics?.pipelineGw ?? 0, // TEMP proxy: use pipeline as placeholder
+      avgWaitYears: regionalResult.supplyMetrics?.avgWaitYears ?? 0,
+      supplyMetrics: regionalResult.supplyMetrics ?? {
+        demandGw: 0,
+        capacityGw: 0,
+        pipelineGw: 0,
+        maxBuildRateGwYear: 0,
+        avgWaitYears: 0,
+        utilizationPct: 0,
+      },
     };
   } else {
     groundResult = calculateGroundTotal(
@@ -1203,6 +1214,29 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       groundEnergyCostPerPflopYear,
       groundElectricityPricePerMwh
     );
+
+    // CRITICAL FIX: Ensure backlogGw and avgWaitYears are always set (even if calculateGroundTotal doesn't provide them)
+    // Use supplyMetrics as fallback if available, otherwise 0
+    // Type assertion needed because calculateGroundTotal may not include these fields
+    const groundResultWithBacklog = groundResult as any;
+    if (!('backlogGw' in groundResultWithBacklog) || groundResultWithBacklog.backlogGw === undefined) {
+      groundResultWithBacklog.backlogGw = groundResultWithBacklog.supplyMetrics?.pipelineGw ?? 0; // TEMP proxy
+    }
+    if (!('avgWaitYears' in groundResultWithBacklog) || groundResultWithBacklog.avgWaitYears === undefined) {
+      groundResultWithBacklog.avgWaitYears = groundResultWithBacklog.supplyMetrics?.avgWaitYears ?? 0;
+    }
+    // Ensure supplyMetrics exists
+    if (!groundResultWithBacklog.supplyMetrics) {
+      groundResultWithBacklog.supplyMetrics = {
+        demandGw: 0,
+        capacityGw: 0,
+        pipelineGw: groundResultWithBacklog.backlogGw ?? 0,
+        maxBuildRateGwYear: 0,
+        avgWaitYears: groundResultWithBacklog.avgWaitYears ?? 0,
+        utilizationPct: 0,
+      };
+    }
+    groundResult = groundResultWithBacklog;
 
     groundTotalCost = groundResult.totalCostPerPflopYear;
     // CRITICAL FIX: Never apply multipliers - all set to 1.0

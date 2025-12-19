@@ -405,19 +405,73 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
     const orbitalCapacityGW = breakdown.orbit?.hybridBreakdown ? 1.0 : 0; // Placeholder - should be calculated from actual capacity
     
     // Extract mobilization metrics for market share calculation
+    // Use robust fallback chain to ensure we get the same values as chartInputs
     const demandGW = breakdown.ground?.buildoutDebug?.demandGW ?? breakdown.ground?.supplyMetrics?.demandGw ?? totalDemandGW;
-    const backlogGW = breakdown.ground?.backlogGw ?? breakdown.ground?.buildoutDebug?.backlogGW ?? 0;
-    const buildRateGWyr = breakdown.ground?.buildoutDebug?.buildRateGWyr ?? breakdown.ground?.supplyMetrics?.maxBuildRateGwYear ?? 0;
-    const avgWaitYears = breakdown.ground?.avgWaitYears ?? breakdown.ground?.buildoutDebug?.timeToPowerYears ?? 0;
-    // TODO: Calculate orbitMaxDeployableComputeGW from launch/manufacturing constraints
-    const orbitMaxDeployableComputeGW = orbitalFeasible ? totalDemandGW : 0; // Placeholder
+    
+    // Robust fallback chain for backlogGW (matches chartInputs.powerBuildout.backlogGw)
+    const backlogGW = 
+      breakdown.ground?.backlogGw ??
+      breakdown.ground?.buildoutDebug?.backlogGW ??
+      breakdown.ground?.supplyMetrics?.pipelineGw ?? // TEMP proxy if true backlog not available
+      breakdown.metadata?.chartInputs?.powerBuildout?.backlogGw ??
+      0;
+    
+    // Robust fallback chain for buildRateGWyr
+    const buildRateGWyr = 
+      breakdown.ground?.buildoutDebug?.buildRateGWyr ??
+      breakdown.ground?.supplyMetrics?.maxBuildRateGwYear ??
+      breakdown.metadata?.chartInputs?.powerBuildout?.maxBuildRateGwYear ??
+      0;
+    
+    // Robust fallback chain for avgWaitYears (matches chartInputs.powerBuildout.avgWaitYears)
+    const avgWaitYears = 
+      breakdown.ground?.avgWaitYears ??
+      breakdown.ground?.buildoutDebug?.timeToPowerYears ??
+      breakdown.ground?.supplyMetrics?.avgWaitYears ??
+      breakdown.metadata?.chartInputs?.powerBuildout?.avgWaitYears ??
+      0;
+    
+    // DEV-ONLY INVARIANT: Check for internal inconsistency
+    if (process.env.NODE_ENV !== 'production') {
+      const supplyMetricsAvgWait = breakdown.ground?.supplyMetrics?.avgWaitYears ?? 0;
+      if (supplyMetricsAvgWait > 0 && avgWaitYears === 0) {
+        throw new Error(
+          `Internal inconsistency detected: supplyMetrics.avgWaitYears=${supplyMetricsAvgWait} but ` +
+          `chosen avgWaitYears=${avgWaitYears} (year=${year}). ` +
+          `backlogGW=${backlogGW}, ` +
+          `chartInputs=${JSON.stringify(breakdown.metadata?.chartInputs?.powerBuildout ?? {})}`
+        );
+      }
+    }
+    
+    // ACCEPTANCE CHECK: If chartInputs has backlogGw > 0, market.debug must match it
+    const chartBacklog = breakdown.metadata?.chartInputs?.powerBuildout?.backlogGw;
+    if (chartBacklog !== undefined && chartBacklog > 0 && Math.abs(backlogGW - chartBacklog) > 0.01) {
+      // Allow small floating-point differences but warn if significant
+      console.warn(
+        `Backlog mismatch: chartInputs.backlogGw=${chartBacklog}, market.debug.backlogGW=${backlogGW} (year=${year})`
+      );
+    }
+    
+    // Calculate orbitMaxDeployableComputeGW from scenario params or use placeholder
+    // TODO: Replace with actual launch/manufacturing constraint model
+    // Default: ramp from 0 in 2025 to 50% of demand by 2040, then scale with demand
+    const defaultOrbitMaxDeployable = year < 2025 
+      ? 0 
+      : Math.min(totalDemandGW * 0.5, totalDemandGW * 0.1 * (year - 2025) / 15); // Ramp from 0 to 50% over 15 years
+    const orbitMaxDeployableComputeGW = orbitalFeasible 
+      ? (params.orbitMaxDeployableComputeGWByYear?.(year) ?? defaultOrbitMaxDeployable)
+      : 0;
+    
+    // Fix orbit feasibility gating: use orbitMaxDeployableComputeGW, not orbitalCapacityGW placeholder
+    const orbitalFeasibleForShare = orbitalFeasible && (orbitMaxDeployableComputeGW > 0);
     
     const marketAnalysis = calculateMarketShare(
       year,
       breakdown.orbit.totalCostPerPflopYear,
       breakdown.ground.totalCostPerPflopYear,
       totalDemandGW,
-      orbitalFeasible && orbitalCapacityGW > 0,
+      orbitalFeasibleForShare,
       groundFeasible,
       orbitalCostAccountingValid,
       groundCostAccountingValid,
