@@ -1046,7 +1046,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     
     groundResult = {
       energyCost: energyCost * groundLatencyPenalty,
-      siteCost: siteCostPerPflopYear * groundLatencyPenalty,
+      siteCost: siteCostPerPflopYear_base * groundLatencyPenalty,
       hardwareCost: hardwareCost * groundLatencyPenalty,
       siteCapexAmortPerPflopYear: siteCapexAmortPerPflopYear * groundLatencyPenalty,
       capacityDeliveryPremium: buildoutPremiumPerPflopYear * groundLatencyPenalty, // Buildout premium replaces old capacityDeliveryPremium
