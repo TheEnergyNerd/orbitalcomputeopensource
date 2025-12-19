@@ -404,7 +404,7 @@ function calculateGroundTotal(
   params: YearParams,
   energyCostBase: number,
   hardwareCostBase: number,
-  isMcCalipMode: boolean,
+  isStaticMode: boolean,
   effectiveScenario: GroundScenarioConfig,
   latencyPenalty: number = 1.0,
   smrParams?: SMRToggleParams,
