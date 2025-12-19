@@ -28,13 +28,6 @@ export function getStaticParams(year: number): YearParams {
     capacityFactorGround: 0.85,
     capacityFactorOrbital: 0.98,
     
-    // Frozen Economics
-    electricityPricePerMwh: 50,
-    siteCapexPerKw: 2000,
-    hardwareCapexPerKw: 3000,
-    wacc: 0.10,
-    projectLifetimeYears: 10,
-    
     // Frozen Technology
     gflopsPerWattGround2025: 30,
     gflopsPerWattOrbital2025: 25,
@@ -49,13 +42,28 @@ export function getStaticParams(year: number): YearParams {
     nreCost: 1000000,
     eccOverhead: 0.1,
     
-    // No constraints
-    groundConstraintCap: 1.5,
-    orbitalConstraintCap: 1.0,
-    
-    // No learning curves
-    launchLearningEnabled: false,
-    mooresLawEnabled: false,
+    // Required boolean flags
+    groundConstraintsEnabled: true,
+    powerGridMultiplier: 1.0,
+    coolingMultiplier: 1.0,
+    waterScarcityEnabled: false,
+    landScarcityEnabled: false,
+    radiationOverheadEnabled: false,
+    deployableRadiatorsEnabled: false,
+    bodyMountedAreaM2: 25,
+    deployableArea2025M2: 50,
+    deployableArea2040M2: 50,
+    deployableMassPerM2Kg: 2.5,
+    deployableCostPerM2Usd: 500,
+    deploymentFailureRate: 0.02,
+    radiatorAreaM2: 75,
+    radiatorTempC: 97,
+    elonScenarioEnabled: false,
+    globalLatencyRequirementEnabled: false,
+    spaceManufacturingEnabled: false,
+    aiWinterEnabled: false,
+    smrToggleEnabled: false,
+    fusionToggleEnabled: false,
   };
 }
 
