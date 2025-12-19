@@ -594,6 +594,12 @@ export interface YearlyBreakdown {
       systemEffectiveGflopsPerWatt: number;
       deliveredGflopsPerWatt: number;
     };
+    debug?: {
+      groundLifetime?: number;
+      gpuFailureRateAnnual?: number;
+      totalCostExcludesDelayPenalty?: boolean;
+      totalCostEffectiveIncludesDelayPenalty?: boolean;
+    };
   };
   staticLcoe?: number;
 }
