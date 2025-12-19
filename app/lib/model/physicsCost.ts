@@ -507,18 +507,21 @@ function calculateGroundTotal(
     : 1.0;
   const timeToEnergizePenaltyPerPflopYear = siteCostBase * (waitPenaltyFactor - 1);
   
-  // INVARIANT: siteCostPerPflopYear = siteCapexAmort + timeToEnergizePenalty + capacityDeliveryPremium
-  const siteCostPerPflopYear = siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear;
+  // CRITICAL: Remove double counting
+  // Do NOT include timeToEnergizePenalty in headline cost used for crossover
+  // (capacity gating in market share already accounts for backlog)
+  // Compute both base and effective costs:
+  const siteCostPerPflopYear_base = siteCapexAmortPerPflopYear + capacityDeliveryPremiumPerPflopYear;
+  const siteCostPerPflopYear_effective = siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear;
   
-  // Validation: siteCost must equal sum of components
-  const siteCostCheck = Math.abs(siteCostPerPflopYear - (siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear));
+  // Validation: siteCost_effective must equal sum of components
+  const siteCostCheck = Math.abs(siteCostPerPflopYear_effective - (siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear));
   if (siteCostCheck > 0.01) {
-    throw new Error(`Site cost accounting error: siteCost=${siteCostPerPflopYear} != sum(components)=${siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear}, diff=${siteCostCheck}`);
+    throw new Error(`Site cost accounting error: siteCost_effective=${siteCostPerPflopYear_effective} != sum(components)=${siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear}, diff=${siteCostCheck}`);
   }
   
   const hardware = hardwareCostBase;
 
-  // Total = energy (no multiplier) + site (sum of components) + hardware
   // Headline cost for crossover: base only (excludes delay penalty, which is handled via capacity gating)
   const total = (energyCost + siteCostPerPflopYear_base + hardware) * latencyPenalty;
   // Effective/all-in cost: includes delay penalty (for reference/debug)
