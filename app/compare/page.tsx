@@ -599,7 +599,7 @@ export default function ComparePage() {
       mode: isStaticMode ? 'STATIC' : 'DYNAMIC',
       paramsByYear: getParamsByYear
     }, trajectoryWithStatic);
-  }, [getParamsByYear, isMcCalipMode]);
+  }, [getParamsByYear, isStaticMode]);
 
   // CRITICAL: Ensure ground data is always present (even if orbital is infeasible)
   const trajectoryData = useMemo(() => {
@@ -839,7 +839,7 @@ export default function ComparePage() {
                   <YAxis scale="log" domain={['auto', 'auto']} axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                   <Tooltip 
                     contentStyle={{ fontSize: '10px', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(v: number) => [`$${v.toFixed(6)}`, '']}
+                    formatter={(v: number | undefined) => v !== undefined ? [`$${v.toFixed(6)}`, ''] : ['', '']}
                   />
                   <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingBottom: '20px' }} />
                   <Line type="monotone" dataKey="orbitalTokens" stroke="#0891b2" strokeWidth={4} dot={false} name="Orbital Tokens" />
