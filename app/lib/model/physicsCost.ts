@@ -519,7 +519,10 @@ function calculateGroundTotal(
   const hardware = hardwareCostBase;
 
   // Total = energy (no multiplier) + site (sum of components) + hardware
-  const total = (energyCost + siteCostPerPflopYear + hardware) * latencyPenalty;
+  // Headline cost for crossover: base only (excludes delay penalty, which is handled via capacity gating)
+  const total = (energyCost + siteCostPerPflopYear_base + hardware) * latencyPenalty;
+  // Effective/all-in cost: includes delay penalty (for reference/debug)
+  const totalEffective = (energyCost + siteCostPerPflopYear_effective + hardware) * latencyPenalty;
   
   return {
     energyCost: energyCost * latencyPenalty, // Energy NOT multiplied by constraint
