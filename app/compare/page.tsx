@@ -1263,14 +1263,12 @@ export default function ComparePage() {
                   <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} label={{ value: 'GW', angle: -90, position: 'insideLeft', style: { fontSize: '10px', fill: '#64748b' } }} />
                   <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} label={{ value: 'Years', angle: 90, position: 'insideRight', style: { fontSize: '10px', fill: '#64748b' } }} />
                   <Tooltip 
-                    formatter={(value: any, name: any) => {
-                      const numValue = typeof value === 'number' ? value : Number(value);
-                      if (!isFinite(numValue)) return ['', ''];
+                    formatter={(value: number, name: string) => {
                       if (name === 'timeToPowerYears') {
-                        return [`${numValue.toFixed(2)} years`, 'Time to Power'];
+                        return [`${value.toFixed(2)} years`, 'Time to Power'];
                       }
-                      return [`${numValue.toFixed(2)} GW`, name || ''];
-                    } as any}
+                      return [`${value.toFixed(2)} GW`, name];
+                    }}
                     labelFormatter={(label) => `Year ${label}`}
                   />
                   <Legend />
