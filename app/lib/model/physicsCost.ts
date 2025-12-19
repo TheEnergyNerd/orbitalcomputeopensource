@@ -1195,7 +1195,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       params,
       ENERGY_COST_BASE_2025,
       groundHardwareCapexPerPflopYear,
-      isStaticMode: params.isStaticMode,
+      params.isStaticMode,
       effectiveGroundScenario,
       groundLatencyPenalty,
       smrParams,
