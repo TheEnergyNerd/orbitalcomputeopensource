@@ -7,13 +7,13 @@
 
 import { computePhysicsCost } from '../physicsCost';
 import { computeTrajectory } from '../trajectory';
-import { getMcCalipStaticParams } from '../modes/mccalipStatic';
+import { getStaticParams } from '../modes/static';
 import { SLA_DEFINITIONS } from '../sla_definitions';
 
 describe('Model Invariants', () => {
   const trajectory = computeTrajectory({
     mode: 'DYNAMIC',
-    paramsByYear: (year) => getMcCalipStaticParams(year),
+    paramsByYear: (year) => getStaticParams(year),
   });
 
   describe('Cost Accounting', () => {

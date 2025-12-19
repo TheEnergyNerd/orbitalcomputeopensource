@@ -22,8 +22,8 @@ export interface MonteCarloParams {
   launchCost2040: number;
   specificPower2025: number;
   specificPower2040: number;
-  flopsPerWattOrbital2025: number;
-  flopsPerWattOrbital2040: number;
+      gflopsPerWattOrbital2025: number;
+      gflopsPerWattOrbital2040: number;
   failureRateBase: number;
   groundConstraintCap: number;
   pueGround2025: number;
@@ -61,8 +61,8 @@ function generateSample(
     launchCost2040: perturb(baseParams.launchCost2040, 0.20), // ±20% for future launch costs
     specificPower2025: perturb(baseParams.specificPower2025, 0.10), // ±10% for specific power
     specificPower2040: perturb(baseParams.specificPower2040, 0.15), // ±15% for future specific power
-    flopsPerWattOrbital2025: perturb(baseParams.flopsPerWattOrbital2025, 0.10), // ±10% for compute efficiency
-    flopsPerWattOrbital2040: perturb(baseParams.flopsPerWattOrbital2040, 0.15), // ±15% for future efficiency
+      gflopsPerWattOrbital2025: perturb(baseParams.gflopsPerWattOrbital2025, 0.10), // ±10% for compute efficiency
+      gflopsPerWattOrbital2040: perturb(baseParams.gflopsPerWattOrbital2040 || baseParams.gflopsPerWattOrbital2025, 0.15), // ±15% for future efficiency
     failureRateBase: perturb(baseParams.failureRateBase, 0.20), // ±20% for failure rate
     groundConstraintCap: perturb(baseParams.groundConstraintCap, 0.15), // ±15% for constraint cap
     pueGround2025: perturb(baseParams.pueGround2025, 0.05), // ±5% for PUE (well understood)
@@ -89,8 +89,8 @@ function paramsToYearParams(
     (sample.specificPower2040 - sample.specificPower2025) * ((year - 2025) / 15);
   
   // Interpolate GFLOPS/W (exponential growth)
-  const flopsPerWattOrbital = sample.flopsPerWattOrbital2025 * 
-    Math.pow(sample.flopsPerWattOrbital2040 / sample.flopsPerWattOrbital2025, (year - 2025) / 15);
+  const flopsPerWattOrbital = sample.gflopsPerWattOrbital2025 * 
+    Math.pow(sample.gflopsPerWattOrbital2040 / sample.gflopsPerWattOrbital2025, (year - 2025) / 15);
   
   // Interpolate PUE (linear)
   const pueGround = sample.pueGround2025 + 
@@ -100,8 +100,7 @@ function paramsToYearParams(
     ...base,
     launchCostKg: launchCost,
     specificPowerWKg: specificPower,
-    flopsPerWattOrbital2025: flopsPerWattOrbital,
-    flopsPerWattOrbital2040: sample.flopsPerWattOrbital2040,
+    gflopsPerWattOrbital2025: flopsPerWattOrbital,
     pueGround: pueGround,
     // Failure rate affects radiation degradation - approximate via useRadHardChips
     useRadHardChips: sample.failureRateBase >= 0.12, // Higher failure rate = rad-hard needed
@@ -189,8 +188,8 @@ export function extractBaseParams(
     launchCost2040: params2040.launchCostKg,
     specificPower2025: params2025.specificPowerWKg,
     specificPower2040: params2040.specificPowerWKg,
-    flopsPerWattOrbital2025: params2025.flopsPerWattOrbital2025,
-    flopsPerWattOrbital2040: params2040.flopsPerWattOrbital2040,
+      gflopsPerWattOrbital2025: params2025.gflopsPerWattOrbital2025 || 0,
+      gflopsPerWattOrbital2040: (params2040.gflopsPerWattOrbital2025 || params2025.gflopsPerWattOrbital2025 || 0),
     failureRateBase: params2025.useRadHardChips ? 0.09 : 0.15,
     groundConstraintCap: 50, // Default from GROUND_SCENARIOS
     pueGround2025: params2025.pueGround,

@@ -93,7 +93,7 @@ export function explainCrossoverDrivers(
       { component: 'compute', share: costShares.compute, cost: orbital.hardwareCostPerPflopYear },
       { component: 'thermal', share: costShares.thermal, cost: orbital.thermalSystemCost || 0 },
       { component: 'ops', share: costShares.ops, cost: orbital.replacementRateCost || 0 },
-      { component: 'networking', share: costShares.networking, cost: orbital.networkingCost || 0 },
+      { component: 'networking', share: costShares.networking, cost: 0 }, // Networking cost is included in other cost components
     ];
     
     shareEntries

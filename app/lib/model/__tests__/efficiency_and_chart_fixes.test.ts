@@ -3,12 +3,12 @@
  * 
  * Tests the three hard bugs fixed:
  * 1. Orbital compute efficiency internal consistency (delivered vs systemEffective)
- * 2. McCalip LCOE not being zeroed in chartInputs
+ * 2. Static LCOE not being zeroed in chartInputs
  * 3. Energy Cost Comparison using ONE definition consistently
  */
 
 import { computePhysicsCost } from '../physicsCost';
-import { getMcCalipStaticParams } from '../modes/mccalipStatic';
+import { getStaticParams } from '../modes/static';
 import { sanitizeFinite } from '../../utils/sanitize';
 
 describe('Efficiency Levels and Chart Data Fixes', () => {
@@ -16,7 +16,7 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
   describe('1. Orbital Compute Efficiency Internal Consistency', () => {
     it('should have delivered efficiency = systemEffective * thermalCap * radiationDerate * availability', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
       // Get efficiency levels from orbit object (stored in hybridBreakdown or directly)
@@ -48,7 +48,7 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
     
     it('should not emit "Power/Efficiency mismatch" warning for valid efficiency levels', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
       const validation = result.metadata?.computeEfficiency?.validation;
@@ -57,52 +57,52 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
     });
   });
   
-  describe('2. McCalip LCOE Not Zeroed in chartInputs', () => {
-    it('should have non-zero mccalipLcoe in chartInputs when mccalipLcoe > 0', () => {
+  describe('2. Static LCOE Not Zeroed in chartInputs', () => {
+    it('should have non-zero staticLcoe in chartInputs when staticLcoe > 0', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
-      const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+      const chartInputs = result.metadata?.chartInputs?.powerBuildout;
       expect(chartInputs).toBeDefined();
       
-      // McCalip LCOE should be computed, not hardcoded to 0
+      // Static LCOE should be computed, not hardcoded to 0
       // Note: It might be 0 if the calculation results in 0, but it should be computed
-      const mccalipLcoe = chartInputs?.mccalipLcoe;
-      expect(mccalipLcoe).toBeDefined();
-      expect(isFinite(mccalipLcoe!)).toBe(true);
+      const staticLcoe = chartInputs?.staticLcoe;
+      expect(staticLcoe).toBeDefined();
+      expect(isFinite(staticLcoe!)).toBe(true);
       
-      // If mccalipLcoe is > 0, it should match the expected calculation
-      if (mccalipLcoe && mccalipLcoe > 0) {
+      // If staticLcoe is > 0, it should match the expected calculation
+      if (staticLcoe && staticLcoe > 0) {
         // Should be a reasonable value (not unit corruption)
-        expect(mccalipLcoe).toBeGreaterThan(10); // At least $10/MWh
-        expect(mccalipLcoe).toBeLessThan(10000); // Not more than $10k/MWh
+        expect(staticLcoe).toBeGreaterThan(10); // At least $10/MWh
+        expect(staticLcoe).toBeLessThan(10000); // Not more than $10k/MWh
       }
     });
     
-    it('should have invariant: chartInputs.mccalipLcoe matches record.mccalipLcoe when both are finite', () => {
+    it('should have invariant: chartInputs.staticLcoe matches record.staticLcoe when both are finite', () => {
       // This test is run in the compare page, but we can test the computation here
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
-      const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+      const chartInputs = result.metadata?.chartInputs?.powerBuildout;
       expect(chartInputs).toBeDefined();
       
-      // chartInputs.mccalipLcoe should be computed (not 0 unless truly 0)
-      const chartMccalip = chartInputs?.mccalipLcoe;
-      expect(chartMccalip).toBeDefined();
-      expect(isFinite(chartMccalip!)).toBe(true);
+      // chartInputs.staticLcoe should be computed (not 0 unless truly 0)
+      const chartStatic = chartInputs?.staticLcoe;
+      expect(chartStatic).toBeDefined();
+      expect(isFinite(chartStatic!)).toBe(true);
     });
   });
   
   describe('3. Energy Cost Comparison Uses ONE Definition', () => {
     it('should use Option A: marginal electricity price to compute bus', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
-      const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+      const chartInputs = result.metadata?.chartInputs?.powerBuildout;
       expect(chartInputs).toBeDefined();
       
       // Ground: electricityPricePerMwh * pue
@@ -118,10 +118,10 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
       const years = [2025, 2030, 2035, 2040];
       
       for (const year of years) {
-        const params = getMcCalipStaticParams(year);
+        const params = getStaticParams(year);
         const result = computePhysicsCost(params);
         
-        const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+        const chartInputs = result.metadata?.chartInputs?.powerBuildout;
         expect(chartInputs).toBeDefined();
         
         // Ground should always be electricityPricePerMwh * pue
@@ -136,10 +136,10 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
     
     it('should not mix LCOE, losses, and amortized ops inconsistently', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
-      const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+      const chartInputs = result.metadata?.chartInputs?.powerBuildout;
       
       // Energy cost should NOT include compute efficiency division
       // It should be electricity price * PUE only
@@ -155,26 +155,26 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
   describe('4. Chart Series Never Drops Due to NaN', () => {
     it('should have all chart series with finite values after sanitization', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
-      const chartInputs = result.metadata?.chartInputs?.energyCostComparison;
+      const chartInputs = result.metadata?.chartInputs?.powerBuildout;
       expect(chartInputs).toBeDefined();
       
       // All sanitized values should be finite
       expect(isFinite(chartInputs!.groundSanitized)).toBe(true);
       expect(isFinite(chartInputs!.orbitSanitized)).toBe(true);
-      expect(isFinite(chartInputs!.mccalipLcoe)).toBe(true);
+      expect(isFinite(chartInputs!.staticLcoe)).toBe(true);
       
       // None should be NaN
       expect(chartInputs!.groundSanitized).not.toBeNaN();
       expect(chartInputs!.orbitSanitized).not.toBeNaN();
-      expect(chartInputs!.mccalipLcoe).not.toBeNaN();
+      expect(chartInputs!.staticLcoe).not.toBeNaN();
     });
     
     it('should have imputation flags when values are imputed', () => {
       const year = 2025;
-      const params = getMcCalipStaticParams(year);
+      const params = getStaticParams(year);
       const result = computePhysicsCost(params);
       
       const imputationFlags = result.metadata?.chartInputs?.imputationFlags;

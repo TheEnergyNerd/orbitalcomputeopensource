@@ -14,7 +14,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { computeTrajectory, generateFinalAnalysis, projectMarketPrice, MARKET_PROVIDERS, getDemandProjection, calculateMarketShare } from '../lib/model/trajectory';
 import { YearParams, WorkloadType, SLAConfig, GpuHourPricing, GroundScenario, FinalModelOutput } from '../lib/model/types';
-import { getMcCalipStaticParams } from '../lib/model/modes/mccalipStatic';
+import { getStaticParams } from '../lib/model/modes/static';
 import { GROUND_SCENARIOS } from '../lib/model/physicsCost';
 import { useCoupledSliders } from '../lib/ui/useCoupledSliders';
 import { DerivedValue } from '../components/ui/DerivedValue';
@@ -22,6 +22,7 @@ import { DerivedSlider } from '../components/ui/DerivedSlider';
 import { getSliderConfig } from '../lib/ui/sliderCoupling';
 import { ValidationWarnings } from '../components/ui/ValidationWarnings';
 import { sanitizeFinite, sanitizeSeries } from '../lib/utils/sanitize';
+import { validateAllCharts, ensureGroundData } from '../lib/utils/chartValidator';
 
 // ============================================================================
 // TYPES & HELPERS
@@ -226,7 +227,7 @@ export default function ComparePage() {
   const [smrToggleEnabled, setSmrToggleEnabled] = useState(false);
   const [fusionToggleEnabled, setFusionToggleEnabled] = useState(false);
 
-  const [isMcCalipMode, setIsMcCalipMode] = useState(false);
+  const [isStaticMode, setIsStaticMode] = useState(false);
   const [workloadType, setWorkloadType] = useState<WorkloadType>('inference');
   const [slaTier, setSlaTier] = useState<'basic' | 'standard' | 'premium'>('standard');
   
@@ -442,7 +443,7 @@ export default function ComparePage() {
 
     return {
       year,
-      isMcCalipMode,
+      isStaticMode,
       spaceTrafficEnabled,
       launchCostKg: interpolate({ 2025: launchCost2025, 2030: launchCost2030, 2035: launchCost2035, 2040: launchCost2040 }, year, 'exponential'),
       specificPowerWKg: interpolate({ 2025: specificPower2025, 2030: specificPower2030, 2035: specificPower2035, 2040: specificPower2040 }, year, 'linear'),
@@ -547,7 +548,7 @@ export default function ComparePage() {
       }
     };
   }, [
-    isMcCalipMode, spaceTrafficEnabled, launchCost2025, launchCost2030, launchCost2035, launchCost2040,
+    isStaticMode, spaceTrafficEnabled, launchCost2025, launchCost2030, launchCost2035, launchCost2040,
     specificPower2025, specificPower2030, specificPower2035, specificPower2040,
     satPower2025, satPower2040, satCost2025, satCost2040,
     computeTrajectoryEnabled, gflopsPerWattGround2025, flopsPerWattGround2040,
@@ -572,32 +573,16 @@ export default function ComparePage() {
 
   const finalAnalysis = useMemo(() => {
     const trajectory = computeTrajectory({
-      mode: isMcCalipMode ? 'MCCALIP_STATIC' : 'DYNAMIC',
+      mode: isStaticMode ? 'STATIC' : 'DYNAMIC',
       paramsByYear: getParamsByYear
     });
 
-    const mccalipStaticData = computeTrajectory({ mode: 'MCCALIP_STATIC', paramsByYear: (y) => getMcCalipStaticParams(y) });
-    const trajectoryWithMccalip = trajectory.map((d, i) => {
-      const mccalipLcoe = mccalipStaticData[i].orbit.lcoePerMwh;
-      
-      // CRITICAL INVARIANT: If mccalipLcoe is finite and > 0, then chartInputs.mccalipLcoe must equal it
-      // This ensures chartInputs uses the actual value, not a hardcoded 0
-      if (isFinite(mccalipLcoe) && mccalipLcoe > 0) {
-        const chartInputsMccalip = d.metadata?.chartInputs?.energyCostComparison?.mccalipLcoe;
-        if (chartInputsMccalip !== undefined && chartInputsMccalip !== 0 && Math.abs(chartInputsMccalip - mccalipLcoe * (d.orbit?.pue ?? 1)) > 0.01) {
-          console.error(
-            `[INVARIANT VIOLATION] mccalipLcoe mismatch: ` +
-            `record.mccalipLcoe=${mccalipLcoe}, ` +
-            `chartInputs.mccalipLcoe=${chartInputsMccalip}, ` +
-            `expected=${mccalipLcoe * (d.orbit?.pue ?? 1)}, ` +
-            `year=${d.year}`
-          );
-        }
-      }
-      
+    const staticData = computeTrajectory({ mode: 'STATIC', paramsByYear: (y) => getStaticParams(y) });
+    const trajectoryWithStatic = trajectory.map((d, i) => {
+      const staticLcoe = staticData[i]?.orbit?.lcoePerMwh ?? 0;
       return {
         ...d,
-        mccalipLcoe,
+        staticLcoe,
         breakdown: {
           ground: {
             hardware: d.ground.hardwareCapexPerPflopYear,
@@ -611,12 +596,29 @@ export default function ComparePage() {
     });
 
     return generateFinalAnalysis({
-      mode: isMcCalipMode ? 'MCCALIP_STATIC' : 'DYNAMIC',
+      mode: isStaticMode ? 'STATIC' : 'DYNAMIC',
       paramsByYear: getParamsByYear
-    }, trajectoryWithMccalip);
+    }, trajectoryWithStatic);
   }, [getParamsByYear, isMcCalipMode]);
 
-  const trajectoryData = finalAnalysis.trajectory;
+  // CRITICAL: Ensure ground data is always present (even if orbital is infeasible)
+  const trajectoryData = useMemo(() => {
+    const data = finalAnalysis.trajectory.map(d => ensureGroundData(d));
+    
+    // Validate chart data in dev mode
+    if (process.env.NODE_ENV === 'development') {
+      const validationResults = data.flatMap(d => 
+        validateAllCharts(d, 'compare-page', d.year)
+      );
+      const invalidCharts = validationResults.filter(r => !r.valid);
+      if (invalidCharts.length > 0) {
+        console.warn('[CHART VALIDATION] Missing required data paths:', invalidCharts);
+      }
+    }
+    
+    return data;
+  }, [finalAnalysis.trajectory]);
+  
   const crossoverYear = finalAnalysis.analysis.crossover.year;
 
   const sensitivityDrivers = useMemo(() => {
@@ -753,22 +755,56 @@ export default function ComparePage() {
 
         {/* Charts Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
-          <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
+          <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm relative">
             <h3 className="text-lg font-black mb-1">GPU-Hour Pricing ({slaTier.toUpperCase()} SLA)</h3>
             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-6">Market Benchmark: $/Hour per H100-Equivalent</p>
-            <div className="h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trajectoryData.map(d => ({ 
-                  year: d.year, 
-                  orbitalPrice: d.orbit.gpuHourPricing[slaTier].pricePerGpuHour,
-                  groundPrice: d.ground.gpuHourPricing[slaTier].pricePerGpuHour,
-                  aws: 4.50,
-                  coreweave: 2.23,
-                  breakdown: {
-                    orbital: d.orbit.gpuHourPricing[slaTier].costBreakdown,
-                    ground: d.ground.gpuHourPricing[slaTier].costBreakdown
-                  }
-                }))}>
+            {(() => {
+              // Validate chart data
+              const chartData = trajectoryData.map(d => ({ 
+                year: d.year, 
+                orbitalPrice: d.orbit?.gpuHourPricing?.[slaTier]?.pricePerGpuHour ?? null,
+                groundPrice: d.ground?.gpuHourPricing?.[slaTier]?.pricePerGpuHour ?? null,
+                aws: 4.50,
+                coreweave: 2.23,
+                breakdown: {
+                  orbital: d.orbit?.gpuHourPricing?.[slaTier]?.costBreakdown,
+                  ground: d.ground?.gpuHourPricing?.[slaTier]?.costBreakdown
+                }
+              }));
+              
+              // Check for missing ground data
+              const missingGround = chartData.filter(d => d.groundPrice === null || !isFinite(d.groundPrice));
+              const validationResults = process.env.NODE_ENV === 'development' 
+                ? trajectoryData.flatMap(d => validateAllCharts(d, 'compare-page', d.year))
+                : [];
+              const invalidCharts = validationResults.filter(r => !r.valid && r.chartName === 'GPU-Hour Pricing').map(r => ({
+                missingPaths: r.missingPaths,
+                nearestPath: r.nearestPath,
+                year: r.year,
+              }));
+              
+              return (
+                <>
+                  {invalidCharts.length > 0 && process.env.NODE_ENV === 'development' && (
+                    <div className="absolute top-2 right-2 z-10 bg-red-100 border border-red-300 rounded p-2 text-xs max-w-xs">
+                      <div className="font-bold text-red-800">Missing Chart Data</div>
+                      {invalidCharts.map((r, i) => (
+                        <div key={i} className="mt-1 text-red-700">
+                          <div>Missing: {r.missingPaths.join(', ')}</div>
+                          {r.nearestPath && <div>Nearest: {r.nearestPath}</div>}
+                          {r.year && <div>Year: {r.year}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {missingGround.length > 0 && process.env.NODE_ENV === 'development' && (
+                    <div className="absolute top-2 left-2 z-10 bg-yellow-100 border border-yellow-300 rounded p-2 text-xs">
+                      <div className="font-bold text-yellow-800">Warning: {missingGround.length} years missing ground data</div>
+                    </div>
+                  )}
+                  <div className="h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} domain={[0, 15]} label={{ value: '$/GPU-Hour', angle: -90, position: 'insideLeft', style: { fontSize: '10px', fill: '#64748b', fontWeight: 700 } }} />
@@ -776,11 +812,14 @@ export default function ComparePage() {
                   <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingBottom: '20px' }} />
                   <Line type="monotone" dataKey="orbitalPrice" stroke="#2563eb" strokeWidth={4} dot={false} name="Orbital GPU-Hour" />
                   <Line type="monotone" dataKey="groundPrice" stroke="#ef4444" strokeWidth={2} dot={false} name="Ground (SMR/Grid)" />
-                  <Line type="monotone" dataKey="aws" stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} dot={false} name="AWS H100 ($4.50)" />
-                  <Line type="monotone" dataKey="coreweave" stroke="#64748b" strokeDasharray="3 3" strokeWidth={2} dot={false} name="CoreWeave ($2.23)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                        <Line type="monotone" dataKey="aws" stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} dot={false} name="AWS H100 ($4.50)" />
+                        <Line type="monotone" dataKey="coreweave" stroke="#64748b" strokeDasharray="3 3" strokeWidth={2} dot={false} name="CoreWeave ($2.23)" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
@@ -973,7 +1012,7 @@ export default function ComparePage() {
             <div className="flex flex-col gap-2">
               <button 
                 onClick={() => {
-                  setIsMcCalipMode(false);
+                  setIsStaticMode(false);
                   updateParameter('launchCost2025', 1500);
                   updateParameter('launchCost2040', 100);
                   updateParameter('specificPower2025', 36.5);
@@ -982,13 +1021,13 @@ export default function ComparePage() {
                   updateParameter('flopsPerWattOrbital2025', 1500);
                   setUseRadHardChips(false);
                 }} 
-                className={`w-full py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${!isMcCalipMode ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                className={`w-full py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${!isStaticMode ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
               >
                 Reset to Dynamic Base
               </button>
               <button 
                 onClick={() => {
-                  setIsMcCalipMode(true);
+                  setIsStaticMode(true);
                   updateParameter('launchCost2025', 1500);
                   updateParameter('launchCost2030', 1500);
                   updateParameter('launchCost2035', 1500);
@@ -1003,9 +1042,9 @@ export default function ComparePage() {
                   updateParameter('flopsPerWattOrbital2040', 1000);
                   setUseRadHardChips(false);
                 }} 
-                className={`w-full py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${isMcCalipMode ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                className={`w-full py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${isStaticMode ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
               >
-                Load McCalip Baseline
+                Load Static Baseline
               </button>
             </div>
           </SliderGroup>
@@ -1264,7 +1303,7 @@ export default function ComparePage() {
 
         {/* Footer */}
         <footer className="mt-20 pt-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="text-sm text-gray-500 max-w-lg">Validating and extending the McCalip model. Transforming abstract cost metrics into market-ready pricing tools for the next generation of infrastructure.</div>
+          <div className="text-sm text-gray-500 max-w-lg">Validating and extending the static baseline model. Transforming abstract cost metrics into market-ready pricing tools for the next generation of infrastructure.</div>
           <div className="flex gap-4">
             <button onClick={handleExportDebug} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-gray-800 transition-all shadow-lg">Export Debug Data</button>
             <a href="/sandbox" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg">Open Sandbox</a>

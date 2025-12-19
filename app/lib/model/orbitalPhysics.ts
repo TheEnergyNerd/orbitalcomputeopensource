@@ -79,7 +79,7 @@ export interface GpuHourPricing {
 }
 
 // =============================================================================
-// PHYSICAL CONSTANTS (From McCalip - Verified)
+// PHYSICAL CONSTANTS (From static baseline - Verified)
 // =============================================================================
 
 export const PHYSICS_CONSTANTS = {
@@ -115,7 +115,7 @@ export const MATERIALS = {
 } as const;
 
 // =============================================================================
-// STARLINK EMPIRICAL DATA (From McCalip - Validated)
+// STARLINK EMPIRICAL DATA (From static baseline - Validated)
 // =============================================================================
 
 export const STARLINK_EMPIRICAL = {
@@ -747,7 +747,7 @@ export function calculateInterconnectCost(
 }
 
 // =============================================================================
-// THERMAL SYSTEM (Physics-Based using McCalip equations)
+// THERMAL SYSTEM (Physics-Based using static baseline equations)
 // =============================================================================
 
 export interface ThermalParams {
@@ -1253,7 +1253,7 @@ export function computeRadiationCost(
 }
 
 // =============================================================================
-// DEGRADATION MODEL (From McCalip - Verified)
+// DEGRADATION MODEL (From static baseline - Verified)
 // =============================================================================
 
 export function calculateDegradationFactor(

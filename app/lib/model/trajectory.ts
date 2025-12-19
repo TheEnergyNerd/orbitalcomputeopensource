@@ -1,11 +1,11 @@
 import { YearParams, YearlyBreakdown, SensitivityAnalysis, FinalModelOutput, MarketProjection, ValidationChecks, GroundScenarioLabel } from './types';
 import { computePhysicsCost, GROUND_SCENARIOS, getLaunchCostPerKg } from './physicsCost';
 import { stepLaunchLearning, LaunchLearningState } from './launch_learning';
-import { getMcCalipStaticParams } from './modes/mccalipStatic';
+import { getStaticParams } from './modes/static';
 import { runMonteCarloCrossover, extractBaseParams, MonteCarloResult } from './monteCarloCrossover';
 
 export interface TrajectoryOptions {
-  mode: 'DYNAMIC' | 'MCCALIP_STATIC';
+  mode: 'DYNAMIC' | 'STATIC';
   spaceTrafficEnabled?: boolean;
   useLaunchLearning?: boolean; // Enable cumulative mass-based launch learning
   
@@ -21,11 +21,31 @@ export function findCrossoverYear(trajectory: YearlyBreakdown[]): number | null 
 export interface MarketAnalysis {
   year: number;
   totalDemandGW: number;
-  orbitalSharePct: number;
+  orbitalShareFrac: number; // Fraction (0..1), standardized - use this everywhere
   orbitalCapacityGW: number;
   orbitalRevenue: number;
-  groundSharePct: number;
+  groundShareFrac: number; // Fraction (0..1), standardized - use this everywhere
   groundCapacityGW: number;
+  debug: {
+    shareConvention: 'frac';
+    orbitalFeasible: boolean;
+    groundFeasible: boolean;
+    orbitalShareFrac: number;
+    groundShareFrac: number;
+    orbitalCapacityGW: number;
+    groundCapacityGW: number;
+    orbitalRevenue: number;
+    groundRevenue: number;
+    demandComputeGW?: number;
+    groundServedComputeGW?: number;
+    orbitServedComputeGW?: number;
+    groundFeasibleComputeGW?: number;
+    orbitFeasibleComputeGW?: number;
+    backlogGW?: number;
+    buildRateGWyr?: number;
+    avgWaitYears?: number;
+    infeasibilityReasons?: string[];
+  };
 }
 
 // Calculate market share based on cost ratio
@@ -323,8 +343,8 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
   let mobilizationState: import('./ground_ramping_mobilization').MobilizationState | null = null;
 
   for (const year of years) {
-    const params = options.mode === 'MCCALIP_STATIC' 
-      ? getMcCalipStaticParams(year)
+    const params = options.mode === 'STATIC' 
+      ? getStaticParams(year)
       : options.paramsByYear(year);
 
     // Apply launch learning if enabled
@@ -548,7 +568,7 @@ export function generateFinalAnalysis(
   const groundScenarioLabel: GroundScenarioLabel = {
     name: selectedScenario.name,
     description: selectedScenario.description,
-    constraintMultiplier2040: baseTrajectory[baseTrajectory.length - 1].ground.constraintMultiplier,
+    constraintMultiplier2040: 1.0, // Not used - constraints now use adders only
     assumptions: [
       `Grid growth: ${(selectedScenario.gridGrowthRate * 100).toFixed(1)}%/year`,
       `Cooling growth: ${(selectedScenario.coolingGrowthRate * 100).toFixed(1)}%/year`,

@@ -150,8 +150,8 @@ describe('Unit Validation and Chart Data Acceptance Tests', () => {
   describe('Energy Cost Comparison Chart', () => {
     it('should have both ground and orbit traces with finite values', () => {
       const chartData = [
-        { year: 2025, ground: 156, orbit: 52.5, mccalip: 0 },
-        { year: 2026, ground: 156, orbit: 50, mccalip: 0 },
+        { year: 2025, ground: 156, orbit: 52.5, static: 0 },
+        { year: 2026, ground: 156, orbit: 50, static: 0 },
       ];
 
       chartData.forEach(point => {

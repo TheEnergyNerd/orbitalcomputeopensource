@@ -170,7 +170,7 @@ export interface FinalModelOutput {
 
 export interface YearlyBreakdown {
   year: number;
-  mode: 'MCCALIP_STATIC' | 'DYNAMIC';
+  mode: 'STATIC' | 'DYNAMIC';
   
   // SANITY PANEL: Debug block per year for auditability
   sanityPanel?: {
@@ -267,6 +267,8 @@ export interface YearlyBreakdown {
       // Additional mobilization debug fields
       demandGW?: number;
       demandGrowthRate?: number;
+      backlogGW?: number; // From mobilization state
+      avgWaitYears?: number; // From mobilization state (alias for timeToPowerYears)
     };
     constraints?: {
       method: 'adders';
@@ -277,7 +279,19 @@ export interface YearlyBreakdown {
         energyMultiplierUsed: boolean;
         siteMultiplierUsed: boolean;
       };
+      debug?: {
+        doubleCountCheck: {
+          mode: 'adders' | 'multipliers';
+          multiplierApplied: boolean;
+          addersApplied: boolean;
+          invariantOk: boolean;
+          notes: string;
+        };
+      };
     };
+    replacementOpsInputs?: import('./replacement_ops_config').ReplacementOpsConfig;
+    replacementOpsOutputs?: import('./replacement_ops_config').ReplacementOpsOutputs;
+    replacementOpsSensitivity?: import('./replacement_ops_config').ReplacementOpsSensitivity;
     totalCostPerPflopYear: number;
 
     gpuHourPricing: {
@@ -495,31 +509,32 @@ export interface YearlyBreakdown {
   
   market?: {
     totalDemandGW: number;
-    orbitalShareFrac: number; // Fraction (0..1), not percentage
+    orbitalShareFrac: number; // Fraction (0..1), standardized - use this everywhere
     orbitalCapacityGW: number;
     orbitalRevenue: number;
-    groundShareFrac: number; // Fraction (0..1), not percentage
+    groundShareFrac: number; // Fraction (0..1), standardized - use this everywhere
     groundCapacityGW: number;
-  debug?: {
-    shareConvention: 'frac';
-    orbitalFeasible: boolean;
-    groundFeasible: boolean;
-    orbitalShareFrac: number;
-    groundShareFrac: number;
-    orbitalCapacityGW: number;
-    groundCapacityGW: number;
-    orbitalRevenue: number;
-    groundRevenue: number;
-    demandComputeGW?: number;
-    groundServedComputeGW?: number;
-    orbitServedComputeGW?: number;
-    groundFeasibleComputeGW?: number;
-    orbitFeasibleComputeGW?: number;
-    backlogGW?: number;
-    buildRateGWyr?: number;
-    avgWaitYears?: number;
+    debug?: {
+      shareConvention: 'frac';
+      orbitalFeasible: boolean;
+      groundFeasible: boolean;
+      orbitalShareFrac: number;
+      groundShareFrac: number;
+      orbitalCapacityGW: number;
+      groundCapacityGW: number;
+      orbitalRevenue: number;
+      groundRevenue: number;
+      demandComputeGW?: number;
+      groundServedComputeGW?: number;
+      orbitServedComputeGW?: number;
+      groundFeasibleComputeGW?: number;
+      orbitFeasibleComputeGW?: number;
+      backlogGW?: number;
+      buildRateGWyr?: number;
+      avgWaitYears?: number;
+      infeasibilityReasons?: string[];
+    };
   };
-};
   
   crossover: boolean;
   crossoverDetails?: {
@@ -550,6 +565,7 @@ export interface YearlyBreakdown {
       validation: { 
         valid: boolean; 
         warning?: string;
+        invalid?: boolean; // Escalate flag: if true, run is invalid (mismatch > 5%)
         expectedDelivered?: number;
         delivered?: number;
         ratio?: number;
@@ -563,16 +579,13 @@ export interface YearlyBreakdown {
       };
     };
     chartInputs?: {
-      energyCostComparison: {
-        groundRaw: number;
-        groundSanitized: number;
-        orbitRaw: number;
-        orbitSanitized: number;
-        mccalipLcoe: number;
-      };
-      imputationFlags: {
-        groundImputed: boolean;
-        orbitImputed: boolean;
+      powerBuildout?: {
+        demandGw: number;
+        supplyGw: number;
+        maxBuildRateGwYear: number;
+        pipelineGw: number;
+        backlogGw: number;
+        avgWaitYears: number;
       };
     };
     computeEfficiencyLevels?: {
@@ -581,7 +594,7 @@ export interface YearlyBreakdown {
       deliveredGflopsPerWatt: number;
     };
   };
-  mccalipLcoe?: number;
+  staticLcoe?: number;
 }
 
 export interface EdgeInferenceParams {
@@ -639,7 +652,7 @@ export interface EdgeInferenceYearData {
 
 export interface YearParams {
   year: number;
-  isMcCalipMode: boolean;
+  isStaticMode: boolean;
   spaceTrafficEnabled: boolean;
   edgeInference?: EdgeInferenceParams;
   launchCostKg: number;
@@ -682,6 +695,7 @@ export interface YearParams {
       2040: number;
       2060: number;
     };
+    demandCurve?: 'piecewise_exponential'; // Curve type (defaults to piecewise_exponential)
     demandIsFacilityLoad: boolean; // If true, includes PUE; if false, multiply by PUE later
     buildoutAnchorsGWyr: {
       2025: number;

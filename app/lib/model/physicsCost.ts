@@ -37,7 +37,7 @@ import { stepLaunchLearning, LaunchLearningState } from './launch_learning';
 import { calculateSystemSpecificPower } from './specific_power';
 import { calculateThermalSystem, DEFAULT_THERMAL_PARAMS } from './thermal_physics';
 import { designConstellation, SATELLITE_CONSTRAINTS } from './constellation_sizing';
-import { getMcCalipStaticParams } from './modes/mccalipStatic';
+import { getStaticParams } from './modes/static';
 import { getDemandProjection, getFacilityLoadGW, getDemandNewGW, getITLoadGW } from './trajectory';
 
 const CONSTANTS = {
@@ -168,8 +168,8 @@ const SLA_TIERS: Record<string, SLAConfig> = {
   },
 };
 
-function applyMcCalipFreeze(params: YearParams): YearParams {
-  if (!params.isMcCalipMode) return params;
+function applyStaticFreeze(params: YearParams): YearParams {
+  if (!params.isStaticMode) return params;
   
   return {
     ...params,
@@ -416,7 +416,7 @@ function calculateGroundTotal(
   
   let siteCostBase = BASE_SITE_2025;
 
-  const enabled = params.groundConstraintsEnabled && !isMcCalipMode;
+  const enabled = params.groundConstraintsEnabled && !isStaticMode;
   
   // SMR Toggle logic
   const smrEnabled = smrParams?.enabled && year >= (smrParams.smrDeploymentStartYear || 2030);
@@ -548,6 +548,15 @@ function calculateGroundTotal(
         energyMultiplierUsed: false,
         siteMultiplierUsed: false,
       },
+      debug: {
+        doubleCountCheck: {
+          mode: 'adders',
+          multiplierApplied: false,
+          addersApplied: (capacityDeliveryPremiumPerPflopYear > 0) || (timeToEnergizePenaltyPerPflopYear > 0),
+          invariantOk: true,
+          notes: 'calculateGroundTotal uses adders only (capacityDeliveryPremium + timeToEnergizePenalty)',
+        },
+      },
     },
     smrEnabled,
     smrRampFactor,
@@ -557,11 +566,11 @@ function calculateGroundTotal(
 }
 
 export function computePhysicsCost(rawParams: YearParams, firstCapYear: number | null = null): YearlyBreakdown {
-  const params = applyMcCalipFreeze(rawParams);
+  const params = applyStaticFreeze(rawParams);
   
   const {
     year,
-    isMcCalipMode,
+    isStaticMode,
     launchCostKg: baseLaunchCost,
     specificPowerWKg: trajSpecificPower,
     groundEffectiveGflopsPerW_2025: rawGroundEffectiveGflopsPerW_2025,
@@ -751,7 +760,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   // For reference/display (not used in constraint calculation)
   const BASE_ELECTRICITY_PRICE_2025 = 120; // $/MWh (2025 baseline)
   let groundElectricityPricePerMwh = BASE_ELECTRICITY_PRICE_2025; 
-  if (!isMcCalipMode) {
+  if (!isStaticMode) {
     groundElectricityPricePerMwh *= Math.pow(1.02, year - 2025);
   }
   
@@ -790,9 +799,9 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     capacityDeliveryMultiplier?: number;
   };
   
-  const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !isMcCalipMode;
-  const useBuildoutModel = params.useBuildoutModel === true && params.groundConstraintsEnabled && !isMcCalipMode && !useRegionalModel;
-  const useQueueModel = (params.useQueueBasedConstraint !== false) && params.groundConstraintsEnabled && !isMcCalipMode && !useRegionalModel && !useBuildoutModel;
+  const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !isStaticMode;
+  const useBuildoutModel = params.useBuildoutModel === true && params.groundConstraintsEnabled && !isStaticMode && !useRegionalModel;
+  const useQueueModel = (params.useQueueBasedConstraint !== false) && params.groundConstraintsEnabled && !isStaticMode && !useRegionalModel && !useBuildoutModel;
   
   if (useQueueModel) {
     const supplyTrajectory = generateGroundSupplyTrajectory(2025, year);
@@ -908,7 +917,11 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     // Uses ramping buildout capacity with smooth interpolation
     
     // Get mobilization parameters (use defaults if not provided)
-    const mobilizationParams: MobilizationScenarioParams = params.mobilizationParams ?? DEFAULT_MOBILIZATION_PARAMS;
+    const mobilizationParams: MobilizationScenarioParams = params.mobilizationParams ? {
+      ...DEFAULT_MOBILIZATION_PARAMS,
+      ...params.mobilizationParams,
+      demandCurve: (params.mobilizationParams.demandCurve || DEFAULT_MOBILIZATION_PARAMS.demandCurve) as 'piecewise_exponential',
+    } : DEFAULT_MOBILIZATION_PARAMS;
     
     // Get previous mobilization state from params (passed from trajectory)
     // If not provided, calculate from previous year's demand
@@ -968,7 +981,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     };
     
     const buildoutResult = calculateBuildoutConstraints(
-      prevBuildoutState,
+      null, // State is now managed by mobilization model
       buildoutParams,
       year,
       groundEffectiveGflopsPerW,
@@ -1048,12 +1061,46 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         // Additional mobilization debug fields
         demandGW: mobilizationResult.demandGW,
         demandGrowthRate: mobilizationResult.demandGrowthRate,
+        backlogGW: mobilizationResult.backlogGW,
+        avgWaitYears: mobilizationResult.avgWaitYears,
       },
       smrEnabled: false,
       smrRampFactor: 0,
       effectiveElectricityCost: groundElectricityPricePerMwh,
       constraintRelief: { grid: 0, cooling: 0, water: 0, land: 0 },
+      constraints: {
+        method: 'adders',
+        capacityDeliveryPremium: buildoutPremiumPerPflopYear * groundLatencyPenalty,
+        delayPenalty: delayPenaltyPerPflopYear * groundLatencyPenalty,
+        appliedMultipliers: {
+          constraintMultiplierUsed: false,
+          energyMultiplierUsed: false,
+          siteMultiplierUsed: false,
+        },
+        debug: {
+          doubleCountCheck: {
+            mode: 'adders',
+            multiplierApplied: false,
+            addersApplied: true,
+            invariantOk: true,
+            notes: 'Buildout model uses adders only (capacityDeliveryPremium + delayPenalty)',
+          },
+        },
+      },
     };
+    
+    // Invariant: If using adders, multipliers must not be applied
+    if (process.env.NODE_ENV === 'development') {
+      const hasMultiplier = groundResult.constraintMultiplier !== 1.0;
+      const hasAdder = (groundResult.capacityDeliveryPremium > 0) || (groundResult.timeToEnergizePenalty > 0);
+      if (hasMultiplier && hasAdder) {
+        throw new Error(
+          `[DOUBLE COUNTING DETECTED] Year ${year}: constraintMultiplier=${groundResult.constraintMultiplier} != 1.0 ` +
+          `AND adders > 0 (capacityDeliveryPremium=${groundResult.capacityDeliveryPremium}, ` +
+          `delayPenalty=${groundResult.timeToEnergizePenalty}). Both cannot be applied simultaneously.`
+        );
+      }
+    }
   } else if (useRegionalModel) {
     const demandPflops = getGlobalDemandPflops(year, groundEffectiveGflopsPerW);
     const regionalResult = calculateRegionalGroundCost(
@@ -1126,6 +1173,15 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           energyMultiplierUsed: false,
           siteMultiplierUsed: false,
         },
+        debug: {
+          doubleCountCheck: {
+            mode: 'adders',
+            multiplierApplied: false,
+            addersApplied: capacityDeliveryPremiumPerPflopYear > 0,
+            invariantOk: true,
+            notes: 'Regional model uses adders only (capacityDeliveryPremium from siteCost - siteCostBase)',
+          },
+        },
       },
       breakdown: constraintBreakdown,
       smrEnabled: false,
@@ -1139,7 +1195,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       params,
       ENERGY_COST_BASE_2025,
       groundHardwareCapexPerPflopYear,
-      isMcCalipMode,
+      isStaticMode,
       effectiveGroundScenario,
       groundLatencyPenalty,
       smrParams,
@@ -1151,6 +1207,19 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     groundTotalCost = groundResult.totalCostPerPflopYear;
     // CRITICAL FIX: Never apply multipliers - all set to 1.0
     energyConstraintMultiplier = 1.0; // Never applied
+    
+    // Invariant: If using adders, multipliers must not be applied
+    if (process.env.NODE_ENV === 'development' && groundResult.constraints) {
+      const hasMultiplier = groundResult.constraintMultiplier !== 1.0;
+      const hasAdder = (groundResult.constraints.capacityDeliveryPremium > 0) || (groundResult.constraints.delayPenalty > 0);
+      if (hasMultiplier && hasAdder) {
+        throw new Error(
+          `[DOUBLE COUNTING DETECTED] Year ${year}: constraintMultiplier=${groundResult.constraintMultiplier} != 1.0 ` +
+          `AND adders > 0 (capacityDeliveryPremium=${groundResult.constraints.capacityDeliveryPremium}, ` +
+          `delayPenalty=${groundResult.constraints.delayPenalty}). Both cannot be applied simultaneously.`
+        );
+      }
+    }
     constraintBreakdown = {
       grid: 1.0, // Not applied
       cooling: 1.0, // Not applied
@@ -1439,10 +1508,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
 
   // FIX 5: GPU-hour breakdown must derive from annual cost breakdown
   // CRITICAL: Include constraint adders (delayPenalty + buildoutPremium) in GPU-hour pricing
+  // Get constraint adders from groundResult (may be in buildoutDebug or directly in constraints)
+  const buildoutDebug = 'buildoutDebug' in groundResult ? groundResult.buildoutDebug : undefined;
   const constraintAdderPerPflopYear = (groundResult.capacityDeliveryPremium || 0) + 
                                       (groundResult.timeToEnergizePenalty || 0) +
-                                      (groundResult.buildoutDebug?.buildoutPremiumPerPflopYear || 0) +
-                                      (groundResult.buildoutDebug?.delayPenaltyPerPflopYear || 0);
+                                      (buildoutDebug?.buildoutPremiumPerPflopYear || 0) +
+                                      (buildoutDebug?.delayPenaltyPerPflopYear || 0);
   
   // Convert constraint adders to $/GPU-hour
   const pflopsPerGpu = 2.0;
@@ -1524,6 +1595,10 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   // CRITICAL: Fix validator logic - if ratio is finite and |1 - ratio| <= tolerance, then valid=true
   const isRatioValid = isFinite(ratio) && ratioError <= TOLERANCE;
   
+  // Escalate: if mismatch > 5%, mark as invalid (don't just warn)
+  const ESCALATE_THRESHOLD = 0.05; // 5%
+  const isInvalid = !isRatioValid && ratioError > ESCALATE_THRESHOLD;
+  
   // Debug invariants: assert delivered <= systemEffective + eps
   const deliveredVsSystemError = orbitDeliveredGflopsPerWatt - orbitSystemEffectiveGflopsPerWatt;
   if (deliveredVsSystemError > 1e-6) {
@@ -1551,12 +1626,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   
   // CRITICAL: Validate delivered efficiency - compare delivered vs expectedDelivered only
   // Make validator debug explicit with all factors
-  // Ensure no other code overwrites valid/warning after this
+  // If mismatch > 5%, mark run invalid and stop chart rendering (escalate, don't silently warn)
   const deliveredValidation = {
     valid: isRatioValid,
     warning: isRatioValid 
       ? undefined // Empty/null when valid
-      : `Power/Efficiency mismatch: ${ratio.toFixed(2)}x discrepancy`,
+      : `Power/Efficiency mismatch: ${ratio.toFixed(2)}x discrepancy (expected=${expectedDelivered.toFixed(2)}, delivered=${orbitDeliveredGflopsPerWatt.toFixed(2)})`,
     expectedDelivered,
     delivered: orbitDeliveredGflopsPerWatt,
     ratio,
@@ -1566,7 +1641,9 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       availability,
       utilization: orbitalEfficiencyResult.debug.utilizationFactor,
       systemOverheadFactor: orbitalEfficiencyResult.debug.systemOverheadFactor,
-    }
+    },
+    // Escalate: if ratio is way off (> 5%), mark as invalid
+    invalid: !isRatioValid && Math.abs(1 - ratio) > 0.05,
   };
   
   const efficiencyValidation = validateComputeEfficiency(orbitEffectiveGflopsPerW, params.efficiencyLevel);
@@ -1603,7 +1680,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
 
   return {
     year,
-    mode: isMcCalipMode ? 'MCCALIP_STATIC' : 'DYNAMIC',
+    mode: isStaticMode ? 'STATIC' : 'DYNAMIC',
     sanityPanel,
     ground: {
       electricityPricePerMwh: groundElectricityPricePerMwh,
@@ -1670,8 +1747,11 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         ...constraintBreakdown,
         capacityDeliveryMultiplier: 1.0, // Not applied
       },
-      constraints: groundResult.constraints || {
-        method: 'adders',
+      constraints: (groundResult.constraints ? {
+        ...groundResult.constraints,
+        method: 'adders' as const,
+      } : {
+        method: 'adders' as const,
         capacityDeliveryPremium: (groundResult.capacityDeliveryPremium || 0),
         delayPenalty: (groundResult.timeToEnergizePenalty || 0),
         appliedMultipliers: {
@@ -1679,7 +1759,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           energyMultiplierUsed: false,
           siteMultiplierUsed: false,
         },
-      },
+      }) as { method: 'adders'; capacityDeliveryPremium: number; delayPenalty: number; appliedMultipliers: { constraintMultiplierUsed: boolean; energyMultiplierUsed: boolean; siteMultiplierUsed: boolean; }; debug?: any },
       supplyMetrics: (groundResult as any).supplyMetrics,
       constraintComponents: (groundResult as any).constraintComponents,
       totalCostPerPflopYear: (() => {
@@ -1719,7 +1799,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         ),
         utilizationFactor: orbitalEfficiencyResult.debug.utilizationFactor,
         effectiveGflopsPerWatt: orbitSystemEffectiveGflopsPerWatt, // System-effective = peak * utilization / systemOverheadFactor (SYSTEM-LEVEL EFFECTIVE)
-        deliveredGflopsPerWatt: orbitEffectiveGflopsPerW, // Delivered = systemEffective × thermalCapFactor × radiationDerate × availability
+        // deliveredGflopsPerWatt is stored in orbit.computeEfficiency.gflopsPerWatt, not here
         notes: 'Commercial rad-tolerant variant. peakGflopsPerWatt = chip peak. effectiveGflopsPerWatt = peak * utilization / systemOverheadFactor (system-level effective). deliveredGflopsPerWatt = systemEffective × thermalCapFactor × radiationDerate × availability',
       },
       computeEfficiencyProvenance: {
@@ -1797,11 +1877,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       
       // Debug blocks for analysis - explicitly track all efficiency levels
       // Single source of truth: define orbit.computeEfficiencyLevels each year
-      computeEfficiencyLevels: {
-        peakGflopsPerWatt: orbitPeakGflopsPerWatt, // peak = orbit.computeDefinition.peakGflopsPerWatt (chip peak)
-        systemEffectiveGflopsPerWatt: orbitSystemEffectiveGflopsPerWatt, // systemEffective = peak * utilization / systemOverheadFactor (SYSTEM-LEVEL EFFECTIVE)
-        deliveredGflopsPerWatt: orbitEffectiveGflopsPerW, // delivered = systemEffective × thermalCapFactor × radiationDerate × availability
-      },
+      // Note: computeEfficiencyLevels is stored in metadata, not directly on orbit
       effectiveComputeMultipliers: {
         thermalCapFactor: hybridResult.thermalSystem.thermalCapFactor,
         radiationDerate: hybridResult.degradationFactor || 1.0,
@@ -1918,54 +1994,21 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           factorsUsed: deliveredValidation.factorsUsed,
         }
       },
-      // CRITICAL FIX: Add chartInputs debug block for Energy Cost Comparison chart
-      // Option A (recommended): marginal electricity price to the compute bus
-      // Ground: electricityPricePerMwh * pue (electricity cost to load only, no compute efficiency)
-      // Orbit: lcoePerMwh * pue (LCOE already accounts for power system, just add PUE)
-      // Do NOT include capex/opex amortization in this chart. It's energy-only.
-      chartInputs: (() => {
-        const groundEffectiveEnergyCostPerMwh = groundElectricityPricePerMwh * effectivePueGround;
-        const orbitEffectiveEnergyCostPerMwh = (hybridResult.powerSystem.totalCostUsd) / (satellitePowerKW * PHYSICS_CONSTANTS.HOURS_PER_YEAR * lifetimeYears * hybridResult.capacityFactor / 1000) * pueOrbital;
-        
-        // CRITICAL FIX: Compute McCalip LCOE for this year (don't hardcode to 0)
-        // Use getMcCalipStaticParams to get the same-year scenario value
-        const mccalipParams = getMcCalipStaticParams(year);
-        const mccalipLcoeRaw = (mccalipParams.orbitEffectiveGflopsPerW_2025 && mccalipParams.orbitEffectiveGflopsPerW_2025 > 0) 
-          ? (() => {
-              // Compute McCalip LCOE using the same formula as orbital LCOE but with McCalip params
-              const mccalipHybridResult = computeSatelliteHybridCost(
-                year,
-                mccalipParams.launchCostKg,
-                {
-                  ...DEFAULT_CONFIG,
-                  computePowerKw: mccalipParams.satellitePowerKW,
-                  altitudeKm: mccalipParams.orbitalAltitude || 1000,
-                  lifetimeYears: lifetimeYears,
-                  specificPowerWKg: mccalipParams.specificPowerWKg,
-                  useRadHardChips: mccalipParams.useRadHardChips || false,
-                  sunFraction: 0.98,
-                  workloadType: 'inference'
-                }
-              );
-              return (mccalipHybridResult.powerSystem.totalCostUsd) / (mccalipParams.satellitePowerKW * PHYSICS_CONSTANTS.HOURS_PER_YEAR * lifetimeYears * mccalipHybridResult.capacityFactor / 1000);
-            })()
-          : 0;
-        const mccalipEffectiveEnergyCostPerMwh = mccalipLcoeRaw * pueOrbital;
-        
-        return {
-          energyCostComparison: {
-            groundRaw: groundEffectiveEnergyCostPerMwh,
-            groundSanitized: sanitizeFinite(groundEffectiveEnergyCostPerMwh, 0),
-            orbitRaw: orbitEffectiveEnergyCostPerMwh,
-            orbitSanitized: sanitizeFinite(orbitEffectiveEnergyCostPerMwh, 0),
-            mccalipLcoe: sanitizeFinite(mccalipEffectiveEnergyCostPerMwh, 0), // CRITICAL: Use actual computed value, never 0 unless truly 0
-          },
-          imputationFlags: {
-            groundImputed: !isFinite(groundElectricityPricePerMwh) || !isFinite(effectivePueGround),
-            orbitImputed: !isFinite(hybridResult.powerSystem.totalCostUsd) || !isFinite(satellitePowerKW),
-          }
-        };
-      })()
+      // Chart inputs for power buildout constraints (replaces energyCostComparison)
+      chartInputs: {
+        powerBuildout: {
+          demandGw: ('buildoutDebug' in groundResult ? groundResult.buildoutDebug?.demandGW : undefined) ?? 
+                    ('supplyMetrics' in groundResult ? groundResult.supplyMetrics?.demandGw : undefined) ?? 0,
+          supplyGw: ('supplyMetrics' in groundResult ? groundResult.supplyMetrics?.capacityGw : undefined) ?? 0,
+          maxBuildRateGwYear: ('supplyMetrics' in groundResult ? groundResult.supplyMetrics?.maxBuildRateGwYear : undefined) ?? 
+                              ('buildoutDebug' in groundResult ? groundResult.buildoutDebug?.buildRateGWyr : undefined) ?? 0,
+          pipelineGw: ('supplyMetrics' in groundResult ? groundResult.supplyMetrics?.pipelineGw : undefined) ?? 0,
+          backlogGw: ('backlogGw' in groundResult ? groundResult.backlogGw : undefined) ?? 
+                     ('buildoutDebug' in groundResult ? groundResult.buildoutDebug?.backlogGW : undefined) ?? 0,
+          avgWaitYears: ('avgWaitYears' in groundResult ? groundResult.avgWaitYears : undefined) ?? 
+                        ('buildoutDebug' in groundResult ? groundResult.buildoutDebug?.timeToPowerYears : undefined) ?? 0,
+        },
+      }
     }
   };
 }

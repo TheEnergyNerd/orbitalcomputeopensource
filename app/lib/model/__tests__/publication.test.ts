@@ -1,13 +1,13 @@
 import { describe, test, expect } from '@jest/globals';
 import { computeTrajectory } from '../trajectory';
-import { getMcCalipStaticParams } from '../modes/mccalipStatic';
+import { getStaticParams } from '../modes/static';
 
 describe('Publication Ready Tests', () => {
   
-  test('McCalip static mode is year-invariant', () => {
+  test('Static mode is year-invariant', () => {
     const trajectory = computeTrajectory({ 
-      mode: 'MCCALIP_STATIC',
-      paramsByYear: (y) => getMcCalipStaticParams(y) 
+      mode: 'STATIC',
+      paramsByYear: (y) => getStaticParams(y) 
     });
     
     const baseline = trajectory[0];
@@ -22,9 +22,9 @@ describe('Publication Ready Tests', () => {
     const trajectory = computeTrajectory({
       mode: 'DYNAMIC',
       paramsByYear: (year) => ({
-        ...getMcCalipStaticParams(year),
+        ...getStaticParams(year),
         year,
-        isMcCalipMode: false,
+        isStaticMode: false,
         spaceTrafficEnabled: true,
         workloadType: 'inference'
       })
