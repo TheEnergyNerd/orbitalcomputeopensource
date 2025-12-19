@@ -760,7 +760,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   // For reference/display (not used in constraint calculation)
   const BASE_ELECTRICITY_PRICE_2025 = 120; // $/MWh (2025 baseline)
   let groundElectricityPricePerMwh = BASE_ELECTRICITY_PRICE_2025; 
-  if (!isStaticMode) {
+  if (!params.isStaticMode) {
     groundElectricityPricePerMwh *= Math.pow(1.02, year - 2025);
   }
   
@@ -1195,7 +1195,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       params,
       ENERGY_COST_BASE_2025,
       groundHardwareCapexPerPflopYear,
-      isStaticMode,
+      isStaticMode: params.isStaticMode,
       effectiveGroundScenario,
       groundLatencyPenalty,
       smrParams,
