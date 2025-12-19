@@ -751,6 +751,11 @@ export interface YearParams {
   
   // Orbital capacity constraints
   orbitMaxDeployableComputeGWByYear?: (year: number) => number; // Maximum orbital capacity (from launch/manufacturing constraints)
+  
+  // Ground hardware lifetime and replacement assumptions
+  groundHardwareLifetimeYears?: number; // Default to CONSTANTS.GROUND_HARDWARE_LIFETIME
+  gpuFailureRateAnnual?: number; // Annual GPU failure rate (if used)
+  
   smrToggleParams?: SMRToggleParams;
   fusionToggleParams?: SpaceFusionParams;
   powerScalingParams?: PowerScalingParams;
