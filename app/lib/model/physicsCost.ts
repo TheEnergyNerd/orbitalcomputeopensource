@@ -2023,14 +2023,6 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           level: 'infrastructure',
           notes: 'Total cost to operate 1 PFLOP of sustained compute for one year',
         },
-      ],
-      debug: {
-        groundLifetime: groundLifetime,
-        gpuFailureRateAnnual: params.gpuFailureRateAnnual,
-        totalCostExcludesDelayPenalty: true, // Headline cost excludes delay penalty (handled via capacity gating)
-        totalCostEffectiveIncludesDelayPenalty: groundResult.totalCostPerPflopYearEffective !== undefined,
-      },
-      units: [
         {
           metric: 'pricePerGpuHour',
           unit: 'USD/GPU-hour',
@@ -2044,6 +2036,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           notes: 'Inference cost for specified model size (70B or 405B)',
         },
       ],
+      debug: {
+        groundLifetime: groundLifetime,
+        gpuFailureRateAnnual: params.gpuFailureRateAnnual,
+        totalCostExcludesDelayPenalty: true, // Headline cost excludes delay penalty (handled via capacity gating)
+        totalCostEffectiveIncludesDelayPenalty: groundResult.totalCostPerPflopYearEffective !== undefined,
+      },
       computeEfficiency: {
         gflopsPerWatt: orbitEffectiveGflopsPerW, // Delivered efficiency (alias)
         efficiencyLevel: 'delivered', // Changed from 'system' to 'delivered'
