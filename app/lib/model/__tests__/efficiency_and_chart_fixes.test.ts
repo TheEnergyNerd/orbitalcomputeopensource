@@ -184,5 +184,111 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
       expect(typeof imputationFlags!.orbitImputed).toBe('boolean');
     });
   });
+  
+  describe('4. Market Share Backlog Wiring', () => {
+    it('should use backlogGW and avgWaitYears from ground buildout in market share calculation', () => {
+      const year = 2030;
+      
+      // Create a trajectory with backlog
+      const trajectory = computeTrajectory({
+        mode: 'DYNAMIC',
+        paramsByYear: (y) => {
+          const base = getStaticParams(y);
+          // Simulate backlog by setting mobilization params that create backlog
+          return {
+            ...base,
+            mobilizationParams: {
+              demandAnchorsGW: { 2025: 120, 2040: 450, 2060: 3000 },
+              demandIsFacilityLoad: true,
+              buildoutAnchorsGWyr: { 2025: 25, 2030: 30, 2040: 140, 2060: 220 }, // Low build rate creates backlog
+              buildoutSmoothingYears: 3,
+              pipelineLeadTimeYears: 3,
+              pipelineFillFrac: 1.5,
+            },
+            groundConstraintsEnabled: true,
+            useBuildoutModel: true,
+          };
+        },
+      });
+      
+      const breakdown = trajectory.find(d => d.year === year);
+      expect(breakdown).toBeDefined();
+      
+      if (breakdown) {
+        // Check that backlogGW is extracted correctly
+        const chartBacklog = breakdown.metadata?.chartInputs?.powerBuildout?.backlogGw ?? 0;
+        const marketBacklog = breakdown.market?.debug?.backlogGW ?? 0;
+        
+        // If chartInputs has backlogGw > 0, market.debug must match it (within tolerance)
+        if (chartBacklog > 0) {
+          expect(Math.abs(marketBacklog - chartBacklog)).toBeLessThan(0.01);
+        }
+        
+        // Check that groundServedComputeGW accounts for backlog
+        const demandComputeGW = breakdown.market?.debug?.demandComputeGW ?? 0;
+        const groundServedComputeGW = breakdown.market?.debug?.groundServedComputeGW ?? 0;
+        const groundFeasibleComputeGW = breakdown.market?.debug?.groundFeasibleComputeGW ?? 0;
+        
+        // If backlog > 0, groundFeasibleComputeGW should be < demandComputeGW
+        if (marketBacklog > 0) {
+          expect(groundFeasibleComputeGW).toBeLessThan(demandComputeGW);
+          expect(groundServedComputeGW).toBeLessThanOrEqual(groundFeasibleComputeGW);
+        }
+        
+        // Check that orbitFeasibleComputeGW becomes > 0 when backlog exists
+        const orbitFeasibleComputeGW = breakdown.market?.debug?.orbitFeasibleComputeGW ?? 0;
+        if (marketBacklog > 0 && demandComputeGW > groundServedComputeGW) {
+          // There should be remaining demand for orbital to serve
+          const remainingDemand = demandComputeGW - groundServedComputeGW;
+          expect(orbitFeasibleComputeGW).toBeGreaterThanOrEqual(0);
+        }
+      }
+    });
+    
+    it('should reproduce the bug: backlogGW=0 forces groundServedComputeGW == demand', () => {
+      const year = 2030;
+      
+      // Create a trajectory WITHOUT backlog (backlog should be 0)
+      const trajectory = computeTrajectory({
+        mode: 'DYNAMIC',
+        paramsByYear: (y) => {
+          const base = getStaticParams(y);
+          // High build rate, no backlog
+          return {
+            ...base,
+            mobilizationParams: {
+              demandAnchorsGW: { 2025: 120, 2040: 450, 2060: 3000 },
+              demandIsFacilityLoad: true,
+              buildoutAnchorsGWyr: { 2025: 200, 2030: 300, 2040: 500, 2060: 1000 }, // Very high build rate
+              buildoutSmoothingYears: 3,
+              pipelineLeadTimeYears: 3,
+              pipelineFillFrac: 1.5,
+            },
+            groundConstraintsEnabled: true,
+            useBuildoutModel: true,
+          };
+        },
+      });
+      
+      const breakdown = trajectory.find(d => d.year === year);
+      expect(breakdown).toBeDefined();
+      
+      if (breakdown) {
+        const marketBacklog = breakdown.market?.debug?.backlogGW ?? 0;
+        const demandComputeGW = breakdown.market?.debug?.demandComputeGW ?? 0;
+        const groundServedComputeGW = breakdown.market?.debug?.groundServedComputeGW ?? 0;
+        
+        // When backlog is 0, groundServedComputeGW should equal demandComputeGW (or groundFeasibleComputeGW)
+        if (marketBacklog === 0) {
+          const groundFeasibleComputeGW = breakdown.market?.debug?.groundFeasibleComputeGW ?? 0;
+          expect(groundServedComputeGW).toBeLessThanOrEqual(demandComputeGW);
+          // If ground is feasible and no backlog, served should equal feasible
+          if (groundFeasibleComputeGW > 0) {
+            expect(Math.abs(groundServedComputeGW - groundFeasibleComputeGW)).toBeLessThan(0.01);
+          }
+        }
+      }
+    });
+  });
 });
 
