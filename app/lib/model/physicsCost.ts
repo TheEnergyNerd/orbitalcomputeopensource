@@ -883,7 +883,6 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     groundResult = {
       energyCost: energyCost * groundLatencyPenalty, // Energy with PUE multiplier
       siteCost: siteCostPerPflopYear_base * groundLatencyPenalty, // Site = base components (excludes delay penalty)
-      totalCostPerPflopYearEffective: groundTotalCostEffective, // Effective/all-in cost (includes delay penalty)
       hardwareCost: hardwareCost * groundLatencyPenalty,
       siteCapexAmortPerPflopYear: siteCapexAmortPerPflopYear * groundLatencyPenalty, // Explicit: pure capex
       capacityDeliveryPremium: capacityDeliveryPremiumPerPflopYear * groundLatencyPenalty, // Explicit: scarcity premium
