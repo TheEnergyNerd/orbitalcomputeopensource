@@ -416,7 +416,7 @@ function calculateGroundTotal(
   
   let siteCostBase = BASE_SITE_2025;
 
-  const enabled = params.groundConstraintsEnabled && !isStaticMode;
+  const enabled = params.groundConstraintsEnabled && !params.isStaticMode;
   
   // SMR Toggle logic
   const smrEnabled = smrParams?.enabled && year >= (smrParams.smrDeploymentStartYear || 2030);
@@ -799,9 +799,9 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     capacityDeliveryMultiplier?: number;
   };
   
-  const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !isStaticMode;
-  const useBuildoutModel = params.useBuildoutModel === true && params.groundConstraintsEnabled && !isStaticMode && !useRegionalModel;
-  const useQueueModel = (params.useQueueBasedConstraint !== false) && params.groundConstraintsEnabled && !isStaticMode && !useRegionalModel && !useBuildoutModel;
+  const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !params.isStaticMode;
+  const useBuildoutModel = params.useBuildoutModel === true && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel;
+  const useQueueModel = (params.useQueueBasedConstraint !== false) && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel && !useBuildoutModel;
   
   if (useQueueModel) {
     const supplyTrajectory = generateGroundSupplyTrajectory(2025, year);
@@ -1680,7 +1680,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
 
   return {
     year,
-    mode: isStaticMode ? 'STATIC' : 'DYNAMIC',
+    mode: params.isStaticMode ? 'STATIC' : 'DYNAMIC',
     sanityPanel,
     ground: {
       electricityPricePerMwh: groundElectricityPricePerMwh,
