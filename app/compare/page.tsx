@@ -1223,11 +1223,25 @@ export default function ComparePage() {
                   const chartData = trajectoryData.map(d => {
                     const buildoutDebug = d.ground?.buildoutDebug;
                     const supplyMetrics = d.ground?.supplyMetrics;
-                    // Use mobilization model data if available
-                    const backlogGW = d.ground?.backlogGw ?? buildoutDebug?.backlogGW ?? 0;
-                    const timeToPowerYears = buildoutDebug?.timeToPowerYears ?? d.ground?.avgWaitYears ?? 0;
+                    const pb = d.metadata?.chartInputs?.powerBuildout;
+                    
+                    // Use same fallback chain as trajectory.ts: buildoutDebug → chartInputs → ground fields
+                    // Treat 0 as missing if chartInputs has positive value
+                    const backlogGW =
+                      (buildoutDebug?.backlogGW !== undefined ? buildoutDebug.backlogGW : undefined) ??
+                      ((pb?.backlogGw !== undefined && pb.backlogGw > 0) ? pb.backlogGw : undefined) ??
+                      (d.ground?.backlogGw ?? 0);
+                    
+                    const timeToPowerYears =
+                      (buildoutDebug?.timeToPowerYears !== undefined ? buildoutDebug.timeToPowerYears : undefined) ??
+                      ((pb?.avgWaitYears !== undefined && pb.avgWaitYears > 0) ? pb.avgWaitYears : undefined) ??
+                      (d.ground?.avgWaitYears ?? 0);
+                    
+                    const buildRateGWyr =
+                      (buildoutDebug?.buildRateGWyr !== undefined ? buildoutDebug.buildRateGWyr : undefined) ??
+                      (supplyMetrics?.maxBuildRateGwYear ?? pb?.maxBuildRateGwYear ?? 0);
+                    
                     const demandNewGW = buildoutDebug?.demandNewGW ?? 0;
-                    const buildRateGWyr = buildoutDebug?.buildRateGWyr ?? supplyMetrics?.maxBuildRateGwYear ?? 0;
                     const capacityGW = supplyMetrics?.capacityGw ?? 0;
                     const demandGW = buildoutDebug?.demandGW ?? supplyMetrics?.demandGw ?? 0;
                     const pipelineGW = supplyMetrics?.pipelineGw ?? 0;

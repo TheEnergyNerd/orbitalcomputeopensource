@@ -293,6 +293,7 @@ export interface YearlyBreakdown {
     replacementOpsOutputs?: import('./replacement_ops_config').ReplacementOpsOutputs;
     replacementOpsSensitivity?: import('./replacement_ops_config').ReplacementOpsSensitivity;
     totalCostPerPflopYear: number;
+    totalCostPerPflopYearEffective?: number; // Effective/all-in cost (includes delay penalty, for reference/debug)
 
     gpuHourPricing: {
       basic: GpuHourPricing;

@@ -523,12 +523,13 @@ function calculateGroundTotal(
   
   return {
     energyCost: energyCost * latencyPenalty, // Energy NOT multiplied by constraint
-    siteCost: siteCostPerPflopYear * latencyPenalty, // Site = sum of explicit components
+    siteCost: siteCostPerPflopYear_base * latencyPenalty, // Site = base components (excludes delay penalty)
     hardwareCost: hardware * latencyPenalty,
     siteCapexAmortPerPflopYear: siteCapexAmortPerPflopYear * latencyPenalty, // Explicit: pure capex amortization
     capacityDeliveryPremium: capacityDeliveryPremiumPerPflopYear * latencyPenalty, // Explicit: scarcity premium
-    timeToEnergizePenalty: timeToEnergizePenaltyPerPflopYear * latencyPenalty, // Explicit: WACC-based penalty
-    totalCostPerPflopYear: total,
+    timeToEnergizePenalty: timeToEnergizePenaltyPerPflopYear * latencyPenalty, // Explicit: WACC-based penalty (not in headline cost)
+    totalCostPerPflopYear: total, // Base cost (excludes delay penalty - handled via capacity gating)
+    totalCostPerPflopYearEffective: totalEffective, // Effective/all-in cost (includes delay penalty)
     constraintMultiplier: 1.0, // NOT APPLIED - kept for backward compat only
     breakdown: { 
       grid: 1.0, // Not applied
@@ -782,7 +783,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     }
     return cost;
   };
-  const groundHardwareCapexPerPflopYear = computeGroundHardwareCost(year, CONSTANTS.GROUND_HARDWARE_COST_PFLOP_2025) / CONSTANTS.GROUND_HARDWARE_LIFETIME;
+  const groundLifetime = params.groundHardwareLifetimeYears ?? CONSTANTS.GROUND_HARDWARE_LIFETIME;
+  const groundHardwareCapexPerPflopYear = computeGroundHardwareCost(year, CONSTANTS.GROUND_HARDWARE_COST_PFLOP_2025) / groundLifetime;
 
   const smrParams = params.smrToggleEnabled ? (params.smrToggleParams || DEFAULT_SMR_PARAMS) : undefined;
   
@@ -835,18 +837,25 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     // 3. timeToEnergizePenaltyPerPflopYear: WACC carry + lost margin (independent, from queue delay)
     const timeToEnergizePenaltyPerPflopYear = penalties.timeToEnergizePenaltyPerPflopYear;
     
-    // INVARIANT: siteCostPerPflopYear = siteCapexAmort + timeToEnergizePenalty + capacityDeliveryPremium
-    const siteCostPerPflopYear = siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear;
+    // CRITICAL: Remove double counting
+    // Do NOT include timeToEnergizePenalty in headline cost used for crossover
+    // (capacity gating in market share already accounts for backlog)
+    // Compute both base and effective costs:
+    const siteCostPerPflopYear_base = siteCapexAmortPerPflopYear + capacityDeliveryPremiumPerPflopYear;
+    const siteCostPerPflopYear_effective = siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear;
     
     // Validation
-    const siteCostCheck = Math.abs(siteCostPerPflopYear - (siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear));
+    const siteCostCheck = Math.abs(siteCostPerPflopYear_effective - (siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear));
     if (siteCostCheck > 0.01) {
-      throw new Error(`Site cost accounting error (queue model): siteCost=${siteCostPerPflopYear} != sum(components)=${siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear}, diff=${siteCostCheck}`);
+      throw new Error(`Site cost accounting error (queue model): siteCost_effective=${siteCostPerPflopYear_effective} != sum(components)=${siteCapexAmortPerPflopYear + timeToEnergizePenaltyPerPflopYear + capacityDeliveryPremiumPerPflopYear}, diff=${siteCostCheck}`);
     }
     
     const hardwareCost = groundHardwareCapexPerPflopYear;
     
-    groundTotalCost = (energyCost + siteCostPerPflopYear + hardwareCost) * groundLatencyPenalty;
+    // Headline cost for crossover: base only (excludes delay penalty, which is handled via capacity gating)
+    groundTotalCost = (energyCost + siteCostPerPflopYear_base + hardwareCost) * groundLatencyPenalty;
+    // Effective/all-in cost: includes delay penalty (for reference/debug)
+    const groundTotalCostEffective = (energyCost + siteCostPerPflopYear_effective + hardwareCost) * groundLatencyPenalty;
     
     // CRITICAL FIX: Remove all multipliers - use additive terms only
     // Multipliers are NOT applied to any dollar amounts
@@ -867,12 +876,13 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     
     groundResult = {
       energyCost: energyCost * groundLatencyPenalty, // Energy with PUE multiplier
-      siteCost: siteCostPerPflopYear * groundLatencyPenalty, // Site = sum of components
+      siteCost: siteCostPerPflopYear_base * groundLatencyPenalty, // Site = base components (excludes delay penalty)
       hardwareCost: hardwareCost * groundLatencyPenalty,
       siteCapexAmortPerPflopYear: siteCapexAmortPerPflopYear * groundLatencyPenalty, // Explicit: pure capex
       capacityDeliveryPremium: capacityDeliveryPremiumPerPflopYear * groundLatencyPenalty, // Explicit: scarcity premium
-      timeToEnergizePenalty: timeToEnergizePenaltyPerPflopYear * groundLatencyPenalty, // Explicit: WACC-based penalty
-      totalCostPerPflopYear: groundTotalCost,
+      timeToEnergizePenalty: timeToEnergizePenaltyPerPflopYear * groundLatencyPenalty, // Explicit: WACC-based penalty (not in headline cost)
+      totalCostPerPflopYear: groundTotalCost, // Base cost (excludes delay penalty - handled via capacity gating)
+      totalCostPerPflopYearEffective: groundTotalCostEffective, // Effective/all-in cost (includes delay penalty)
       constraintMultiplier: 1.0, // NOT APPLIED - kept for backward compat only
       breakdown: constraintBreakdown,
       constraints: {
@@ -997,10 +1007,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     const buildoutPremiumPerPflopYear = buildoutResult.buildoutPremiumPerPflopYear;
     const delayPenaltyPerPflopYear = buildoutResult.delayPenaltyPerPflopYear;
     
-    // CRITICAL: Remove old constraint multiplier - use buildout terms only
-    // No capacityDeliveryPremium from old model - replaced by buildoutPremium
-    // No timeToEnergizePenalty from old model - replaced by delayPenalty
-    const siteCostPerPflopYear = siteCapexAmortPerPflopYear + buildoutPremiumPerPflopYear + delayPenaltyPerPflopYear;
+    // CRITICAL: Remove double counting
+    // Do NOT include timeToEnergizePenalty in headline cost used for crossover
+    // (capacity gating in market share already accounts for backlog)
+    // Compute both base and effective costs:
+    const siteCostPerPflopYear_base = siteCapexAmortPerPflopYear + buildoutPremiumPerPflopYear;
+    const siteCostPerPflopYear_effective = siteCapexAmortPerPflopYear + buildoutPremiumPerPflopYear + delayPenaltyPerPflopYear;
     
     // Validation: ensure no double counting
     if (params.useQueueBasedConstraint !== false) {
@@ -1009,7 +1021,10 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     
     const hardwareCost = groundHardwareCapexPerPflopYear;
     
-    groundTotalCost = (energyCost + siteCostPerPflopYear + hardwareCost) * groundLatencyPenalty;
+    // Headline cost for crossover: base only (excludes delay penalty, which is handled via capacity gating)
+    groundTotalCost = (energyCost + siteCostPerPflopYear_base + hardwareCost) * groundLatencyPenalty;
+    // Effective/all-in cost: includes delay penalty (for reference/debug)
+    const groundTotalCostEffective = (energyCost + siteCostPerPflopYear_effective + hardwareCost) * groundLatencyPenalty;
     energyConstraintMultiplier = 1.0; // Energy NOT affected by buildout constraints
     
     // Constraint breakdown: all 1.0 (no multipliers, use buildout terms instead)
@@ -1030,7 +1045,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       siteCapexAmortPerPflopYear: siteCapexAmortPerPflopYear * groundLatencyPenalty,
       capacityDeliveryPremium: buildoutPremiumPerPflopYear * groundLatencyPenalty, // Buildout premium replaces old capacityDeliveryPremium
       timeToEnergizePenalty: delayPenaltyPerPflopYear * groundLatencyPenalty, // Delay penalty replaces old timeToEnergizePenalty
-      totalCostPerPflopYear: groundTotalCost,
+      totalCostPerPflopYear: groundTotalCost, // Base cost (excludes delay penalty - handled via capacity gating)
+      totalCostPerPflopYearEffective: groundTotalCostEffective, // Effective/all-in cost (includes delay penalty)
       constraintMultiplier: 1.0, // No constraint multiplier - use buildout terms
       breakdown: constraintBreakdown,
       supplyMetrics: {
@@ -2000,6 +2016,14 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
           level: 'infrastructure',
           notes: 'Total cost to operate 1 PFLOP of sustained compute for one year',
         },
+      ],
+      debug: {
+        groundLifetime: groundLifetime,
+        gpuFailureRateAnnual: params.gpuFailureRateAnnual,
+        totalCostExcludesDelayPenalty: true, // Headline cost excludes delay penalty (handled via capacity gating)
+        totalCostEffectiveIncludesDelayPenalty: groundResult.totalCostPerPflopYearEffective !== undefined,
+      },
+      units: [
         {
           metric: 'pricePerGpuHour',
           unit: 'USD/GPU-hour',

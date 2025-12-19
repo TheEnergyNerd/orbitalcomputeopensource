@@ -405,52 +405,48 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
     const orbitalCapacityGW = breakdown.orbit?.hybridBreakdown ? 1.0 : 0; // Placeholder - should be calculated from actual capacity
     
     // Extract mobilization metrics for market share calculation
-    // Use robust fallback chain to ensure we get the same values as chartInputs
+    // Use robust fallback chain that treats 0 as "missing" if chartInputs has a positive value
     const demandGW = breakdown.ground?.buildoutDebug?.demandGW ?? breakdown.ground?.supplyMetrics?.demandGw ?? totalDemandGW;
     
-    // Robust fallback chain for backlogGW (matches chartInputs.powerBuildout.backlogGw)
-    const backlogGW = 
-      breakdown.ground?.backlogGw ??
-      breakdown.ground?.buildoutDebug?.backlogGW ??
-      breakdown.ground?.supplyMetrics?.pipelineGw ?? // TEMP proxy if true backlog not available
-      breakdown.metadata?.chartInputs?.powerBuildout?.backlogGw ??
-      0;
+    const chartPB = breakdown.metadata?.chartInputs?.powerBuildout;
+    const chartBacklog = chartPB?.backlogGw;
+    const chartAvgWait = chartPB?.avgWaitYears;
+    const chartBuildRate = chartPB?.maxBuildRateGwYear;
     
-    // Robust fallback chain for buildRateGWyr
-    const buildRateGWyr = 
-      breakdown.ground?.buildoutDebug?.buildRateGWyr ??
-      breakdown.ground?.supplyMetrics?.maxBuildRateGwYear ??
-      breakdown.metadata?.chartInputs?.powerBuildout?.maxBuildRateGwYear ??
-      0;
+    // Prefer buildoutDebug when present.
+    // If ground/backlog fields exist but are 0 while chartInputs says >0, use chartInputs.
+    // Remove the pipelineGw proxy entirely (it's not backlog and causes silent unit/meaning corruption).
+    const backlogFromGround = breakdown.ground?.backlogGw;
+    const backlogFromBuildout = breakdown.ground?.buildoutDebug?.backlogGW;
+    const backlogGW =
+      (backlogFromBuildout !== undefined ? backlogFromBuildout : undefined) ??
+      ((backlogFromGround !== undefined && backlogFromGround > 0) ? backlogFromGround : undefined) ??
+      ((chartBacklog !== undefined && chartBacklog > 0) ? chartBacklog : 0);
     
-    // Robust fallback chain for avgWaitYears (matches chartInputs.powerBuildout.avgWaitYears)
-    const avgWaitYears = 
-      breakdown.ground?.avgWaitYears ??
-      breakdown.ground?.buildoutDebug?.timeToPowerYears ??
-      breakdown.ground?.supplyMetrics?.avgWaitYears ??
-      breakdown.metadata?.chartInputs?.powerBuildout?.avgWaitYears ??
-      0;
+    const buildRateFromBuildout = breakdown.ground?.buildoutDebug?.buildRateGWyr;
+    const buildRateFromSupply = breakdown.ground?.supplyMetrics?.maxBuildRateGwYear;
+    const buildRateGWyr =
+      (buildRateFromBuildout !== undefined ? buildRateFromBuildout : undefined) ??
+      (buildRateFromSupply !== undefined ? buildRateFromSupply : undefined) ??
+      (chartBuildRate !== undefined ? chartBuildRate : 0);
     
-    // DEV-ONLY INVARIANT: Check for internal inconsistency
+    const avgWaitFromGround = breakdown.ground?.avgWaitYears;
+    const avgWaitFromBuildout = breakdown.ground?.buildoutDebug?.timeToPowerYears;
+    const avgWaitFromSupply = breakdown.ground?.supplyMetrics?.avgWaitYears;
+    const avgWaitYears =
+      (avgWaitFromBuildout !== undefined ? avgWaitFromBuildout : undefined) ??
+      ((avgWaitFromGround !== undefined && avgWaitFromGround > 0) ? avgWaitFromGround : undefined) ??
+      ((avgWaitFromSupply !== undefined && avgWaitFromSupply > 0) ? avgWaitFromSupply : undefined) ??
+      ((chartAvgWait !== undefined && chartAvgWait > 0) ? chartAvgWait : 0);
+    
+    // Strengthen the acceptance check: throw in dev if chartInputs > 0 but chosen value is 0
     if (process.env.NODE_ENV !== 'production') {
-      const supplyMetricsAvgWait = breakdown.ground?.supplyMetrics?.avgWaitYears ?? 0;
-      if (supplyMetricsAvgWait > 0 && avgWaitYears === 0) {
-        throw new Error(
-          `Internal inconsistency detected: supplyMetrics.avgWaitYears=${supplyMetricsAvgWait} but ` +
-          `chosen avgWaitYears=${avgWaitYears} (year=${year}). ` +
-          `backlogGW=${backlogGW}, ` +
-          `chartInputs=${JSON.stringify(breakdown.metadata?.chartInputs?.powerBuildout ?? {})}`
-        );
+      if ((chartBacklog ?? 0) > 0 && backlogGW === 0) {
+        throw new Error(`BACKLOG PLUMBING BUG: chartInputs.backlogGw=${chartBacklog} but chosen backlogGW=0 (year=${year})`);
       }
-    }
-    
-    // ACCEPTANCE CHECK: If chartInputs has backlogGw > 0, market.debug must match it
-    const chartBacklog = breakdown.metadata?.chartInputs?.powerBuildout?.backlogGw;
-    if (chartBacklog !== undefined && chartBacklog > 0 && Math.abs(backlogGW - chartBacklog) > 0.01) {
-      // Allow small floating-point differences but warn if significant
-      console.warn(
-        `Backlog mismatch: chartInputs.backlogGw=${chartBacklog}, market.debug.backlogGW=${backlogGW} (year=${year})`
-      );
+      if ((chartAvgWait ?? 0) > 0 && avgWaitYears === 0) {
+        throw new Error(`WAIT PLUMBING BUG: chartInputs.avgWaitYears=${chartAvgWait} but chosen avgWaitYears=0 (year=${year})`);
+      }
     }
     
     // Calculate orbitMaxDeployableComputeGW from scenario params or use placeholder
@@ -492,18 +488,18 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
       debug: marketAnalysis.debug,
     };
     
-    // Update mobilization state for next year (extract from buildoutDebug)
+    // Update mobilization state for next year (use extracted values, not breakdown.ground which might be 0)
     if (breakdown.ground?.buildoutDebug) {
       const buildoutDebug = breakdown.ground.buildoutDebug;
       mobilizationState = {
         year,
         demandGW: buildoutDebug.demandGW ?? 0,
         demandNewGW: buildoutDebug.demandNewGW,
-        buildRateGWyr: buildoutDebug.buildRateGWyr ?? 0,
+        buildRateGWyr: buildoutDebug.buildRateGWyr ?? buildRateGWyr,
         capacityGW: buildoutDebug.capacityGW ?? 0,
         pipelineGW: buildoutDebug.pipelineGW ?? 0,
-        backlogGW: breakdown.ground.backlogGw ?? 0,
-        avgWaitYears: breakdown.ground.avgWaitYears ?? 0,
+        backlogGW: backlogGW, // Use extracted value, not breakdown.ground.backlogGw which might be 0
+        avgWaitYears: avgWaitYears, // Use extracted value, not breakdown.ground.avgWaitYears which might be 0
       };
     }
     

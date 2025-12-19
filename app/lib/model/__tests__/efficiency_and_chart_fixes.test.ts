@@ -242,6 +242,63 @@ describe('Efficiency Levels and Chart Data Fixes', () => {
           const remainingDemand = demandComputeGW - groundServedComputeGW;
           expect(orbitFeasibleComputeGW).toBeGreaterThanOrEqual(0);
         }
+        
+        // ACCEPTANCE CHECK: If chartInputs has backlogGw > 0, market.debug must match it (within eps)
+        if (chartBacklog > 0) {
+          expect(Math.abs(marketBacklog - chartBacklog)).toBeLessThan(0.01);
+        }
+        
+        // ACCEPTANCE CHECK: If chartInputs has avgWaitYears > 0, market.debug must match it (within eps)
+        const chartAvgWait = breakdown.metadata?.chartInputs?.powerBuildout?.avgWaitYears ?? 0;
+        const marketAvgWait = breakdown.market?.debug?.avgWaitYears ?? 0;
+        if (chartAvgWait > 0) {
+          expect(Math.abs(marketAvgWait - chartAvgWait)).toBeLessThan(0.01);
+        }
+      }
+    });
+    
+    it('should ensure totalCostPerPflopYearEffective >= totalCostPerPflopYear when avgWaitYears > 0', () => {
+      const year = 2030;
+      
+      // Create a trajectory with backlog (which creates avgWaitYears > 0)
+      const trajectory = computeTrajectory({
+        mode: 'DYNAMIC',
+        paramsByYear: (y) => {
+          const base = getStaticParams(y);
+          return {
+            ...base,
+            mobilizationParams: {
+              demandAnchorsGW: { 2025: 120, 2040: 450, 2060: 3000 },
+              demandIsFacilityLoad: true,
+              buildoutAnchorsGWyr: { 2025: 25, 2030: 30, 2040: 140, 2060: 220 }, // Low build rate creates backlog
+              buildoutSmoothingYears: 3,
+              pipelineLeadTimeYears: 3,
+              pipelineFillFrac: 1.5,
+            },
+            groundConstraintsEnabled: true,
+            useBuildoutModel: true,
+          };
+        },
+      });
+      
+      const breakdown = trajectory.find(d => d.year === year);
+      expect(breakdown).toBeDefined();
+      
+      if (breakdown) {
+        const avgWaitYears = breakdown.ground?.avgWaitYears ?? breakdown.ground?.buildoutDebug?.timeToPowerYears ?? 0;
+        const totalCost = breakdown.ground.totalCostPerPflopYear;
+        const totalCostEffective = breakdown.ground.totalCostPerPflopYearEffective;
+        
+        // If avgWaitYears > 0, effective cost should be >= base cost
+        if (avgWaitYears > 0 && totalCostEffective !== undefined) {
+          expect(totalCostEffective).toBeGreaterThanOrEqual(totalCost);
+        }
+        
+        // Debug should show that totalCost excludes delay penalty
+        const debug = breakdown.metadata?.debug;
+        if (debug) {
+          expect(debug.totalCostExcludesDelayPenalty).toBe(true);
+        }
       }
     });
     

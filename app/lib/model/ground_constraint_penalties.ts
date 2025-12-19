@@ -42,7 +42,7 @@ export function calculateGroundConstraintPenalties(
   pueGround: number,
   capacityFactorGround: number
 ): GroundConstraintPenalties {
-  const backlogGw = state.backlogGw || state.pipelineGw; // Use explicit backlog
+  const backlogGw = state.backlogGw; // Pipeline is not backlog. If backlog is missing, treat as 0 and let chartInputs/buildoutDebug supply the real number elsewhere.
   const avgWaitYears = state.avgWaitYears;
   const maxBuildRateGwYear = state.maxBuildRateGwYear;
   const utilizationPct = state.utilizationPct;
