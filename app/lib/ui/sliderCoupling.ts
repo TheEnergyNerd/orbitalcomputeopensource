@@ -444,7 +444,7 @@ export function getSliderConfig(id: string): SliderConfig | undefined {
  */
 export function isDerivedSlider(id: string): boolean {
   const config = getSliderConfig(id);
-  return config?.type === 'derived' ?? false;
+  return (config?.type === 'derived') || false;
 }
 
 /**
