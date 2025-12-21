@@ -1208,6 +1208,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     
     const hardwareCost = groundHardwareCapexPerPflopYear;
     
+    // Replacement/ops costs (currently not calculated for buildout model - set to 0)
+    // TODO: Calculate these if needed using computeGroundReplacementOps from replacement_ops_config.ts
+    const replacementCostPerPflopYear = 0;
+    const sparesCarryCostPerPflopYear = 0;
+    const groundOpsCostPerPflopYear = 0;
+    
     // Add replacement/ops costs to hardware cost
     const hardwareCostWithReplacement = hardwareCost + replacementCostPerPflopYear + sparesCarryCostPerPflopYear + groundOpsCostPerPflopYear;
     
