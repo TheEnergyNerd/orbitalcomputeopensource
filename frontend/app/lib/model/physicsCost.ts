@@ -1173,7 +1173,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     
     // Calculate scarcity multiplier using LOG-BASED function (never fully saturates)
     // Returns multiplier (1.0 = no scarcity, 2.0 = 2x price) - MULTIPLICATIVE, not additive
-    const utilizationPct = capacityGW > 0 ? Math.min(1.0, demandNewGW / capacityGW) : 1.0;
+    // FIX: Use total demandGW, not incremental demandNewGW (demandNewGW can be 0 when demand falls)
+    const utilizationPct = capacityGW > 0 ? Math.min(1.0, mobilizationResult.demandGW / capacityGW) : 1.0;
     const scarcityRentResult = calculateScarcityRent(
       avgWaitYears,
       utilizationPct, // Pass utilization for threshold gate
