@@ -374,28 +374,47 @@ export function calculateResponsiveDemand(
   const effectiveGrowth = growthRate * (0.5 + 0.5 * taper); // 10% -> 5% CAGR
   const baselineGW = 120 * Math.pow(1 + effectiveGrowth, yearsFrom2025);
   
-  // Price elasticity: demand drops as ground price rises
+  // FIX SINUSOIDAL OSCILLATION: Add smoothing to prevent feedback loops
+  // Use exponential smoothing on price and wait factors to dampen oscillations
+  const SMOOTHING_ALPHA = 0.3; // 30% weight on new value, 70% on previous (dampens oscillations)
+  
+  // Price elasticity: demand drops as ground price rises (REDUCED to prevent oscillation)
   const baselinePrice = 4.00; // $/GPU-hr reference
   const priceRatio = groundPricePerGpuHour / baselinePrice;
-  const priceElasticity = -0.3; // 30% drop per 100% price increase
-  const priceFactor = Math.pow(priceRatio, priceElasticity);
+  const priceElasticity = -0.2; // REDUCED from -0.3 to -0.2 (less aggressive)
+  const priceFactorRaw = Math.pow(priceRatio, priceElasticity);
   
-  // Wait elasticity: demand drops with longer waits
-  const waitElasticity = -0.15; // 15% drop per 5yr wait
-  const waitFactor = Math.exp(avgWaitYears * waitElasticity / 5);
+  // Smooth price factor using previous state
+  const prevPriceFactor = prevDemandState ? (prevDemandState.effectiveGW / prevDemandState.baselineGW) : priceFactorRaw;
+  const priceFactor = SMOOTHING_ALPHA * priceFactorRaw + (1 - SMOOTHING_ALPHA) * prevPriceFactor;
+  
+  // Wait elasticity: demand drops with longer waits (REDUCED to prevent oscillation)
+  const waitElasticity = -0.10; // REDUCED from -0.15 to -0.10 (less aggressive)
+  const waitFactorRaw = Math.exp(avgWaitYears * waitElasticity / 5);
+  
+  // Smooth wait factor using previous state
+  const prevWaitFactor = prevDemandState ? (prevDemandState.effectiveGW / (prevDemandState.baselineGW * prevPriceFactor)) : waitFactorRaw;
+  const waitFactor = SMOOTHING_ALPHA * waitFactorRaw + (1 - SMOOTHING_ALPHA) * prevWaitFactor;
   
   // Effective total demand (may shift to orbital)
-  const effectiveGW = baselineGW * priceFactor * waitFactor;
+  // Add minimum floor to prevent demand from collapsing too quickly
+  const effectiveGWRaw = baselineGW * priceFactor * waitFactor;
+  const minDemandFrac = 0.5; // Demand can't drop below 50% of baseline
+  const effectiveGW = Math.max(baselineGW * minDemandFrac, effectiveGWRaw);
   
-  // Orbital substitution: if orbital < ground, demand shifts
+  // Orbital substitution: if orbital < ground, demand shifts (SMOOTHED)
   const groundOrbitalRatio = groundPricePerGpuHour / Math.max(orbitalPricePerGpuHour, 0.01);
-  let orbitalShare = 0;
+  let orbitalShareRaw = 0;
   if (groundOrbitalRatio > 1.0) {
-    // Orbital is cheaper - logistic shift
-    // At ratio 1.5 (ground 50% more): ~30% shifts to orbital
-    // At ratio 2.0 (ground 100% more): ~60% shifts to orbital
-    orbitalShare = 1 / (1 + Math.exp(-2 * (groundOrbitalRatio - 1.3)));
+    // Orbital is cheaper - logistic shift (LESS AGGRESSIVE)
+    // At ratio 1.5 (ground 50% more): ~20% shifts to orbital (was 30%)
+    // At ratio 2.0 (ground 100% more): ~45% shifts to orbital (was 60%)
+    orbitalShareRaw = 1 / (1 + Math.exp(-1.5 * (groundOrbitalRatio - 1.4))); // Less steep
   }
+  
+  // Smooth orbital share to prevent rapid oscillations
+  const prevOrbitalShare = prevDemandState ? (prevDemandState.orbitalDemandGW / prevDemandState.effectiveGW) : orbitalShareRaw;
+  const orbitalShare = SMOOTHING_ALPHA * orbitalShareRaw + (1 - SMOOTHING_ALPHA) * prevOrbitalShare;
   
   const orbitalDemandGW = effectiveGW * orbitalShare;
   const groundDemandGW = effectiveGW * (1 - orbitalShare);
