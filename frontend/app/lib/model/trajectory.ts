@@ -423,14 +423,42 @@ export function calculateResponsiveDemand(
   // Calculate ground demand
   let groundDemandGW = effectiveGW * (1 - orbitalShare);
   
+  // DEBUG: Log raw demand before smoothing
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[DEMAND DEBUG] Year ${year}: raw groundDemandGW=${groundDemandGW.toFixed(1)}`);
+    console.log(`[DEMAND DEBUG]   prevDemandState=${prevDemandState ? `exists, groundDemandGW=${prevDemandState.groundDemandGW?.toFixed(1) ?? 'undefined'}` : 'NULL'}`);
+  }
+  
   // FIXED: Add demand momentum (max 5% change per year) - prevents wild swings and sawtooth oscillation
-  if (prevDemandState?.groundDemandGW) {
+  // Use explicit check instead of truthy check to handle 0 values correctly
+  if (prevDemandState !== null && prevDemandState.groundDemandGW !== undefined && prevDemandState.groundDemandGW > 0) {
     const maxDemandChangePerYear = 0.05; // Max 5% change per year (tighter constraint to eliminate oscillation)
     const demandChangeRatio = groundDemandGW / prevDemandState.groundDemandGW;
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEMAND DEBUG]   changeRatio=${demandChangeRatio.toFixed(3)} (max allowed: ${(1 + maxDemandChangePerYear).toFixed(3)} to ${(1 - maxDemandChangePerYear).toFixed(3)})`);
+    }
+    
     if (demandChangeRatio > 1 + maxDemandChangePerYear) {
-      groundDemandGW = prevDemandState.groundDemandGW * (1 + maxDemandChangePerYear);
+      const clamped = prevDemandState.groundDemandGW * (1 + maxDemandChangePerYear);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEMAND DEBUG]   CLAMPED UP from ${groundDemandGW.toFixed(1)} to ${clamped.toFixed(1)}`);
+      }
+      groundDemandGW = clamped;
     } else if (demandChangeRatio < 1 - maxDemandChangePerYear) {
-      groundDemandGW = prevDemandState.groundDemandGW * (1 - maxDemandChangePerYear);
+      const clamped = prevDemandState.groundDemandGW * (1 - maxDemandChangePerYear);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEMAND DEBUG]   CLAMPED DOWN from ${groundDemandGW.toFixed(1)} to ${clamped.toFixed(1)}`);
+      }
+      groundDemandGW = clamped;
+    } else {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEMAND DEBUG]   NO CLAMP (within bounds)`);
+      }
+    }
+  } else {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEMAND DEBUG]   NO SMOOTHING (prevDemandState check failed: ${prevDemandState === null ? 'null' : prevDemandState.groundDemandGW === undefined ? 'undefined' : 'zero or negative'})`);
     }
   }
   
