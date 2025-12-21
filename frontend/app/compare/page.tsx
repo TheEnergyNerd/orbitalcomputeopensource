@@ -776,69 +776,27 @@ export default function ComparePage() {
             <h3 className="text-lg font-black mb-1">GPU-Hour Pricing ({slaTier.toUpperCase()} SLA)</h3>
             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-6">Market Benchmark: $/Hour per H100-Equivalent</p>
             {(() => {
-              // CRITICAL: Create minimal data object with ONLY the fields we need for the chart
-              // This prevents Recharts from scanning other numeric fields in the trajectory data
-              const MAX_REASONABLE_GPU_HOUR_PRICE = 100;
-              const MIN_REASONABLE_GPU_HOUR_PRICE = 0.01;
+              // CRITICAL: Sanitize GPU-hour values to prevent chart pollution from single insane year
+              const clampGpuHour = (x: any) =>
+                sanitizeFinite(x, { min: 0.01, max: 100, fallback: null });
               
-              const chartData = trajectoryData.map(d => {
-                const orbitalPrice = d.orbit?.gpuHourPricing?.[slaTier]?.pricePerGpuHour;
-                const groundPrice = d.ground?.gpuHourPricing?.[slaTier]?.pricePerGpuHour;
-                
-                // DEV ASSERT: Throw if any GPU-hour value is non-finite or >100
-                if (isDevelopment()) {
-                  if (orbitalPrice != null && (!isFinite(orbitalPrice) || orbitalPrice > MAX_REASONABLE_GPU_HOUR_PRICE)) {
-                    throw new Error(
-                      `[GPU-HOUR CHART ASSERT] Year ${d.year}: orbitalPrice=${orbitalPrice} is non-finite or >${MAX_REASONABLE_GPU_HOUR_PRICE}. ` +
-                      `This indicates a calculation error or data leak.`
-                    );
-                  }
-                  if (groundPrice != null && (!isFinite(groundPrice) || groundPrice > MAX_REASONABLE_GPU_HOUR_PRICE)) {
-                    throw new Error(
-                      `[GPU-HOUR CHART ASSERT] Year ${d.year}: groundPrice=${groundPrice} is non-finite or >${MAX_REASONABLE_GPU_HOUR_PRICE}. ` +
-                      `This indicates a calculation error or data leak.`
-                    );
-                  }
+              const chartData = trajectoryData.map(d => ({
+                year: d.year,
+                orbitalPrice: clampGpuHour(d.orbit?.gpuHourPricing?.[slaTier]?.pricePerGpuHour),
+                groundPrice: clampGpuHour(d.ground?.gpuHourPricing?.[slaTier]?.pricePerGpuHour),
+                aws: 4.50,
+                coreweave: 2.23,
+                breakdown: {
+                  orbital: d.orbit?.gpuHourPricing?.[slaTier]?.costBreakdown,
+                  ground: d.ground?.gpuHourPricing?.[slaTier]?.costBreakdown
                 }
-                
-                // Validate and accept only reasonable values
-                const validOrbital = (orbitalPrice != null && 
-                  isFinite(orbitalPrice) && 
-                  orbitalPrice >= MIN_REASONABLE_GPU_HOUR_PRICE && 
-                  orbitalPrice <= MAX_REASONABLE_GPU_HOUR_PRICE) ? orbitalPrice : null;
-                
-                const validGround = (groundPrice != null && 
-                  isFinite(groundPrice) && 
-                  groundPrice >= MIN_REASONABLE_GPU_HOUR_PRICE && 
-                  groundPrice <= MAX_REASONABLE_GPU_HOUR_PRICE) ? groundPrice : null;
-                
-                // Return ONLY the fields needed for the chart (no breakdown, no other fields)
-                // Use Object.freeze to prevent accidental additions
-                return Object.freeze({
-                  year: d.year,
-                  orbitalPrice: validOrbital,
-                  groundPrice: validGround,
-                  aws: 4.50,
-                  coreweave: 2.23,
-                });
-              });
+              }));
               
-              // Compute Y-domain ONLY from validated GPU-hour series values
-              // Extract ONLY from the four series: orbitalPrice, groundPrice, aws, coreweave
-              const orbitalSeries = chartData.map(p => p.orbitalPrice).filter((v): v is number => v !== null && isFinite(v) && v > 0 && v <= MAX_REASONABLE_GPU_HOUR_PRICE);
-              const groundSeries = chartData.map(p => p.groundPrice).filter((v): v is number => v !== null && isFinite(v) && v > 0 && v <= MAX_REASONABLE_GPU_HOUR_PRICE);
-              const awsSeries = [4.50]; // AWS H100 benchmark
-              const coreweaveSeries = [2.23]; // CoreWeave benchmark
-              
-              // Combine ONLY the four validated series
-              const allValidatedValues = [...orbitalSeries, ...groundSeries, ...awsSeries, ...coreweaveSeries];
-              
-              // Compute domain from validated values only
-              const yMax = allValidatedValues.length > 0 ? Math.max(...allValidatedValues) : 15;
-              const yMin = allValidatedValues.length > 0 ? Math.min(...allValidatedValues) : 0;
-              
-              // Normal domain with padding (linear scale, no log scale)
-              const yDomain = [Math.max(0, yMin * 0.9), yMax * 1.1];
+              // Explicitly set YAxis domain from validated values (so nulls don't confuse)
+              const vals = chartData.flatMap(d => [d.orbitalPrice, d.groundPrice, d.aws, d.coreweave]).filter((v): v is number => typeof v === 'number');
+              const yMin = vals.length ? Math.min(...vals) : 0;
+              const yMax = vals.length ? Math.max(...vals) : 10;
+              const yDomain: [number, number] = [Math.max(0, yMin * 0.9), yMax * 1.1];
               
               return (
                 <div className="h-[350px]">

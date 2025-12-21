@@ -14,6 +14,7 @@ export interface GroundSupplyState {
   maxBuildRateGwYear: number; // Build rate (GW/year)
   avgWaitYears: number;
   utilizationPct: number;
+  inflightGw?: number[]; // Inflight capacity buffer (length = BUILD_LAG_YEARS)
   // Debug fields
   unservedGw: number; // Unmet demand this year
   deliveredFromBacklogGw: number; // Capacity delivered from backlog this year
@@ -23,6 +24,8 @@ export interface GroundSupplyState {
 // Explicit initial backlog (tunable parameter)
 const INITIAL_BACKLOG_GW = 50; // 30-100 GW baseline backlog in 2025
 const INITIAL_BUILD_RATE_GW_YEAR = 12; // Initial build rate (slower than demand growth)
+const TARGET_UTIL = 0.85;
+const BUILD_LAG_YEARS = 2;
 
 export const INITIAL_SUPPLY_STATE: GroundSupplyState = {
   year: 2025,
@@ -33,6 +36,7 @@ export const INITIAL_SUPPLY_STATE: GroundSupplyState = {
   maxBuildRateGwYear: INITIAL_BUILD_RATE_GW_YEAR,
   avgWaitYears: INITIAL_BACKLOG_GW / INITIAL_BUILD_RATE_GW_YEAR, // Initial wait from backlog
   utilizationPct: 1.0, // At capacity
+  inflightGw: Array(BUILD_LAG_YEARS).fill(0),
   unservedGw: 0,
   deliveredFromBacklogGw: 0,
   avgWaitYearsRaw: INITIAL_BACKLOG_GW / INITIAL_BUILD_RATE_GW_YEAR,
@@ -57,66 +61,59 @@ export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
   const year = prev.year + 1;
   const demandGw = getGlobalDemandGw(year);
   
-  // Build rate ramps with backlog pressure but is capped
-  const buildRateGrowth = 1.04; // Slower growth to create bottleneck
-  const maxBuildRateGwYear = Math.min(
-    prev.maxBuildRateGwYear * buildRateGrowth,
-    80 // Cap build rate (permit/substation bottleneck)
-  );
+  // Capacity required to serve demand at target utilization
+  const requiredCapacityGw = demandGw / TARGET_UTIL;
   
-  // COHERENT QUEUE MODEL: Based on unmet demand
-  // unservedGW = max(0, demandGW - capacityGW)
+  // Count inflight
+  const inflightTotalGw = (prev.inflightGw ?? []).reduce((a, b) => a + b, 0);
+  
+  // New deficit enters backlog (projects that must be built)
+  const deficitGw = Math.max(0, requiredCapacityGw - (prev.capacityGw + inflightTotalGw));
+  const backlogGw0 = (prev.backlogGw ?? prev.pipelineGw ?? 0);
+  const backlogGw = backlogGw0 + deficitGw;
+  
+  // Build rate ramps, but cannot instantly erase the queue
+  const buildRateGrowth = 1.05;
+  const maxBuildRateGwYear = Math.min(prev.maxBuildRateGwYear * buildRateGrowth, 50);
+  
+  // Start construction from backlog (not from "newDemand")
+  const startBuildGw = Math.min(backlogGw, maxBuildRateGwYear);
+  
+  // Move GW through lag pipeline
+  const inflight = [...(prev.inflightGw ?? Array(BUILD_LAG_YEARS).fill(0))];
+  const onlineNow = inflight.pop() ?? 0;
+  inflight.unshift(startBuildGw);
+  
+  // Capacity increases only when projects come online
+  const capacityGw = prev.capacityGw + onlineNow;
+  
+  // Backlog decreases by starts (since they left the queue into inflight)
+  const updatedBacklogGw = Math.max(0, backlogGw - startBuildGw);
+  
+  // Wait time is queue / start rate (bounded)
+  const effectiveStartRate = Math.max(1e-6, maxBuildRateGwYear);
+  const rawAvgWaitYears = updatedBacklogGw / effectiveStartRate;
+  const avgWaitYears = Math.max(0, Math.min(10, rawAvgWaitYears));
+  
+  const utilizationPct = Math.min(1.0, demandGw / Math.max(1e-6, capacityGw));
+  
+  // Debug fields
   const unservedGw = Math.max(0, demandGw - prev.capacityGw);
-  
-  // CRITICAL: deliveredFromBacklogGW must be min(backlogPrevGw, maxBuildRateGwYear) 
-  // even when unservedGw=0 (backlog drains regardless of current demand)
-  const deliveredFromBacklogGw = Math.min(prev.backlogGw, maxBuildRateGwYear);
-  
-  // backlogGW[t] = max(0, backlogGW[t-1] + unservedGW - deliveredFromBacklogGW)
-  // Backlog updates as: previous backlog + new unserved demand - delivered capacity
-  const backlogGw = Math.max(0, prev.backlogGw + unservedGw - deliveredFromBacklogGw);
-  
-  // Capacity grows by what we can deliver
-  const capacityGw = prev.capacityGw + deliveredFromBacklogGw;
-  
-  // Wait time: Little's law approximation
-  // avgWaitYearsRaw = backlogGW / maxBuildRateGWyr
-  const avgWaitYearsRaw = maxBuildRateGwYear > 1e-6 && backlogGw > 0
-    ? backlogGw / maxBuildRateGwYear
-    : 0;
-  
-  // Smooth saturation instead of hard clamp: avgWaitYears = waitCap * (1 - exp(-avgWaitYearsRaw / waitCap))
-  const WAIT_CAP_YEARS = 8; // Maximum wait time
-  const avgWaitYears = backlogGw > 0 && maxBuildRateGwYear > 1e-6
-    ? WAIT_CAP_YEARS * (1 - Math.exp(-avgWaitYearsRaw / WAIT_CAP_YEARS))
-    : 0;
-  
-  // Utilization based on capacity
-  const utilizationPct = capacityGw > 0 ? Math.min(1.0, demandGw / capacityGw) : 1.0;
-  
-  // ACCEPTANCE TEST: Never see demandGW < capacityGW and avgWaitYears == waitCap unless backlogGW is truly huge
-  if (process.env.NODE_ENV === 'development') {
-    if (demandGw < capacityGw && avgWaitYears >= WAIT_CAP_YEARS * 0.95 && backlogGw < 200) {
-      console.warn(
-        `[INVARIANT WARNING] Year ${year}: demandGw=${demandGw.toFixed(1)} < capacityGw=${capacityGw.toFixed(1)} ` +
-        `but avgWaitYears=${avgWaitYears.toFixed(2)} near cap and backlogGw=${backlogGw.toFixed(1)} < 200. ` +
-        `This suggests queue model inconsistency.`
-      );
-    }
-  }
+  const deliveredFromBacklogGw = onlineNow; // Capacity that came online this year
   
   return {
     year,
     demandGw,
     capacityGw,
-    pipelineGw: backlogGw, // Keep for backward compatibility
-    backlogGw,
-    maxBuildRateGwYear,
+    pipelineGw: updatedBacklogGw, // Keep for backward compatibility
+    backlogGw: updatedBacklogGw,
+    inflightGw: inflight,
+    maxBuildRateGwYear: maxBuildRateGwYear,
     avgWaitYears,
     utilizationPct,
     unservedGw,
     deliveredFromBacklogGw,
-    avgWaitYearsRaw,
+    avgWaitYearsRaw: rawAvgWaitYears,
   };
 }
 
