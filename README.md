@@ -1,129 +1,150 @@
-# Orbital Compute Control Room
+# Orbital Compute Open Source
 
-A 3D interactive visualization dashboard showing the interaction between orbital compute infrastructure (satellites) and ground-based hyperscale data centers.
+A research-grade physics-based economic model for comparing orbital vs ground-based AI compute infrastructure.
 
-## Features
+## Overview
 
-- **3D Globe Visualization**: Full Earth view with satellite orbits and ground data centers
-- **Real-time Simulation**: Live updates showing power consumption, latency, cost, and carbon metrics
-- **Interactive Scenarios**: 
-  - Normal operation
-  - Price spike (ground energy costs increase)
-  - Solar storm (satellite capacity degradation)
-  - Fiber cut (regional connectivity issues)
-- **Workload Routing**: Adjustable slider to route jobs between orbital and ground infrastructure
-- **Entity Interaction**: Click on satellites, orbital hubs, or ground sites to see detailed metrics
-- **Camera Presets**: Quick navigation to Earth view or Abilene data center
+This repository contains the core comparison engine and UI for analyzing the economics of orbital compute platforms versus traditional ground-based datacenters. The model includes:
+
+- **Physics-based cost modeling** for orbital satellites (power, thermal, launch, operations)
+- **Ground infrastructure constraints** with buildout rates, backlog queues, and scarcity pricing
+- **Market share analysis** based on served compute capacity (not just cost)
+- **Interactive parameter exploration** with coupled sliders and validation
+
+## Key Features
+
+### 1. Demand Model
+- Piecewise exponential growth calibrated to 450 GW by 2040, multi-TW by 2060
+- Facility load tracking with PUE adjustments
+- Incremental demand calculation for buildout constraints
+
+### 2. Ground Buildout Model
+- Ramping mobilization with configurable build rates (25→60→140→220 GW/yr)
+- Backlog queue tracking when demand exceeds build rate
+- Wait time calculation: `avgWaitYears = backlogGW / buildRateGWyr`
+- Pipeline capacity modeling with lead times
+
+### 3. Constraint Economics
+- **Delay penalty**: `avgWaitYears × valueOfTime × (queuePressure^1.3)`
+- **Buildout premium**: Scarcity-adjusted capex with convex scaling
+- **Queue pressure**: `1 + backlogGW / buildableGW`
+- All constraints as **adders only** (no multipliers) to prevent double-counting
+
+### 4. Market Share
+- **Capacity-served model**: Shares based on feasible served compute, not cost softmax
+- Ground feasible: `max(0, demandGW - backlogGW)`
+- Orbital feasible: Limited by launch/manufacturing constraints
+- Feasibility gating: If capacity = 0, share = 0
+
+### 5. GPU-Hour Pricing
+- Includes `gridScarcity` adder from constraint penalties
+- Converts delay penalty + buildout premium to $/GPU-hour
+- Margin applied after scarcity (market charges for constraints)
+
+## Installation
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000/compare](http://localhost:3000/compare)
 
 ## Project Structure
 
 ```
-orbitalcompute/
-├── backend/          # Python FastAPI server
-│   ├── main.py      # Main API and simulation engine
-│   └── requirements.txt
-├── frontend/         # Next.js + CesiumJS application
-│   ├── app/
-│   │   ├── components/  # React components
-│   │   ├── context/     # React context for state
-│   │   └── types.ts     # TypeScript type definitions
-│   └── package.json
-└── README.md
+app/
+  compare/
+    page.tsx          # Main comparison UI
+  lib/
+    model/            # Core physics and economic models
+      physicsCost.ts  # Main cost calculation engine
+      trajectory.ts  # Multi-year simulation
+      ground_ramping_mobilization.ts  # Demand and buildout model
+      ground_buildout.ts  # Constraint economics
+      orbitalPhysics.ts  # Orbital satellite physics
+      types.ts        # Type definitions
+      ...
+    ui/              # UI utilities (slider coupling, etc.)
+    utils/           # Utilities (sanitization, etc.)
+  components/
+    ui/              # React components (sliders, validation, etc.)
 ```
 
-## Setup
+## Core Models
 
-### Backend
-
-1. Navigate to the backend directory:
-```bash
-cd backend
+### Demand Curve
+```typescript
+// Piecewise exponential with anchors
+r1 = ln(450 / demand2025) / (2040-2025)
+r2 = ln(demand2060 / 450) / (2060-2040)
+demandGw(t) = t<=2040 ? demand2025*exp(r1*(t-2025)) : 450*exp(r2*(t-2040))
 ```
 
-2. Create a virtual environment (recommended):
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+### Buildout Constraints
+```typescript
+backlogGw(t) = max(0, backlogGw(t-1) + demandNewGw(t) - buildableGw(t))
+avgWaitYears(t) = backlogGw(t) / max(buildRateGwYear(t), 1e-9)
+queuePressure = 1 + backlogGw / buildableGw
 ```
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
+### Constraint Economics
+```typescript
+// Delay penalty with panic regime
+delayPenalty = avgWaitYears × wacc × (hardwareCapex + siteCapex) × (queuePressure^1.3)
+
+// Buildout premium with scarcity scaling
+scarcityIndex = max(0, demandNewGw / buildableGw - 1)
+buildoutCapex = base × (1 + 2.0 × scarcityIndex^1.7)
+buildoutPremium = amortize(buildoutCapex, wacc, lifetime) × kW_per_PFLOP
 ```
 
-4. Run the server:
-```bash
-uvicorn main:app --reload --port 8000
+### Market Share
+```typescript
+groundFeasibleComputeGW = max(0, demandGW - backlogGW)
+groundServedComputeGW = min(demandGW, groundFeasibleComputeGW)
+orbitServedComputeGW = min(remainingDemand, orbitFeasibleComputeGW)
+orbitalShareFrac = orbitServed / (groundServed + orbitServed)
 ```
 
-The backend will:
-- Fetch Starlink TLE data from CelesTrak on startup
-- Start the simulation engine that updates every second
-- Serve the API at `http://localhost:8000`
+## Key Parameters
 
-### Frontend
+### Demand Anchors
+- `demandAnchorsGW: { 2025: 120, 2040: 450, 2060: 3000 }`
+- `demandIsFacilityLoad: true` (includes PUE)
 
-1. Navigate to the frontend directory:
-```bash
-cd frontend
+### Buildout Anchors
+- `buildoutAnchorsGWyr: { 2025: 25, 2030: 60, 2040: 140, 2060: 220 }`
+- `buildoutSmoothingYears: 3`
+- `pipelineLeadTimeYears: 3`
+
+### Constraint Scaling
+- `buildoutK: 2.0` (scarcity scaling factor)
+- `buildoutExponent: 1.7` (convex exponent)
+- `panicExponent: 1.3` (delay penalty panic regime)
+
+## Validation
+
+The model includes hard asserts in development mode:
+- Demand anchors: `abs(demandGw(2040)-450)/450 < 0.03`
+- Backlog invariant: If `demandNewGW > buildRateGWyr`, backlog must increase
+- Constraint invariant: If `queuePressure>1.1` OR `scarcityIndex>0`, at least one adder must be >0
+- Market share: Shares sum to 1.0 when both feasible
+
+## License
+
+MIT License - See LICENSE file for details
+
+## Citation
+
+If you use this model in research, please cite:
+
+```
+Orbital Compute Open Source - Physics-Based Economic Model
+https://github.com/TheEnergyNerd/orbitalcomputeopensource
 ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+## Contributing
 
-3. Create `.env.local` file:
-```bash
-cp .env.local.example .env.local
-```
-
-4. Edit `.env.local` and add your Cesium Ion token:
-```
-NEXT_PUBLIC_CESIUM_ION_TOKEN=your_token_here
-NEXT_PUBLIC_API_BASE=http://localhost:8000
-```
-
-To get a Cesium Ion token:
-- Sign up at https://cesium.com/ion/
-- Create a new access token
-- Copy it to your `.env.local` file
-
-5. Run the development server:
-```bash
-npm run dev
-```
-
-The frontend will be available at `http://localhost:3000`
-
-## API Endpoints
-
-- `GET /health` - Health check
-- `GET /state` - Get current simulation state
-- `POST /scenario` - Update scenario mode or orbit offload percentage
-  ```json
-  {
-    "mode": "normal" | "price_spike" | "solar_storm" | "fiber_cut",
-    "orbitOffloadPercent": 0-100
-  }
-  ```
-
-## Data Sources
-
-- **Satellite TLEs**: Fetched from CelesTrak (Starlink constellation)
-- **Ground Sites**: Hardcoded locations (Abilene, NoVA, DFW, Phoenix)
-- **Workload Profile**: Synthetic profile based on typical data center workloads
-
-## Technologies
-
-- **Backend**: Python, FastAPI, Skyfield, SGP4
-- **Frontend**: Next.js, React, TypeScript, CesiumJS, Tailwind CSS
-- **3D Visualization**: CesiumJS for globe rendering and satellite visualization
-
-## Notes
-
-- The simulation uses simplified models for power consumption, latency, and routing
-- Satellite positions are propagated using TLE data and Skyfield
-- Workload generation is synthetic but follows realistic patterns
-- Carbon intensity varies by region (approximated)
+This is an open-source research tool. Contributions welcome! Please open issues for bugs or feature requests.
 
