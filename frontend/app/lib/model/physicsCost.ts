@@ -1185,6 +1185,11 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       }
     );
     const scarcityMultiplier = scarcityRentResult.scarcityMultiplier;
+    
+    // DEBUG: Log scarcity calculation in dev mode
+    if (process.env.NODE_ENV !== 'production' && year >= 2030 && year <= 2040) {
+      console.log(`[SCARCITY DEBUG] Year ${year}: backlog=${backlogGW.toFixed(1)}GW, wait=${avgWaitYears.toFixed(2)}yr, util=${(utilizationPct*100).toFixed(1)}%, multiplier=${scarcityMultiplier.toFixed(2)}x`);
+    }
     // For backward compatibility: scarcityRentPerPflopYear = 0 (scarcity is now multiplicative)
     const scarcityRentPerPflopYear = 0;
     

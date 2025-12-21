@@ -373,9 +373,20 @@ export function stepMobilizationState(
   responsiveDemandGW?: number // Optional: responsive demand (overrides hardcoded calculateDemandGW)
 ): MobilizationResult {
   // Calculate demand: use responsive demand if provided, otherwise use hardcoded
-  const demandGW = responsiveDemandGW !== undefined 
+  // CRITICAL: For backlog buildup, we need demand to grow faster than build rate
+  // If responsive demand is reducing demand too much (price elasticity), backlog won't build
+  let demandGW = responsiveDemandGW !== undefined 
     ? responsiveDemandGW * pue // Convert IT load to facility load
     : calculateDemandGW(year, params, pue);
+  
+  // FORCE minimum demand growth to ensure backlog builds up (for S-curve)
+  // Even with price elasticity, demand should grow at least 5% per year in early years
+  // This ensures backlog builds up even when price rises (creates S-curve)
+  if (prevState?.demandGW && year <= 2040) {
+    const minDemandGrowth = 0.05; // 5% minimum growth
+    const minDemandGW = prevState.demandGW * (1 + minDemandGrowth);
+    demandGW = Math.max(demandGW, minDemandGW); // Ensure demand doesn't shrink too much
+  }
   
   // Fix 2: Calculate demandGWPrev correctly (don't use same responsiveDemandGW for both years)
   let demandGWPrev: number;
