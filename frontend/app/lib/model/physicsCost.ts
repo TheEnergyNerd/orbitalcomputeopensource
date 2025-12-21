@@ -1180,7 +1180,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       utilizationPct, // Pass utilization for threshold gate
       {
         waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 0.5, // Lower threshold: 0.5yr (scarcity activates earlier)
-        rentMaxMultiplier: params.scarcityRentMaxMultiplier ?? 2.5, // Increased from 2.0 (allows higher scarcity)
+        rentMaxMultiplier: params.scarcityRentMaxMultiplier ?? 3.0, // Increased from 2.5 (allows higher scarcity for visible hump)
         utilizationThreshold: 0.80, // Lower threshold: 80% (scarcity activates earlier)
       }
     );
@@ -1855,12 +1855,15 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     const margin = costWithScarcityAndDelay * operatorMargin;
     const pricePerGpuHour = costWithScarcityAndDelay + margin;
     
+    // Calculate scarcity premium for breakdown (difference between with/without scarcity)
+    const scarcityPremium = costWithScarcity - preMarginBase;
+    
     return {
       ...basePricing,
       pricePerGpuHour,
       costBreakdown: {
         ...basePricing.costBreakdown,
-        scarcity: scarcityPremium, // Fixed-base scarcity premium (doesn't decline with Moore's Law)
+        scarcity: scarcityPremium, // Scarcity premium (multiplicative effect)
         delayPenalty: delayPenaltyAdderPerGpuHour, // Delay penalty (WACC carry)
         margin, // overwrite with recomputed margin
       },

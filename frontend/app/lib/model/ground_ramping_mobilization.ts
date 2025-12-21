@@ -460,7 +460,8 @@ export function stepMobilizationState(
   // When demand shifts to orbital, "implicit backlog drain" occurs
   // because customers who were waiting for ground now use orbital instead
   // Fix 1: Initialize with baseline backlog if no previous state
-  const INITIAL_BACKLOG_GW = 50; // Same as queue model
+  // HIGHER initial backlog to create early scarcity pressure
+  const INITIAL_BACKLOG_GW = 80; // Increased from 50 to create more early scarcity
   const backlogGWPrev = prevState?.backlogGW ?? INITIAL_BACKLOG_GW;
   const buildableGW = buildRateGWyr;
   const implicitBacklogDrain = (orbitalSubstitutionGW ?? 0) * 0.5; // 50% of shifted demand was in backlog
@@ -534,8 +535,8 @@ export const DEFAULT_MOBILIZATION_PARAMS: MobilizationScenarioParams = {
   demandCurve: 'piecewise_exponential',
   demandIsFacilityLoad: true, // Demand is facility load (includes PUE)
   buildoutAnchorsGWyr: {
-    2025: 25, // Wartime mobilization example
-    2030: 60,
+    2025: 15, // LOWER initial build rate to force backlog buildup (was 25)
+    2030: 50, // Slower ramp to allow backlog to build (was 60)
     2040: 140,
     2060: 220,
   },

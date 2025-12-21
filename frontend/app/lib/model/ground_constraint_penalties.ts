@@ -92,11 +92,11 @@ export function calculateScarcityRent(
   const WAIT_THRESHOLD = params?.waitThresholdYears ?? 0.5; // Lower threshold: 0.5yr instead of 1.0yr (scarcity activates earlier)
   
   // Dynamic rent max that scales with wait time (prevents Moore's Law from canceling scarcity)
-  // More aggressive: baseMax=2.5, cap=5.0, scaling=0.5 per log10
-  // At wait=1yr: ~2.5x, wait=3yr: ~3.0x, wait=10yr: ~3.5x, wait=50yr: ~4.0x (log-based, never fully saturates)
-  const baseMax = params?.rentMaxMultiplier ?? 2.5; // Increased from 2.0
-  const waitScaling = waitYears > 0.5 ? Math.log10(waitYears / 0.5) * 0.5 : 0; // +0.5x per order of magnitude (steeper)
-  const RENT_MAX = Math.min(5.0, baseMax + waitScaling); // Cap at 5x total (increased from 4x)
+  // EVEN MORE aggressive: baseMax=3.0, cap=6.0, scaling=0.7 per log10
+  // At wait=0.5yr: ~3.0x, wait=1yr: ~3.2x, wait=3yr: ~3.7x, wait=10yr: ~4.2x, wait=50yr: ~4.9x
+  const baseMax = params?.rentMaxMultiplier ?? 3.0; // Increased from 2.5 to create more visible hump
+  const waitScaling = waitYears > 0.5 ? Math.log10(waitYears / 0.5) * 0.7 : 0; // +0.7x per order of magnitude (steeper)
+  const RENT_MAX = Math.min(6.0, baseMax + waitScaling); // Cap at 6x total (increased from 5x)
   
   // Gate: no scarcity ONLY if utilization < 80% AND wait < 0.5 year (both must be low)
   // If either is high, scarcity activates (OR logic, not AND)
@@ -111,11 +111,11 @@ export function calculateScarcityRent(
     };
   }
   
-  // Wait term: LOG-BASED but more aggressive (steeper curve)
-  // At wait=0.5yr: 0, wait=1yr: 0.30, wait=3yr: 0.78, wait=10yr: 1.30, wait=50yr: 2.0
-  // Steeper than before: uses log10(waitYears / 0.5) instead of log10(waitYears / 1.0)
+  // Wait term: LOG-BASED but EVEN MORE aggressive (steeper curve)
+  // At wait=0.5yr: 0, wait=1yr: 0.45, wait=3yr: 1.17, wait=10yr: 1.95, wait=50yr: 3.0
+  // Much steeper: multiply by 2.0 instead of 1.5
   const waitTerm = waitYears > WAIT_THRESHOLD 
-    ? Math.log10(waitYears / WAIT_THRESHOLD) * 1.5 // Multiply by 1.5 for steeper curve
+    ? Math.log10(waitYears / WAIT_THRESHOLD) * 2.0 // Multiply by 2.0 for much steeper curve
     : 0;
   
   // Utilization term: gentler sigmoid (activates earlier, not just at 90%)
