@@ -377,7 +377,7 @@ export function calculateResponsiveDemand(
   
   // FIX SINUSOIDAL OSCILLATION: Add smoothing to prevent feedback loops
   // Use exponential smoothing on price and wait factors to dampen oscillations
-  const SMOOTHING_ALPHA = 0.3; // 30% weight on new value, 70% on previous (dampens oscillations)
+  const SMOOTHING_ALPHA = 0.15; // 15% weight on new value, 85% on previous (stronger damping to eliminate sawtooth)
   
   // Price elasticity: demand drops as ground price rises (REDUCED to prevent oscillation)
   const baselinePrice = 4.00; // $/GPU-hr reference
@@ -423,9 +423,9 @@ export function calculateResponsiveDemand(
   // Calculate ground demand
   let groundDemandGW = effectiveGW * (1 - orbitalShare);
   
-  // FIXED: Add demand momentum (max 8% change per year) - prevents wild swings
+  // FIXED: Add demand momentum (max 5% change per year) - prevents wild swings and sawtooth oscillation
   if (prevDemandState?.groundDemandGW) {
-    const maxDemandChangePerYear = 0.08; // Max 8% change per year
+    const maxDemandChangePerYear = 0.05; // Max 5% change per year (tighter constraint to eliminate oscillation)
     const demandChangeRatio = groundDemandGW / prevDemandState.groundDemandGW;
     if (demandChangeRatio > 1 + maxDemandChangePerYear) {
       groundDemandGW = prevDemandState.groundDemandGW * (1 + maxDemandChangePerYear);
