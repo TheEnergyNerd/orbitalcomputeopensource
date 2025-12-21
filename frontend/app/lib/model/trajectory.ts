@@ -375,9 +375,9 @@ export function calculateResponsiveDemand(
   const effectiveGrowth = growthRate * (0.5 + 0.5 * taper); // 10% -> 5% CAGR
   const baselineGW = 120 * Math.pow(1 + effectiveGrowth, yearsFrom2025);
   
-  // FIX SINUSOIDAL OSCILLATION: Add smoothing to prevent feedback loops
-  // Use exponential smoothing on price and wait factors to dampen oscillations
-  const SMOOTHING_ALPHA = 0.15; // 15% weight on new value, 85% on previous (stronger damping to eliminate sawtooth)
+  // BALANCE: Allow S-curve while preventing oscillation
+  // Use exponential smoothing on price and wait factors - balanced for S-curve formation
+  const SMOOTHING_ALPHA = 0.25; // 25% weight on new value, 75% on previous (allows S-curve while preventing oscillation)
   
   // Price elasticity: demand drops as ground price rises (REDUCED to prevent oscillation)
   const baselinePrice = 4.00; // $/GPU-hr reference
@@ -398,24 +398,25 @@ export function calculateResponsiveDemand(
   const waitFactor = SMOOTHING_ALPHA * waitFactorRaw + (1 - SMOOTHING_ALPHA) * prevWaitFactor;
   
   // Effective total demand (may shift to orbital)
-  // Add minimum floor to prevent demand from collapsing too quickly
+  // Allow demand to respond more freely for S-curve formation
   const effectiveGWRaw = baselineGW * priceFactor * waitFactor;
-  const minDemandFrac = 0.5; // Demand can't drop below 50% of baseline
+  const minDemandFrac = 0.3; // Demand can drop to 30% of baseline (allows S-curve drop)
   const effectiveGW = Math.max(baselineGW * minDemandFrac, effectiveGWRaw);
   
-  // FIXED: Orbital substitution with smoothing to prevent cobweb oscillation
+  // Orbital substitution: S-curve response to price ratio
+  // Steeper curve to allow faster substitution when orbital becomes competitive
   const groundOrbitalRatio = groundPricePerGpuHour / Math.max(orbitalPricePerGpuHour, 0.01);
   
-  // Gentler curve (k=1.0 instead of 2.0, midpoint=1.5 instead of 1.3)
-  // At ratio 1.2: ~5% shifts, ratio 1.5: ~25%, ratio 2.0: ~50%
+  // S-curve: steeper response (k=1.5, midpoint=1.3) for faster substitution
+  // At ratio 1.2: ~15% shifts, ratio 1.3: ~50%, ratio 1.5: ~80%
   let targetOrbitalShare = 0;
   if (groundOrbitalRatio > 1.0) {
-    targetOrbitalShare = 1 / (1 + Math.exp(-1.0 * (groundOrbitalRatio - 1.5)));
+    targetOrbitalShare = 1 / (1 + Math.exp(-1.5 * (groundOrbitalRatio - 1.3)));
   }
   
-  // Smooth orbital share (max 15% change per year) - prevents instant switching
+  // Smooth orbital share - allow faster substitution for S-curve (one-way shift prevents oscillation)
   const prevOrbitalShare = prevDemandState?.orbitalShare ?? 0;
-  const maxShareChangePerYear = 0.15; // Max 15% shift per year
+  const maxShareChangePerYear = 0.25; // Max 25% shift per year (faster substitution for S-curve)
   const shareChange = targetOrbitalShare - prevOrbitalShare;
   const smoothedChange = Math.sign(shareChange) * Math.min(Math.abs(shareChange), maxShareChangePerYear);
   const orbitalShare = Math.max(0, Math.min(1, prevOrbitalShare + smoothedChange));
@@ -429,10 +430,13 @@ export function calculateResponsiveDemand(
     console.log(`[DEMAND DEBUG]   prevDemandState=${prevDemandState ? `exists, groundDemandGW=${prevDemandState.groundDemandGW?.toFixed(1) ?? 'undefined'}` : 'NULL'}`);
   }
   
-  // FIXED: Add demand momentum (max 5% change per year) - prevents wild swings and sawtooth oscillation
+  // BALANCE: Allow S-curve demand changes when orbital substitution happens
   // Use explicit check instead of truthy check to handle 0 values correctly
   if (prevDemandState !== null && prevDemandState.groundDemandGW !== undefined && prevDemandState.groundDemandGW > 0) {
-    const maxDemandChangePerYear = 0.05; // Max 5% change per year (tighter constraint to eliminate oscillation)
+    // Allow larger changes when orbital substitution is happening (S-curve formation)
+    // But still cap to prevent wild oscillations
+    const orbitalSubstitutionActive = orbitalShare > 0.1 || (prevOrbitalShare > 0 && orbitalShare > prevOrbitalShare);
+    const maxDemandChangePerYear = orbitalSubstitutionActive ? 0.12 : 0.08; // 12% when substitution active, 8% otherwise
     const demandChangeRatio = groundDemandGW / prevDemandState.groundDemandGW;
     
     if (process.env.NODE_ENV !== 'production') {
