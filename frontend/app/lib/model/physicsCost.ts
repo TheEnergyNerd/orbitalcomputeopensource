@@ -1756,9 +1756,9 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   // Note: Scarcity is now MULTIPLICATIVE (not additive), so no conversion check needed
   // Scarcity multiplier is applied directly to base cost in GPU-hour pricing
   
-  // Use BASE cost (without scarcity) for GPU-hour pricing, then add scarcity separately
-  // This prevents double-counting: groundComparatorCostPerPflopYear already includes scarcity
-  // We want: baseCost (no scarcity) + scarcityAdder = total with scarcity
+  // Use BASE cost (without scarcity) for GPU-hour pricing, then apply scarcity as multiplier
+  // This prevents double-counting: scarcity is multiplicative in GPU-hour pricing, not additive
+  // We want: baseCost (no scarcity) * scarcityMultiplier = total with scarcity
   // Use groundResult.totalCostPerPflopYearBase if available (from buildout model), otherwise construct from components
   const groundCostBaseForPricing = useBuildoutModel && groundResult?.totalCostPerPflopYearBase !== undefined
     ? groundResult.totalCostPerPflopYearBase
