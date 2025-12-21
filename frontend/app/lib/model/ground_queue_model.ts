@@ -36,7 +36,7 @@ export const INITIAL_SUPPLY_STATE: GroundSupplyState = {
   maxBuildRateGwYear: INITIAL_BUILD_RATE_GW_YEAR,
   avgWaitYears: INITIAL_BACKLOG_GW / INITIAL_BUILD_RATE_GW_YEAR, // Initial wait from backlog
   utilizationPct: 1.0, // At capacity
-  inflightGw: Array(BUILD_LAG_YEARS).fill(0),
+  inflightGw: Array.from({ length: BUILD_LAG_YEARS }, () => 0),
   unservedGw: 0,
   deliveredFromBacklogGw: 0,
   avgWaitYearsRaw: INITIAL_BACKLOG_GW / INITIAL_BUILD_RATE_GW_YEAR,
@@ -80,7 +80,7 @@ export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
   const startBuildGw = Math.min(backlogGw, maxBuildRateGwYear);
   
   // Move GW through lag pipeline
-  const inflight = [...(prev.inflightGw ?? Array(BUILD_LAG_YEARS).fill(0))];
+  const inflight = [...(prev.inflightGw ?? Array.from({ length: BUILD_LAG_YEARS }, () => 0))];
   const onlineNow = inflight.pop() ?? 0;
   inflight.unshift(startBuildGw);
   
