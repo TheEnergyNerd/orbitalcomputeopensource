@@ -1179,9 +1179,9 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       avgWaitYears,
       utilizationPct, // Pass utilization for threshold gate
       {
-        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 1.0, // Minimum wait before scarcity activates
-        rentMaxMultiplier: params.scarcityRentMaxMultiplier ?? 2.0, // Maximum price multiplier (2x = 100% increase)
-        utilizationThreshold: 0.85, // Utilization threshold
+        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 0.5, // Lower threshold: 0.5yr (scarcity activates earlier)
+        rentMaxMultiplier: params.scarcityRentMaxMultiplier ?? 2.5, // Increased from 2.0 (allows higher scarcity)
+        utilizationThreshold: 0.80, // Lower threshold: 80% (scarcity activates earlier)
       }
     );
     const scarcityMultiplier = scarcityRentResult.scarcityMultiplier;

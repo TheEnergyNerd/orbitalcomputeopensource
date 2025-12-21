@@ -88,18 +88,18 @@ export function calculateScarcityRent(
   avgWaitYearsRaw: number; // Raw wait years (no clamp)
   avgWaitYearsClamped: number; // Same as raw (no clamp applied)
 } {
-  const UTIL_THRESHOLD = params?.utilizationThreshold ?? 0.85;
-  const WAIT_THRESHOLD = params?.waitThresholdYears ?? 1.0;
+  const UTIL_THRESHOLD = params?.utilizationThreshold ?? 0.80; // Lower threshold: 80% instead of 85%
+  const WAIT_THRESHOLD = params?.waitThresholdYears ?? 0.5; // Lower threshold: 0.5yr instead of 1.0yr (scarcity activates earlier)
   
   // Dynamic rent max that scales with wait time (prevents Moore's Law from canceling scarcity)
-  // OLD: baseMax=2.0, cap=5.0
-  // NEW: baseMax=2.0, cap=4.0, scaling=0.3 per log10 (more conservative)
-  // At wait=10yr: ~2.3x, wait=50yr: ~2.6x, wait=100yr: ~2.9x (log-based, never fully saturates)
-  const baseMax = params?.rentMaxMultiplier ?? 2.0;
-  const waitScaling = waitYears > 1 ? Math.log10(waitYears) * 0.3 : 0; // +0.3x per order of magnitude
-  const RENT_MAX = Math.min(4.0, baseMax + waitScaling); // Cap at 4x total
+  // More aggressive: baseMax=2.5, cap=5.0, scaling=0.5 per log10
+  // At wait=1yr: ~2.5x, wait=3yr: ~3.0x, wait=10yr: ~3.5x, wait=50yr: ~4.0x (log-based, never fully saturates)
+  const baseMax = params?.rentMaxMultiplier ?? 2.5; // Increased from 2.0
+  const waitScaling = waitYears > 0.5 ? Math.log10(waitYears / 0.5) * 0.5 : 0; // +0.5x per order of magnitude (steeper)
+  const RENT_MAX = Math.min(5.0, baseMax + waitScaling); // Cap at 5x total (increased from 4x)
   
-  // Gate: no scarcity if utilization < 85% AND wait < 1 year
+  // Gate: no scarcity ONLY if utilization < 80% AND wait < 0.5 year (both must be low)
+  // If either is high, scarcity activates (OR logic, not AND)
   if (utilizationPct !== undefined && utilizationPct < UTIL_THRESHOLD && waitYears < WAIT_THRESHOLD) {
     return {
       scarcityMultiplier: 1.0,
@@ -111,19 +111,21 @@ export function calculateScarcityRent(
     };
   }
   
-  // Wait term: LOG-BASED (never saturates, but grows slowly)
-  // At wait=1yr: 0, wait=3yr: 0.48, wait=10yr: 1.0, wait=100yr: 2.0, wait=1000yr: 3.0
+  // Wait term: LOG-BASED but more aggressive (steeper curve)
+  // At wait=0.5yr: 0, wait=1yr: 0.30, wait=3yr: 0.78, wait=10yr: 1.30, wait=50yr: 2.0
+  // Steeper than before: uses log10(waitYears / 0.5) instead of log10(waitYears / 1.0)
   const waitTerm = waitYears > WAIT_THRESHOLD 
-    ? Math.log10(waitYears / WAIT_THRESHOLD) 
+    ? Math.log10(waitYears / WAIT_THRESHOLD) * 1.5 // Multiply by 1.5 for steeper curve
     : 0;
   
-  // Utilization term: sigmoid above threshold
+  // Utilization term: gentler sigmoid (activates earlier, not just at 90%)
   const utilExcess = Math.max(0, (utilizationPct ?? 0) - UTIL_THRESHOLD);
   const utilTerm = utilExcess > 0 
-    ? 1 / (1 + Math.exp(-20 * (utilExcess - 0.05))) // Sharp rise at 90%
+    ? 1 / (1 + Math.exp(-10 * (utilExcess - 0.05))) // Gentler rise (k=10 instead of 20), activates at 85%
     : 0;
   
   // Combined: scarcity = 1 + min(RENT_MAX - 1, waitTerm * (1 + utilTerm))
+  // More aggressive: waitTerm is steeper, utilTerm activates earlier
   const rawRent = waitTerm * (1 + utilTerm);
   const rentFrac = Math.min(RENT_MAX - 1, rawRent);
   const scarcityMultiplier = 1 + rentFrac;
