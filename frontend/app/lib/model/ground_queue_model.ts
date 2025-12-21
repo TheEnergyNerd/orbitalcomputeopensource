@@ -48,8 +48,10 @@ function expSegment(y0: number, y1: number, v0: number, v1: number, y: number): 
   return v0 * Math.pow(r, (y - y0));
 }
 
-function getGlobalDemandGw(year: number): number {
+// Export for debug/comparison purposes, but prefer responsive demand
+export function getGlobalDemandGw(year: number): number {
   // Anchors (tune if you want)
+  // NOTE: This is a fallback - responsive demand from trajectory.ts should be used instead
   const y0 = 2025, v0 = 120;
   const y1 = 2040, v1 = 450;
   const y2 = 2060, v2 = 3000;  // "terawatts by 2060" -> 3 TW here; change to 5000 if you want
@@ -57,9 +59,17 @@ function getGlobalDemandGw(year: number): number {
   return expSegment(y1, y2, v1, v2, year);
 }
 
-export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
+export function stepGroundSupply(
+  prev: GroundSupplyState,
+  responsiveDemandGW?: number, // NEW: Override hardcoded demand
+  orbitalSubstitutionGW?: number // NEW: For backlog drain
+): GroundSupplyState {
   const year = prev.year + 1;
-  const demandGw = getGlobalDemandGw(year);
+  
+  // Use responsive demand if provided, otherwise fall back to hardcoded
+  const demandGw = responsiveDemandGW !== undefined 
+    ? responsiveDemandGW 
+    : getGlobalDemandGw(year);
   
   // Capacity required to serve demand at target utilization
   const requiredCapacityGw = demandGw / TARGET_UTIL;
@@ -86,8 +96,11 @@ export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
   const servedBacklog = Math.max(0, actualBuilt - servedNewDemand);
   const unservedNewDemand = newDeficitGw - servedNewDemand;
   
-  // Update backlog (conservation: backlog[t+1] = backlog[t] + unserved - served)
-  const updatedBacklogGw = Math.max(0, backlogGw0 + unservedNewDemand - servedBacklog);
+  // NEW: Backlog can drain from orbital substitution
+  const implicitBacklogDrain = (orbitalSubstitutionGW ?? 0) * 0.5; // 50% of shifted demand was in backlog
+  
+  // Update backlog (conservation: backlog[t+1] = backlog[t] + unserved - served - orbital drain)
+  const updatedBacklogGw = Math.max(0, backlogGw0 + unservedNewDemand - servedBacklog - implicitBacklogDrain);
   
   // Start construction from backlog (projects move into inflight)
   const startBuildGw = servedBacklog;
@@ -181,14 +194,21 @@ export function calculateConstraintFromSupply(state: GroundSupplyState): Constra
   };
 }
 
-export function generateGroundSupplyTrajectory(startYear: number, endYear: number): GroundSupplyState[] {
+export function generateGroundSupplyTrajectory(
+  startYear: number, 
+  endYear: number,
+  demandByYear?: Map<number, number>, // NEW: Optional demand override by year
+  orbitalSubstitutionByYear?: Map<number, number> // NEW: Optional orbital substitution
+): GroundSupplyState[] {
   const trajectory: GroundSupplyState[] = [INITIAL_SUPPLY_STATE];
   
   let current = INITIAL_SUPPLY_STATE;
   let prevWaitYears = current.avgWaitYears;
   
   for (let year = startYear + 1; year <= endYear; year++) {
-    current = stepGroundSupply(current);
+    const responsiveDemand = demandByYear?.get(year);
+    const orbitalSub = orbitalSubstitutionByYear?.get(year);
+    current = stepGroundSupply(current, responsiveDemand, orbitalSub);
     
     // Assert: if avgWaitYears changes by > 1.0 year between adjacent years, warn/throw in dev (this catches snaps)
     // NOTE: Disabled temporarily - smoothing logic now prevents snaps, so this assertion may be too strict

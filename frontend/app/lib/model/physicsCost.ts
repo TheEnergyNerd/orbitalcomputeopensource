@@ -24,7 +24,7 @@ import {
   SpaceFusionParams
 } from './orbitalPhysics';
 import { calculateRegionalGroundCost, GroundCostResult, getGlobalDemandPflops } from './ground_supply_model';
-import { generateGroundSupplyTrajectory, calculateConstraintFromSupply, stepGroundSupply, INITIAL_SUPPLY_STATE, GroundSupplyState } from './ground_queue_model';
+import { generateGroundSupplyTrajectory, calculateConstraintFromSupply, stepGroundSupply, INITIAL_SUPPLY_STATE, GroundSupplyState, getGlobalDemandGw } from './ground_queue_model';
 import { calculateGroundConstraintPenalties, calculateScarcityRent } from './ground_constraint_penalties';
 import { calculateBuildoutConstraints, BuildoutState, BuildoutResult } from './ground_buildout';
 import { stepMobilizationState, DEFAULT_MOBILIZATION_PARAMS, MobilizationScenarioParams, MobilizationState } from './ground_ramping_mobilization';
@@ -836,12 +836,42 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   };
   
   const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !params.isStaticMode;
-  const useBuildoutModel = params.useBuildoutModel === true && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel;
-  const useQueueModel = (params.useQueueBasedConstraint !== false) && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel && !useBuildoutModel;
+  // RECOMMENDED: Make buildout model the default (it correctly uses responsive demand)
+  // Only use queue model if explicitly enabled
+  const useQueueModel = params.useQueueBasedConstraint === true && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel;
+  const useBuildoutModel = (params.useBuildoutModel !== false) && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel && !useQueueModel;
   
   if (useQueueModel) {
-    const supplyTrajectory = generateGroundSupplyTrajectory(2025, year);
+    // Pass responsive demand and orbital substitution to queue model (if available from trajectory.ts)
+    const responsiveDemandGW = (params as any).responsiveDemandGW as number | undefined;
+    const orbitalSubstitutionGW = (params as any).orbitalSubstitutionGW as number | undefined;
+    
+    // Build demand map if responsive demand is provided
+    const demandByYear = responsiveDemandGW !== undefined 
+      ? new Map([[year, responsiveDemandGW]])
+      : undefined;
+    const orbitalSubstitutionByYear = orbitalSubstitutionGW !== undefined
+      ? new Map([[year, orbitalSubstitutionGW]])
+      : undefined;
+    
+    const supplyTrajectory = generateGroundSupplyTrajectory(2025, year, demandByYear, orbitalSubstitutionByYear);
     const currentSupplyState = supplyTrajectory[supplyTrajectory.length - 1];
+    
+    // Debug: Log if responsive demand is being ignored
+    if (process.env.NODE_ENV === 'development' && responsiveDemandGW !== undefined) {
+      const hardcodedDemand = getGlobalDemandGw(year);
+      if (Math.abs(currentSupplyState.demandGw - hardcodedDemand) < 1e-6) {
+        console.warn(
+          `[QUEUE MODEL DEBUG] Year ${year}: Responsive demand (${responsiveDemandGW.toFixed(2)} GW) may be ignored. ` +
+          `Queue model using: ${currentSupplyState.demandGw.toFixed(2)} GW (hardcoded: ${hardcodedDemand.toFixed(2)} GW)`
+        );
+      } else {
+        console.log(
+          `[QUEUE MODEL DEBUG] Year ${year}: Using responsive demand ${responsiveDemandGW.toFixed(2)} GW ` +
+          `(queue model: ${currentSupplyState.demandGw.toFixed(2)} GW)`
+        );
+      }
+    }
     
     // Calculate WACC-based penalties and multipliers
     // Pass WACC parameters for capital rationing (WACC rises with backlog)
