@@ -1285,6 +1285,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         maxBuildRateGwYear: buildRateGWyr,
         avgWaitYears: avgWaitYears,
         utilizationPct: capacityGW > 0 ? mobilizationResult.demandGW / capacityGW : 0,
+        backlogGw: backlogGW, // ADD: Backlog for chart display
       },
       // Buildout debug fields (from ramping mobilization model)
       backlogGw: backlogGW,

@@ -203,8 +203,9 @@ export function ensureGroundData(data: any): any {
   // Normalize backlog + wait fields from multiple sources (fixes chart disappearing)
   const pb = data.metadata?.chartInputs?.powerBuildout;
   
+  // FIX: Skip 0 values to allow fallback chain to continue to buildoutDebug
   const backlog =
-    data.ground.backlogGw ??
+    (data.ground.backlogGw !== undefined && data.ground.backlogGw > 0 ? data.ground.backlogGw : undefined) ??
     data.ground.buildoutDebug?.backlogGW ??
     data.ground.buildoutDebug?.backlogGw ??
     pb?.backlogGw ??

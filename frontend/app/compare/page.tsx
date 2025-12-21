@@ -1288,9 +1288,10 @@ export default function ComparePage() {
                       
                       // Use supplyMetrics first (queue model), then fallback to buildoutDebug
                       // Queue model provides: backlogGw, avgWaitYears, unservedGw, deliveredFromBacklogGw
+                      // FIX: Skip 0 values to allow fallback chain to continue
                       const backlogGW = 
-                        supplyMetrics?.backlogGw ?? 
-                        d.ground?.backlogGw ??
+                        (supplyMetrics?.backlogGw !== undefined && supplyMetrics.backlogGw > 0 ? supplyMetrics.backlogGw : undefined) ??
+                        (d.ground?.backlogGw !== undefined && d.ground.backlogGw > 0 ? d.ground.backlogGw : undefined) ??
                         buildoutDebug?.backlogGW ??
                         pb?.backlogGw ??
                         0;
