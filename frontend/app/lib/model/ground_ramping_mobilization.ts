@@ -390,7 +390,7 @@ export function stepMobilizationState(
   if (demandGrowthRate < 0) {
     // Demand is shrinking - reduce buildout
     const contractionFactor = Math.max(0.5, 1 + demandGrowthRate * 2); // At most 50% reduction
-    buildRateCandidate = buildRateCandidate * contractionFactor;
+    buildRateCandidate = buildRateCandidate * contractionFactor; // Reassign to let variable
   }
   
   // Apply bottleneck constraints if enabled
