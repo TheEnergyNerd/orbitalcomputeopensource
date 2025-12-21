@@ -350,6 +350,7 @@ export interface DemandState {
   effectiveGW: number;       // Actual demand after price/wait response
   groundDemandGW: number;    // Demand for ground compute
   orbitalDemandGW: number;   // Demand shifted to orbital
+  orbitalShare: number;      // Orbital share (0-1) for smoothing
 }
 
 /**
@@ -402,22 +403,38 @@ export function calculateResponsiveDemand(
   const minDemandFrac = 0.5; // Demand can't drop below 50% of baseline
   const effectiveGW = Math.max(baselineGW * minDemandFrac, effectiveGWRaw);
   
-  // Orbital substitution: if orbital < ground, demand shifts (SMOOTHED)
+  // FIXED: Orbital substitution with smoothing to prevent cobweb oscillation
   const groundOrbitalRatio = groundPricePerGpuHour / Math.max(orbitalPricePerGpuHour, 0.01);
-  let orbitalShareRaw = 0;
+  
+  // Gentler curve (k=1.0 instead of 2.0, midpoint=1.5 instead of 1.3)
+  // At ratio 1.2: ~5% shifts, ratio 1.5: ~25%, ratio 2.0: ~50%
+  let targetOrbitalShare = 0;
   if (groundOrbitalRatio > 1.0) {
-    // Orbital is cheaper - logistic shift (LESS AGGRESSIVE)
-    // At ratio 1.5 (ground 50% more): ~20% shifts to orbital (was 30%)
-    // At ratio 2.0 (ground 100% more): ~45% shifts to orbital (was 60%)
-    orbitalShareRaw = 1 / (1 + Math.exp(-1.5 * (groundOrbitalRatio - 1.4))); // Less steep
+    targetOrbitalShare = 1 / (1 + Math.exp(-1.0 * (groundOrbitalRatio - 1.5)));
   }
   
-  // Smooth orbital share to prevent rapid oscillations
-  const prevOrbitalShare = prevDemandState ? (prevDemandState.orbitalDemandGW / prevDemandState.effectiveGW) : orbitalShareRaw;
-  const orbitalShare = SMOOTHING_ALPHA * orbitalShareRaw + (1 - SMOOTHING_ALPHA) * prevOrbitalShare;
+  // Smooth orbital share (max 15% change per year) - prevents instant switching
+  const prevOrbitalShare = prevDemandState?.orbitalShare ?? 0;
+  const maxShareChangePerYear = 0.15; // Max 15% shift per year
+  const shareChange = targetOrbitalShare - prevOrbitalShare;
+  const smoothedChange = Math.sign(shareChange) * Math.min(Math.abs(shareChange), maxShareChangePerYear);
+  const orbitalShare = Math.max(0, Math.min(1, prevOrbitalShare + smoothedChange));
   
-  const orbitalDemandGW = effectiveGW * orbitalShare;
-  const groundDemandGW = effectiveGW * (1 - orbitalShare);
+  // Calculate ground demand
+  let groundDemandGW = effectiveGW * (1 - orbitalShare);
+  
+  // FIXED: Add demand momentum (max 8% change per year) - prevents wild swings
+  if (prevDemandState?.groundDemandGW) {
+    const maxDemandChangePerYear = 0.08; // Max 8% change per year
+    const demandChangeRatio = groundDemandGW / prevDemandState.groundDemandGW;
+    if (demandChangeRatio > 1 + maxDemandChangePerYear) {
+      groundDemandGW = prevDemandState.groundDemandGW * (1 + maxDemandChangePerYear);
+    } else if (demandChangeRatio < 1 - maxDemandChangePerYear) {
+      groundDemandGW = prevDemandState.groundDemandGW * (1 - maxDemandChangePerYear);
+    }
+  }
+  
+  const orbitalDemandGW = effectiveGW - groundDemandGW;
   
   return {
     year,
@@ -425,6 +442,7 @@ export function calculateResponsiveDemand(
     effectiveGW,
     groundDemandGW,
     orbitalDemandGW,
+    orbitalShare, // Track for smoothing in next iteration
   };
 }
 
