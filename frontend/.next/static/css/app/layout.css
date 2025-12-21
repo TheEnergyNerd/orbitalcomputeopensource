@@ -3634,6 +3634,10 @@ a {
   --tw-bg-opacity: 1;
   background-color: rgb(253 224 71 / var(--tw-bg-opacity, 1));
 }
+.hover\:bg-green-700:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(21 128 61 / var(--tw-bg-opacity, 1));
+}
 .hover\:text-accent-blue\/80:hover {
   color: rgb(0 212 255 / 0.8);
 }

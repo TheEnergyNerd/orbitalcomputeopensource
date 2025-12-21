@@ -23,6 +23,8 @@ import { getSliderConfig } from '../lib/ui/sliderCoupling';
 import { ValidationWarnings } from '../components/ui/ValidationWarnings';
 import { sanitizeFinite, sanitizeSeries } from '../lib/utils/sanitize';
 import { validateAllCharts, ensureGroundData } from '../lib/utils/chartValidator';
+import html2canvas from 'html2canvas';
+import JSZip from 'jszip';
 
 // ============================================================================
 // TYPES & HELPERS
@@ -659,6 +661,43 @@ export default function ComparePage() {
     a.click();
   }, [trajectoryData, years, targetGW, launchCost2025, specificPower2025, gflopsPerWattGround2025, workloadType, slaTier]);
 
+  const handleExportCharts = useCallback(async () => {
+    const chartIds = [
+      'gpu-hour-pricing-chart',
+      'inference-cost-chart',
+      'ground-buildout-chart'
+    ];
+    
+    const zip = new JSZip();
+    
+    try {
+      for (const chartId of chartIds) {
+        const element = document.querySelector(`[data-chart-id="${chartId}"]`);
+        if (element) {
+          const canvas = await html2canvas(element as HTMLElement, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            logging: false
+          });
+          const dataUrl = canvas.toDataURL('image/png');
+          const base64Data = dataUrl.split(',')[1];
+          zip.file(`${chartId}.png`, base64Data, { base64: true });
+        }
+      }
+      
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orbital-compute-charts-${Date.now()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting charts:', error);
+      alert('Failed to export charts. Please try again.');
+    }
+  }, []);
+
   if (!isMounted) return <div className="min-h-screen bg-white" />;
 
   return (
@@ -671,12 +710,18 @@ export default function ComparePage() {
               <h1 className="text-4xl font-bold text-gray-900 mb-3 leading-tight">GPU Pricing & SLA: Orbital vs Ground</h1>
               <p className="text-lg text-gray-600 max-w-3xl">Transforming abstract $/PFLOP-year into market-comparable $/GPU-hour with SLA tiers and inference token pricing.</p>
             </div>
-            <div className="text-right ml-6">
+            <div className="text-right ml-6 flex flex-col gap-2">
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono">
                 <div className="text-blue-900 font-semibold">v2fb6194</div>
                 <div className="text-blue-600">2025-12-19</div>
                 <div className="text-blue-500 mt-1">Scarcity Rent</div>
               </div>
+              <button
+                onClick={handleExportCharts}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-colors"
+              >
+                Export Charts
+              </button>
             </div>
           </div>
         </div>
@@ -793,18 +838,31 @@ export default function ComparePage() {
               }));
               
               // Explicitly set YAxis domain from validated values (so nulls don't confuse)
-              const vals = chartData.flatMap(d => [d.orbitalPrice, d.groundPrice, d.aws, d.coreweave]).filter((v): v is number => typeof v === 'number');
-              const yMin = vals.length ? Math.min(...vals) : 0;
-              const yMax = vals.length ? Math.max(...vals) : 10;
-              const yDomain: [number, number] = [Math.max(0, yMin * 0.9), yMax * 1.1];
+              const vals = chartData.flatMap(d => [d.orbitalPrice, d.groundPrice, d.aws, d.coreweave])
+                .filter((v): v is number => typeof v === 'number' && isFinite(v) && v > 0 && v < 1000);
+              
+              // Ensure sane defaults
+              const yMin = vals.length > 0 ? Math.min(...vals) : 0;
+              const yMax = vals.length > 0 ? Math.max(...vals) : 30;
+              const yDomain: [number, number] = [
+                Math.max(0, Math.floor(yMin * 0.9)), 
+                Math.ceil(yMax * 1.1)
+              ];
               
               return (
-                <div className="h-[350px]">
+                <div className="h-[350px]" data-chart-id="gpu-hour-pricing-chart">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} domain={yDomain} label={{ value: '$/GPU-Hour', angle: -90, position: 'insideLeft', style: { fontSize: '10px', fill: '#64748b', fontWeight: 700 } }} />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 10 }} 
+                        domain={yDomain} 
+                        tickFormatter={(value) => `$${value.toFixed(2)}`}
+                        label={{ value: '$/GPU-Hour', angle: -90, position: 'insideLeft', style: { fontSize: '10px', fill: '#64748b', fontWeight: 700 } }} 
+                      />
                       <Tooltip content={<CustomWaterfallTooltip />} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingBottom: '20px' }} />
                       <Line type="monotone" dataKey="orbitalPrice" stroke="#2563eb" strokeWidth={4} dot={false} name="Orbital GPU-Hour" />
@@ -821,7 +879,7 @@ export default function ComparePage() {
           <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
             <h3 className="text-lg font-black mb-1">Inference Cost (Llama 70B)</h3>
             <p className="text-[10px] text-cyan-600 uppercase font-bold tracking-widest mb-6">Market Benchmark: $/1K Tokens</p>
-            <div className="h-[350px]">
+            <div className="h-[350px]" data-chart-id="inference-cost-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trajectoryData.map(d => ({
                   year: d.year,
@@ -1213,7 +1271,7 @@ export default function ComparePage() {
           <div className="border border-gray-200 rounded-2xl p-6 bg-gray-50 shadow-sm">
             <h3 className="text-lg font-bold mb-1">Ground Buildout Constraints (GW)</h3>
             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-4">Demand vs Capacity & Queue Metrics</p>
-            <div className="h-[300px]">
+            <div className="h-[300px]" data-chart-id="ground-buildout-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={(() => {
                   try {

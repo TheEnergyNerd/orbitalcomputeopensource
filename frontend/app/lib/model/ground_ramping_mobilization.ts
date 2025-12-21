@@ -453,7 +453,15 @@ export function stepMobilizationState(
   const backlogGWPrev = prevState?.backlogGW ?? 0;
   const buildableGW = buildRateGWyr;
   const implicitBacklogDrain = (orbitalSubstitutionGW ?? 0) * 0.5; // 50% of shifted demand was in backlog
-  const backlogGW = Math.max(0, backlogGWPrev + demandNewGW - buildableGW - implicitBacklogDrain);
+  
+  // NEW: Backlog can drain when demand falls below buildout
+  const netDemandChange = demandNewGW - buildableGW;
+  
+  // If orbital substitution caused demand to drop, backlog drains faster
+  const demandDropFromPrev = Math.max(0, (prevState?.demandGW ?? demandGW) - demandGW);
+  const substitutionDrain = demandDropFromPrev * 0.3; // 30% of demand drop was from backlog
+  
+  const backlogGW = Math.max(0, backlogGWPrev + netDemandChange - substitutionDrain - implicitBacklogDrain);
   
   // Hard assert: If demandNewGw(t) > buildRateGwYear(t), backlogGw must increase
   if (process.env.NODE_ENV === 'development') {
