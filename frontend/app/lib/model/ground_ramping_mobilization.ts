@@ -368,15 +368,30 @@ export function stepMobilizationState(
   params: MobilizationScenarioParams,
   year: number,
   pue: number = 1.3,
-  retirementsGW: number = 0 // Optional retirements (default 0)
+  retirementsGW: number = 0, // Optional retirements (default 0)
+  orbitalSubstitutionGW?: number, // Optional: demand shifted to orbital (for backlog drain)
+  responsiveDemandGW?: number // Optional: responsive demand (overrides hardcoded calculateDemandGW)
 ): MobilizationResult {
-  // Calculate demand
-  const demandGW = calculateDemandGW(year, params, pue);
-  const demandGWPrev = prevState?.demandGW ?? calculateDemandGW(year - 1, params, pue);
+  // Calculate demand: use responsive demand if provided, otherwise use hardcoded
+  const demandGW = responsiveDemandGW !== undefined 
+    ? responsiveDemandGW * pue // Convert IT load to facility load
+    : calculateDemandGW(year, params, pue);
+  const demandGWPrev = prevState?.demandGW ?? (responsiveDemandGW !== undefined 
+    ? responsiveDemandGW * pue 
+    : calculateDemandGW(year - 1, params, pue));
   const demandNewGW = Math.max(0, demandGW - demandGWPrev);
   
   // Calculate build rate candidate (from anchors)
-  const buildRateCandidate = calculateBuildRateGWyr(year, params);
+  let buildRateCandidate = calculateBuildRateGWyr(year, params);
+  
+  // NEW: If ground demand is falling (due to orbital substitution or price elasticity),
+  // buildout should slow down (no one builds capacity for declining market)
+  const demandGrowthRate = prevState?.demandGW ? (demandGW - prevState.demandGW) / Math.max(prevState.demandGW, 1) : 0;
+  if (demandGrowthRate < 0) {
+    // Demand is shrinking - reduce buildout
+    const contractionFactor = Math.max(0.5, 1 + demandGrowthRate * 2); // At most 50% reduction
+    buildRateCandidate = buildRateCandidate * contractionFactor;
+  }
   
   // Apply bottleneck constraints if enabled
   const bottleneckMode = params.bottleneckMode ?? 'min_of_bottlenecks';
@@ -431,10 +446,14 @@ export function stepMobilizationState(
   const pipelineGW = buildRateGWyr * params.pipelineLeadTimeYears * params.pipelineFillFrac;
   
   // Calculate backlog
-  // backlogGw(t) = max(0, backlogGw(t-1) + demandNewGw(t) - buildableGw(t))
+  // backlogGw(t) = max(0, backlogGw(t-1) + demandNewGw(t) - buildableGw(t) - implicitBacklogDrain)
+  // NEW: Backlog can also be satisfied by demand shifting to orbital
+  // When demand shifts to orbital, "implicit backlog drain" occurs
+  // because customers who were waiting for ground now use orbital instead
   const backlogGWPrev = prevState?.backlogGW ?? 0;
   const buildableGW = buildRateGWyr;
-  const backlogGW = Math.max(0, backlogGWPrev + demandNewGW - buildableGW);
+  const implicitBacklogDrain = (orbitalSubstitutionGW ?? 0) * 0.5; // 50% of shifted demand was in backlog
+  const backlogGW = Math.max(0, backlogGWPrev + demandNewGW - buildableGW - implicitBacklogDrain);
   
   // Hard assert: If demandNewGw(t) > buildRateGwYear(t), backlogGw must increase
   if (process.env.NODE_ENV === 'development') {

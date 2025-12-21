@@ -1037,12 +1037,17 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     const prevMobilizationState: MobilizationState | null = (params as any).prevMobilizationState ?? null;
     
     // Step mobilization state forward
+    // Pass responsive demand and orbital substitution if available (from trajectory.ts)
+    const responsiveDemandGW = (params as any).responsiveDemandGW as number | undefined;
+    const orbitalSubstitutionGW = (params as any).orbitalSubstitutionGW as number | undefined;
     const mobilizationResult = stepMobilizationState(
       prevMobilizationState,
       mobilizationParams,
       year,
       effectivePueGround,
-      0 // retirementsGW = 0 for now
+      0, // retirementsGW = 0 for now
+      orbitalSubstitutionGW, // Pass orbital substitution for backlog drain
+      responsiveDemandGW // Pass responsive demand (overrides hardcoded)
     );
     
     // Extract values from mobilization model

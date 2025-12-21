@@ -332,6 +332,7 @@ export const MARKET_PROVIDERS = [
 //   - Facility_GW(t) = IT_GW(t) * PUE(t)  (hits transmission/substation constraints)
 //   - DemandNewGW(t) = max(0, Facility_GW(t) - Facility_GW(t-1))
 
+// LEGACY: Hardcoded demand anchors (kept for backward compatibility, but replaced by responsive demand)
 const IT_GW_2025 = 120; // Baseline installed IT load in 2025 (GW)
 const IT_GW_2040_TARGET = 450; // Target installed IT load in 2040 (GW)
 const IT_GW_2060_TARGET = 3000; // Target installed IT load in 2060 (GW)
@@ -339,6 +340,74 @@ const IT_GW_2060_TARGET = 3000; // Target installed IT load in 2060 (GW)
 // Calculate growth rates
 const R1 = Math.log(IT_GW_2040_TARGET / IT_GW_2025) / 15; // Growth rate 2025-2040
 const R2 = Math.log(IT_GW_2060_TARGET / IT_GW_2040_TARGET) / 20; // Growth rate 2040-2060
+
+/**
+ * Demand state for responsive demand calculation
+ */
+export interface DemandState {
+  year: number;
+  baselineGW: number;        // What demand WOULD be without constraints
+  effectiveGW: number;       // Actual demand after price/wait response
+  groundDemandGW: number;    // Demand for ground compute
+  orbitalDemandGW: number;   // Demand shifted to orbital
+}
+
+/**
+ * Calculate price-responsive demand that creates S-curve
+ * 
+ * Demand responds to:
+ * - Price elasticity: higher ground prices reduce demand
+ * - Wait elasticity: longer waits reduce demand
+ * - Orbital substitution: if orbital cheaper, demand shifts
+ */
+export function calculateResponsiveDemand(
+  year: number,
+  groundPricePerGpuHour: number,
+  orbitalPricePerGpuHour: number,
+  avgWaitYears: number,
+  prevDemandState: DemandState | null
+): DemandState {
+  // Baseline demand: 10% CAGR from 120 GW, TAPERED after 20 years
+  const yearsFrom2025 = year - 2025;
+  const growthRate = 0.10; // 10% CAGR
+  const taper = 1 / (1 + Math.exp((yearsFrom2025 - 20) / 5)); // Tapers after 2045
+  const effectiveGrowth = growthRate * (0.5 + 0.5 * taper); // 10% -> 5% CAGR
+  const baselineGW = 120 * Math.pow(1 + effectiveGrowth, yearsFrom2025);
+  
+  // Price elasticity: demand drops as ground price rises
+  const baselinePrice = 4.00; // $/GPU-hr reference
+  const priceRatio = groundPricePerGpuHour / baselinePrice;
+  const priceElasticity = -0.3; // 30% drop per 100% price increase
+  const priceFactor = Math.pow(priceRatio, priceElasticity);
+  
+  // Wait elasticity: demand drops with longer waits
+  const waitElasticity = -0.15; // 15% drop per 5yr wait
+  const waitFactor = Math.exp(avgWaitYears * waitElasticity / 5);
+  
+  // Effective total demand (may shift to orbital)
+  const effectiveGW = baselineGW * priceFactor * waitFactor;
+  
+  // Orbital substitution: if orbital < ground, demand shifts
+  const groundOrbitalRatio = groundPricePerGpuHour / Math.max(orbitalPricePerGpuHour, 0.01);
+  let orbitalShare = 0;
+  if (groundOrbitalRatio > 1.0) {
+    // Orbital is cheaper - logistic shift
+    // At ratio 1.5 (ground 50% more): ~30% shifts to orbital
+    // At ratio 2.0 (ground 100% more): ~60% shifts to orbital
+    orbitalShare = 1 / (1 + Math.exp(-2 * (groundOrbitalRatio - 1.3)));
+  }
+  
+  const orbitalDemandGW = effectiveGW * orbitalShare;
+  const groundDemandGW = effectiveGW * (1 - orbitalShare);
+  
+  return {
+    year,
+    baselineGW,
+    effectiveGW,
+    groundDemandGW,
+    orbitalDemandGW,
+  };
+}
 
 /**
  * Calculate installed IT load (GW) for a given year
@@ -396,6 +465,10 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
   const BASELINE_MASS_KG = 1_000_000; // 1M kg baseline for doublings calculation
   const LAUNCH_COST_0_PER_KG = 1500; // Initial launch cost in 2025
   
+  // Responsive demand: Track demand state across years for S-curve behavior
+  let prevDemandState: DemandState | null = null;
+  let prevYearBreakdown: YearlyBreakdown | null = null;
+  
   // Buildout state: Track across years for backlog calculation
   let buildoutState: import('./ground_buildout').BuildoutState | null = null;
   
@@ -433,12 +506,34 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
       paramsWithLaunchCost = { ...params, launchCostKg: launchCostPerKg };
     }
 
-    // Pass firstCapYear and mobilizationState to computePhysicsCost
-    // Add mobilization state to params so it can be used for backlog calculation
+    // SINGLE SOURCE OF TRUTH: compute demand in GW using RESPONSIVE demand
+    // Demand responds to prices, wait times, and orbital substitution (creates S-curve)
+    // NOTE: We use PREVIOUS year's prices to calculate current year's demand (avoids circular dependency)
+    const groundPue = params.pueGround ?? 1.3;
+    
+    // Get prices from previous year (or estimates for first year)
+    const prevGroundPrice = prevYearBreakdown?.ground?.gpuHourPricing?.standard?.pricePerGpuHour ?? 4.00;
+    const prevOrbitalPrice = prevYearBreakdown?.orbit?.gpuHourPricing?.standard?.pricePerGpuHour ?? 25.00;
+    const prevAvgWait = prevYearBreakdown?.ground?.supplyMetrics?.avgWaitYears ?? 0;
+    
+    // Calculate responsive demand (price/wait elastic, orbital substitution)
+    const demandState = calculateResponsiveDemand(
+      year,
+      prevGroundPrice,
+      prevOrbitalPrice,
+      prevAvgWait,
+      prevDemandState
+    );
+    prevDemandState = demandState;
+    
+    // Pass firstCapYear, mobilizationState, and responsive demand to computePhysicsCost
+    // Add mobilization state and responsive demand to params so they can be used for backlog calculation
     const paramsWithMobilization = {
       ...paramsWithLaunchCost,
       prevMobilizationState: mobilizationState,
-    } as any; // Type assertion needed since YearParams doesn't include prevMobilizationState
+      responsiveDemandGW: demandState.groundDemandGW, // Responsive ground demand (IT load, not facility)
+      orbitalSubstitutionGW: demandState.orbitalDemandGW, // Demand shifted to orbital (for backlog drain)
+    } as any; // Type assertion needed since YearParams doesn't include these fields
     const breakdown = computePhysicsCost(paramsWithMobilization, firstCapYear);
     
     // Update launch learning state with actual mass from breakdown (for next iteration)
@@ -456,10 +551,10 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
       }
     }
     
-    // SINGLE SOURCE OF TRUTH: compute demand in GW
-    // Use getDemandProjection (IT load) then multiply by PUE to get facility load
-    const groundPue = breakdown.ground?.pue ?? params.pueGround ?? 1.3;
-    const demandComputeGW = getFacilityLoadGW(year, groundPue); // Facility load = IT load * PUE
+    // Use responsive ground demand (facility load = ground demand * PUE)
+    const actualGroundPue = breakdown.ground?.pue ?? groundPue;
+    const demandComputeGW = demandState.groundDemandGW * actualGroundPue; // Convert IT load to facility load
+    const orbitalDemandGW = demandState.orbitalDemandGW * actualGroundPue; // For orbital capacity planning
     
     // CRITICAL: Ensure ground.buildoutDebug.demandGW matches single source of truth
     // Override any value from buildout model to ensure consistency
@@ -631,6 +726,9 @@ export function computeTrajectory(options: TrajectoryOptions): YearlyBreakdown[]
     }
     
     trajectory.push(breakdown);
+    
+    // Update previous year breakdown for next iteration (for responsive demand calculation)
+    prevYearBreakdown = breakdown;
   }
 
   return trajectory;
