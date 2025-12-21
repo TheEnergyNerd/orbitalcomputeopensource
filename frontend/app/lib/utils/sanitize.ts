@@ -14,7 +14,7 @@
  */
 export function sanitizeFinite(
   x: number | null | undefined, 
-  options?: { min?: number; max?: number; fallback?: number }
+  options?: { min?: number; max?: number; fallback?: number | null }
 ): number | null {
   const fallback = options?.fallback ?? null;
   const min = options?.min;

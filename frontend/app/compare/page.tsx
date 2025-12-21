@@ -782,8 +782,8 @@ export default function ComparePage() {
               
               const chartData = trajectoryData.map(d => ({
                 year: d.year,
-                orbitalPrice: clampGpuHour(d.orbit?.gpuHourPricing?.[slaTier]?.pricePerGpuHour),
-                groundPrice: clampGpuHour(d.ground?.gpuHourPricing?.[slaTier]?.pricePerGpuHour),
+                orbitalPrice: clampGpuHour(d.orbit?.gpuHourPricing?.[slaTier]?.pricePerGpuHour) ?? null,
+                groundPrice: clampGpuHour(d.ground?.gpuHourPricing?.[slaTier]?.pricePerGpuHour) ?? null,
                 aws: 4.50,
                 coreweave: 2.23,
                 breakdown: {
