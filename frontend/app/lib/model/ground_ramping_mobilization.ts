@@ -376,9 +376,18 @@ export function stepMobilizationState(
   const demandGW = responsiveDemandGW !== undefined 
     ? responsiveDemandGW * pue // Convert IT load to facility load
     : calculateDemandGW(year, params, pue);
-  const demandGWPrev = prevState?.demandGW ?? (responsiveDemandGW !== undefined 
-    ? responsiveDemandGW * pue 
-    : calculateDemandGW(year - 1, params, pue));
+  
+  // Fix 2: Calculate demandGWPrev correctly (don't use same responsiveDemandGW for both years)
+  let demandGWPrev: number;
+  if (prevState?.demandGW !== undefined) {
+    demandGWPrev = prevState.demandGW;
+  } else if (responsiveDemandGW !== undefined) {
+    // For first year, estimate previous year's demand using hardcoded calculation
+    // Don't use same responsiveDemandGW for both current and previous year
+    demandGWPrev = calculateDemandGW(year - 1, params, pue);
+  } else {
+    demandGWPrev = calculateDemandGW(year - 1, params, pue);
+  }
   const demandNewGW = Math.max(0, demandGW - demandGWPrev);
   
   // Calculate build rate candidate (from anchors)
@@ -450,7 +459,9 @@ export function stepMobilizationState(
   // NEW: Backlog can also be satisfied by demand shifting to orbital
   // When demand shifts to orbital, "implicit backlog drain" occurs
   // because customers who were waiting for ground now use orbital instead
-  const backlogGWPrev = prevState?.backlogGW ?? 0;
+  // Fix 1: Initialize with baseline backlog if no previous state
+  const INITIAL_BACKLOG_GW = 50; // Same as queue model
+  const backlogGWPrev = prevState?.backlogGW ?? INITIAL_BACKLOG_GW;
   const buildableGW = buildRateGWyr;
   const implicitBacklogDrain = (orbitalSubstitutionGW ?? 0) * 0.5; // 50% of shifted demand was in backlog
   
@@ -461,7 +472,11 @@ export function stepMobilizationState(
   const demandDropFromPrev = Math.max(0, (prevState?.demandGW ?? demandGW) - demandGW);
   const substitutionDrain = demandDropFromPrev * 0.3; // 30% of demand drop was from backlog
   
-  const backlogGW = Math.max(0, backlogGWPrev + netDemandChange - substitutionDrain - implicitBacklogDrain);
+  // Fix 3: Ensure backlog reflects demand-capacity gap
+  // If demand >> capacity, backlog must be at least (demand - capacity)
+  const unservedGW = Math.max(0, demandGW - capacityGW);
+  const backlogFloor = unservedGW * 0.5; // At least 50% of unserved is in backlog
+  const backlogGW = Math.max(backlogFloor, Math.max(0, backlogGWPrev + netDemandChange - substitutionDrain - implicitBacklogDrain));
   
   // Hard assert: If demandNewGw(t) > buildRateGwYear(t), backlogGw must increase
   if (process.env.NODE_ENV === 'development') {
@@ -476,8 +491,11 @@ export function stepMobilizationState(
   
   // Calculate average wait time
   // avgWaitYears(t) = backlogGw(t) / max(buildRateGwYear(t), 1e-9)
+  // Fix 4: Add sanity check - if backlog > 0, wait must be > 0
   const EPS = 1e-9;
-  const avgWaitYears = backlogGW / Math.max(buildRateGWyr, EPS);
+  const avgWaitYearsRaw = backlogGW / Math.max(buildRateGWyr, EPS);
+  // If backlog > 0, wait must be > 0
+  const avgWaitYears = backlogGW > 0.1 ? Math.max(0.1, avgWaitYearsRaw) : avgWaitYearsRaw;
   
   // Calculate growth rate (for debug)
   let demandGrowthRate: number;

@@ -163,7 +163,14 @@ export function calculateGroundConstraintPenalties(
   }
 ): GroundConstraintPenalties {
   const backlogGw = state.backlogGw; // Pipeline is not backlog. If backlog is missing, treat as 0 and let chartInputs/buildoutDebug supply the real number elsewhere.
-  const avgWaitYears = state.avgWaitYears;
+  
+  // Fix 5: Add fallback calculation for avgWaitYears if it's 0 but backlog exists
+  // Sanity check: if backlog > buildRate, wait should be > 0
+  const impliedWait = backlogGw > 0 && state.maxBuildRateGwYear > 0 
+    ? backlogGw / Math.max(state.maxBuildRateGwYear, 1) 
+    : 0;
+  const avgWaitYears = Math.max(state.avgWaitYears, impliedWait > 0.1 ? impliedWait : 0);
+  
   const maxBuildRateGwYear = state.maxBuildRateGwYear;
   const utilizationPct = state.utilizationPct;
   
