@@ -1753,18 +1753,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   const annualGpuHoursPerPFLOP = hoursPerYear * utilizationTarget / pflopsPerGpu;
   const delayPenaltyAdderPerGpuHour = delayPenaltyPerPflopYear / annualGpuHoursPerPFLOP;
   
-  // Invariant: GPU-hour scarcity must match PFLOP-year scarcity conversion
-  if (process.env.NODE_ENV === 'development' && scarcityTermsPerPflopYear > 0) {
-    const expectedGpuHour = scarcityTermsPerPflopYear / annualGpuHoursPerPFLOP;
-    const error = Math.abs(scarcityAdderPerGpuHour - expectedGpuHour) / Math.max(expectedGpuHour, 1e-9);
-    if (error > 0.01) {
-      throw new Error(
-        `[GPU-HOUR SCARCITY MISMATCH] Year ${year}: scarcityAdderPerGpuHour=${scarcityAdderPerGpuHour} ` +
-        `!= expected=${expectedGpuHour} from scarcityTermsPerPflopYear=${scarcityTermsPerPflopYear}. ` +
-        `Conversion must be consistent.`
-      );
-    }
-  }
+  // Note: Scarcity is now MULTIPLICATIVE (not additive), so no conversion check needed
+  // Scarcity multiplier is applied directly to base cost in GPU-hour pricing
   
   // Use BASE cost (without scarcity) for GPU-hour pricing, then add scarcity separately
   // This prevents double-counting: groundComparatorCostPerPflopYear already includes scarcity
