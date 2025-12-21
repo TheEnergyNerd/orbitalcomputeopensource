@@ -68,16 +68,29 @@ export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
   const inflightTotalGw = (prev.inflightGw ?? []).reduce((a, b) => a + b, 0);
   
   // New deficit enters backlog (projects that must be built)
-  const deficitGw = Math.max(0, requiredCapacityGw - (prev.capacityGw + inflightTotalGw));
+  const newDeficitGw = Math.max(0, requiredCapacityGw - (prev.capacityGw + inflightTotalGw));
   const backlogGw0 = (prev.backlogGw ?? prev.pipelineGw ?? 0);
-  const backlogGw = backlogGw0 + deficitGw;
   
   // Build rate ramps, but cannot instantly erase the queue
   const buildRateGrowth = 1.05;
   const maxBuildRateGwYear = Math.min(prev.maxBuildRateGwYear * buildRateGrowth, 50);
   
-  // Start construction from backlog (not from "newDemand")
-  const startBuildGw = Math.min(backlogGw, maxBuildRateGwYear);
+  // Build serves BOTH new demand AND backlog (backlog can drain)
+  // Try to clear 15% of backlog per year in addition to new deficit
+  const backlogClearTarget = backlogGw0 * 0.15;
+  const totalToBuild = newDeficitGw + backlogClearTarget;
+  const actualBuilt = Math.min(totalToBuild, maxBuildRateGwYear);
+  
+  // New demand gets priority, then backlog
+  const servedNewDemand = Math.min(newDeficitGw, actualBuilt);
+  const servedBacklog = Math.max(0, actualBuilt - servedNewDemand);
+  const unservedNewDemand = newDeficitGw - servedNewDemand;
+  
+  // Update backlog (conservation: backlog[t+1] = backlog[t] + unserved - served)
+  const updatedBacklogGw = Math.max(0, backlogGw0 + unservedNewDemand - servedBacklog);
+  
+  // Start construction from backlog (projects move into inflight)
+  const startBuildGw = servedBacklog;
   
   // Move GW through lag pipeline
   const inflight = [...(prev.inflightGw ?? Array.from({ length: BUILD_LAG_YEARS }, () => 0))];
@@ -87,13 +100,11 @@ export function stepGroundSupply(prev: GroundSupplyState): GroundSupplyState {
   // Capacity increases only when projects come online
   const capacityGw = prev.capacityGw + onlineNow;
   
-  // Backlog decreases by starts (since they left the queue into inflight)
-  const updatedBacklogGw = Math.max(0, backlogGw - startBuildGw);
-  
-  // Wait time is queue / start rate (bounded)
+  // Wait time is queue / start rate (NO CLAMP - let it go to 100+ years if that's reality)
+  // This follows Little's Law: waitYears = backlog / buildRate
   const effectiveStartRate = Math.max(1e-6, maxBuildRateGwYear);
-  const rawAvgWaitYears = updatedBacklogGw / effectiveStartRate;
-  const avgWaitYears = Math.max(0, Math.min(10, rawAvgWaitYears));
+  const rawAvgWaitYears = updatedBacklogGw > 0 ? updatedBacklogGw / effectiveStartRate : 0;
+  const avgWaitYears = Math.max(0, rawAvgWaitYears); // No upper clamp - preserves scarcity signal
   
   const utilizationPct = Math.min(1.0, demandGw / Math.max(1e-6, capacityGw));
   

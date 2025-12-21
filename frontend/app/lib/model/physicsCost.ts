@@ -887,14 +887,14 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       siteCapexAmortPerPflopYear;
     
     // Calculate scarcity rent using Hill function of avgWaitYears (NOT backlog or utilization)
-    // Parameters: w50=2.0, n=2.0, rentMax=0.65
+    // Uses fixed reference base (doesn't decline with tech) to ensure rent INCREASES with scarcity
+    // Parameters: w50=3.0, n=2.0, rentMax=0.65, utilization threshold=0.85
     const scarcityRentResult = calculateScarcityRent(
       currentSupplyState.avgWaitYears,
-      capexAnnualBasePerPflopYear,
+      currentSupplyState.utilizationPct, // Pass utilization for threshold gate
       {
-        waitCapYears: 10,
-        waitThresholdYears: 2.0, // w50 = 2.0 years (half-saturation)
-        rentMaxFracOfCapexAnnual: 0.65, // rentMax = 65% of annualized capex
+        waitThresholdYears: 3.0, // w50 = 3.0 years (half-saturation) - increased from 2.0
+        rentMaxFracOfCapexAnnual: 0.65, // rentMax = 65% of reference base
         rentShapeP: 2.0, // n = 2.0 (Hill coefficient)
       }
     );
@@ -1120,14 +1120,15 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       buildoutPremiumPerPflopYear; // Include buildout premium as true engineering capex
     
     // Calculate scarcity rent using Hill function (saturating, wait-time-based)
-    // Parameters: w50=2.0, n=2.0, rentMax=0.65
+    // Uses fixed reference base (doesn't decline with tech) to ensure rent INCREASES with scarcity
+    // Parameters: w50=3.0, n=2.0, rentMax=0.65, utilization threshold=0.85
+    const utilizationPct = capacityGW > 0 ? Math.min(1.0, demandNewGW / capacityGW) : 1.0;
     const scarcityRentResult = calculateScarcityRent(
       avgWaitYears,
-      capexAnnualBasePerPflopYear,
+      utilizationPct, // Pass utilization for threshold gate
       {
-        waitCapYears: params.scarcityRentWaitCapYears ?? 10,
-        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 2.0, // w50 = 2.0 years (half-saturation)
-        rentMaxFracOfCapexAnnual: params.scarcityRentMaxFracOfCapexAnnual ?? 0.65, // rentMax = 65% of annualized capex
+        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 3.0, // w50 = 3.0 years (half-saturation)
+        rentMaxFracOfCapexAnnual: params.scarcityRentMaxFracOfCapexAnnual ?? 0.65, // rentMax = 65% of reference base
         rentShapeP: params.scarcityRentShapeP ?? 2.0, // n = 2.0 (Hill coefficient)
       }
     );
