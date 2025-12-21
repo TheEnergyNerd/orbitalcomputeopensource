@@ -386,10 +386,10 @@ export function stepMobilizationState(
   
   // NEW: If ground demand is falling (due to orbital substitution or price elasticity),
   // buildout should slow down (no one builds capacity for declining market)
-  const demandGrowthRate = prevState?.demandGW ? (demandGW - prevState.demandGW) / Math.max(prevState.demandGW, 1) : 0;
-  if (demandGrowthRate < 0) {
+  const demandGrowthRateActual = prevState?.demandGW ? (demandGW - prevState.demandGW) / Math.max(prevState.demandGW, 1) : 0;
+  if (demandGrowthRateActual < 0) {
     // Demand is shrinking - reduce buildout
-    const contractionFactor = Math.max(0.5, 1 + demandGrowthRate * 2); // At most 50% reduction
+    const contractionFactor = Math.max(0.5, 1 + demandGrowthRateActual * 2); // At most 50% reduction
     buildRateCandidate = buildRateCandidate * contractionFactor; // Reassign to let variable
   }
   
