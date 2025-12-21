@@ -90,7 +90,12 @@ export function calculateScarcityRent(
 } {
   const UTIL_THRESHOLD = params?.utilizationThreshold ?? 0.85;
   const WAIT_THRESHOLD = params?.waitThresholdYears ?? 1.0;
-  const RENT_MAX = params?.rentMaxMultiplier ?? 2.0; // 2x max price multiplier
+  
+  // Dynamic rent max that scales with wait time (prevents Moore's Law from canceling scarcity)
+  // At wait=10yr: ~3x, wait=50yr: ~4x, wait=100yr: ~4.5x (log-based, never fully saturates)
+  const baseRentMax = params?.rentMaxMultiplier ?? 2.0;
+  const waitScaling = waitYears > 1 ? Math.log10(waitYears) * 0.5 : 0; // +0.5x per order of magnitude
+  const RENT_MAX = Math.min(5.0, baseRentMax + waitScaling); // Cap at 5x to prevent runaway
   
   // Gate: no scarcity if utilization < 85% AND wait < 1 year
   if (utilizationPct !== undefined && utilizationPct < UTIL_THRESHOLD && waitYears < WAIT_THRESHOLD) {
