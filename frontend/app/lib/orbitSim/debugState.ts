@@ -165,10 +165,38 @@ export interface DebugStateEntry {
   cost_crossover_triggered: boolean;
   
   // --- ECONOMICS (unified debug output) ---
-  cost_per_compute_ground: number; // $ per compute unit (ground)
-  cost_per_compute_orbit: number; // $ per compute unit (orbit)
-  cost_per_compute_mix: number; // $ per compute unit (mixed)
-  raw_cost_per_compute_mix?: number; // Raw (unclamped) cost per compute mix
+  CALIBRATED_COST_INDEX_GROUND: number;
+  CALIBRATED_COST_INDEX_ORBIT: number;
+  CALIBRATED_COST_INDEX_MIX: number;
+  CALIBRATED_COST_INDEX_MIX_RAW?: number;
+  
+  // PHYSICS-DERIVED $/PFLOP-YEAR (Truth Source)
+  physics_cost_per_pflop_year_ground: number;
+  physics_cost_per_pflop_year_orbit: number;
+  physics_cost_per_pflop_year_mix: number;
+  
+  // Waterfall components
+  physics_ground_energy_cost: number;
+  physics_ground_hardware_cost: number;
+  physics_orbit_energy_cost: number;
+  physics_orbit_hardware_cost: number;
+  physics_orbit_congestion_cost: number;
+  physics_orbit_radiation_multiplier: number;
+  physics_orbit_thermal_cap_factor: number;
+  
+  // Detailed Waterfall (BLOCKER 2)
+  optimisticCostPerPflop: number;
+  radiationShieldingCost: number;
+  thermalSystemCost: number;
+  replacementRateCost: number;
+  eccOverheadCost: number;
+  redundancyCost: number;
+  realisticCostPerPflop: number;
+  
+  // Thermal detailed fields (Section 4.3)
+  physics_thermal_requested_kw: number;
+  physics_thermal_max_kw: number;
+  physics_thermal_capped: boolean;
   annual_opex_ground: number; // $ per year (ground)
   annual_opex_ground_all_ground?: number; // $ per year (all-ground baseline)
   annual_opex_orbit: number; // $ per year (orbit)
@@ -205,7 +233,7 @@ export interface DebugStateEntry {
   space_solar_uptime_percent: number; // % time at full power (space-based solar)
   
   // --- SCENARIO DIAGNOSTICS (3) Make the "why" explicit ---
-  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
+  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR" | "MCCALIP_BASELINE";
   scenarioKind?: "bear" | "baseline" | "bull"; // For debugging
   launch_cost_per_kg?: number; // $/kg (scenario-dependent)
   tech_progress_factor?: number; // Tech progress multiplier
@@ -282,7 +310,7 @@ export interface DebugStateEntry {
   eclipse_tolerance_minutes?: number;           // Eclipse duration tolerance
 }
 
-export type ScenarioKey = 'BASELINE' | 'ORBITAL_BEAR' | 'ORBITAL_BULL';
+export type ScenarioKey = 'BASELINE' | 'ORBITAL_BEAR' | 'ORBITAL_BULL' | 'MCCALIP_BASELINE';
 
 export interface DebugState {
   perScenario: Record<ScenarioKey, Record<number, DebugStateEntry>>;
@@ -300,6 +328,7 @@ let debugState: DebugState = {
     BASELINE: {},
     ORBITAL_BEAR: {},
     ORBITAL_BULL: {},
+    MCCALIP_BASELINE: {},
   },
 };
 
@@ -309,6 +338,7 @@ let debugState: DebugState = {
 function getScenarioKey(scenarioMode?: string): ScenarioKey {
   if (scenarioMode === 'ORBITAL_BEAR') return 'ORBITAL_BEAR';
   if (scenarioMode === 'ORBITAL_BULL') return 'ORBITAL_BULL';
+  if (scenarioMode === 'MCCALIP_BASELINE') return 'MCCALIP_BASELINE';
   return 'BASELINE'; // Default to BASELINE
 }
 
@@ -333,6 +363,7 @@ export function getDebugState(): DebugState {
 export function scenarioModeToKey(scenarioMode?: string): ScenarioKey {
   if (scenarioMode === 'ORBITAL_BEAR') return 'ORBITAL_BEAR';
   if (scenarioMode === 'ORBITAL_BULL') return 'ORBITAL_BULL';
+  if (scenarioMode === 'MCCALIP_BASELINE') return 'MCCALIP_BASELINE';
   return 'BASELINE';
 }
 
@@ -355,6 +386,7 @@ export function clearDebugState(): void {
       BASELINE: {},
       ORBITAL_BEAR: {},
       ORBITAL_BULL: {},
+      MCCALIP_BASELINE: {},
     },
   };
 }

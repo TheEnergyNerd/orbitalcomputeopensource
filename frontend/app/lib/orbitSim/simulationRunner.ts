@@ -100,7 +100,7 @@ export function runSimulationFromPlans(
   // OPTIMIZATION: Run scenarios asynchronously to avoid blocking UI
   const startYear = baseConfig.startYear;
   const endYear = baseConfig.startYear + yearPlans.length - 1;
-  const scenariosToRun: Array<"BASELINE" | "ORBITAL_BEAR" | "ORBITAL_BULL"> = ["BASELINE", "ORBITAL_BEAR", "ORBITAL_BULL"];
+  const scenariosToRun: Array<"BASELINE" | "ORBITAL_BEAR" | "ORBITAL_BULL" | "MCCALIP_BASELINE"> = ["BASELINE", "ORBITAL_BEAR", "ORBITAL_BULL", "MCCALIP_BASELINE"];
   
   // Run each scenario and populate debug state
   // OPTIMIZATION: Run other scenarios asynchronously to avoid blocking
@@ -116,21 +116,21 @@ export function runSimulationFromPlans(
     };
     
     scheduleOtherScenarios(() => {
-      scenariosToRun.forEach(scenarioMode => {
+      scenariosToRun.forEach((mode) => {
         try {
-          runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
+          runMultiYearDeployment(startYear, endYear, strategyMap, mode as any);
         } catch (error) {
-          console.error(`[SimulationRunner] Error running scenario ${scenarioMode}:`, error);
+          console.error(`[SimulationRunner] Error running scenario ${mode}:`, error);
         }
       });
     });
   } else {
     // SSR: run synchronously (but this shouldn't happen in client components)
-    scenariosToRun.forEach(scenarioMode => {
+    scenariosToRun.forEach((mode) => {
       try {
-        runMultiYearDeployment(startYear, endYear, strategyMap, scenarioMode);
+        runMultiYearDeployment(startYear, endYear, strategyMap, mode as any);
       } catch (error) {
-        console.error(`[SimulationRunner] Error running scenario ${scenarioMode}:`, error);
+        console.error(`[SimulationRunner] Error running scenario ${mode}:`, error);
       }
     });
   }
@@ -242,6 +242,9 @@ export function runSimulationFromPlans(
     let useDebugState = false;
     let costPerComputeGround: number = 340; // Default fallback
     let costPerComputeMix: number = 340; // Default fallback
+    let physics_cost_per_pflop_year_ground: number = 340;
+    let physics_cost_per_pflop_year_mix: number = 340;
+    let physics_cost_per_pflop_year_orbit: number = 1e7;
     let latencyGroundMs: number = 120; // Default fallback
     let latencyMixMs: number = 120; // Default fallback
     let opexGround: number = 0; // Default fallback
@@ -252,15 +255,18 @@ export function runSimulationFromPlans(
         const debugEntry = getDebugStateEntry(year, scenarioMode);
         
         if (debugEntry && 
-            debugEntry.cost_per_compute_ground !== undefined && 
-            debugEntry.cost_per_compute_mix !== undefined &&
+            debugEntry.physics_cost_per_pflop_year_ground !== undefined && 
+            debugEntry.physics_cost_per_pflop_year_mix !== undefined &&
             debugEntry.latency_ground_ms !== undefined &&
             debugEntry.latency_mix_ms !== undefined &&
             debugEntry.annual_opex_ground !== undefined &&
             debugEntry.annual_opex_mix !== undefined) {
           // Use debug state values (single source of truth)
-          costPerComputeGround = debugEntry.cost_per_compute_ground;
-          costPerComputeMix = debugEntry.cost_per_compute_mix;
+          costPerComputeGround = debugEntry.physics_cost_per_pflop_year_ground;
+          costPerComputeMix = debugEntry.physics_cost_per_pflop_year_mix;
+          physics_cost_per_pflop_year_ground = debugEntry.physics_cost_per_pflop_year_ground;
+          physics_cost_per_pflop_year_mix = debugEntry.physics_cost_per_pflop_year_mix;
+          physics_cost_per_pflop_year_orbit = debugEntry.physics_cost_per_pflop_year_orbit;
           latencyGroundMs = debugEntry.latency_ground_ms;
           latencyMixMs = debugEntry.latency_mix_ms;
           // A. FIX: Use all-ground baseline for ground OPEX display
@@ -453,6 +459,9 @@ export function runSimulationFromPlans(
       chipsTotal,
       costPerComputeGround,
       costPerComputeMix,
+      physics_cost_per_pflop_year_ground,
+      physics_cost_per_pflop_year_mix,
+      physics_cost_per_pflop_year_orbit,
       latencyGroundMs,
       latencyMixMs,
       opexGround,

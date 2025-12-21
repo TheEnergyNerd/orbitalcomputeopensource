@@ -51,7 +51,7 @@ const TUTORIAL_STEPS: Record<number, TutorialStepConfig> = {
   },
   5: {
     title: "Explore World View",
-    description: "Switch to World View tab to see the global deployment map. Click satellites and data centers to see details.",
+    description: "Switch to World View tab to see the global deployment map. Click satellites and data centers to see details. Toggle 'Show Compute Routes' to visualize data flows between satellites and ground sites.",
     highlight: "[data-tutorial-world-tab]",
     requiresWorldTab: true,
     interactionTime: 5000,

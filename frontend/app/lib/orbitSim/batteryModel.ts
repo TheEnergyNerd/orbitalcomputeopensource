@@ -96,3 +96,8 @@ export function calculateBatteryRequirements(
   return { capacityNeededKwh, massKg, costUsd };
 }
 
+
+
+
+
+

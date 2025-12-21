@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Orbital Compute Comparison Debug Data Full",
+  "description": "Comprehensive debug export from astrocompute.dev/compare",
+  "type": "object",
+  "required": ["metadata", "parameters", "pflopBenchmarks", "validations", "sensitivityRankings", "computeEconomicsTrajectory"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["timestamp", "version", "scenario"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "version": { "type": "string" },
+        "scenario": { "type": "string" }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "required": [
+        "shared", "launchCostTrajectory", "specificPowerTrajectory", 
+        "computeEfficiencyTrajectory", "groundConstraints", "spaceConstraints", 
+        "economics", "toggles", "mechanics"
+      ],
+      "properties": {
+        "shared": { "type": "object" },
+        "launchCostTrajectory": { "type": "object" },
+        "specificPowerTrajectory": { "type": "object" },
+        "computeEfficiencyTrajectory": { "type": "object" },
+        "groundConstraints": { "type": "object" },
+        "spaceConstraints": { "type": "object" },
+        "economics": { "type": "object" },
+        "toggles": { "type": "object" },
+        "mechanics": { "type": "object" }
+      }
+    },
+    "pflopBenchmarks": {
+      "type": "object",
+      "required": ["2025", "2032", "2040"],
+      "properties": {
+        "2025": { "type": "object", "properties": { "ground": { "type": "number" }, "orbital": { "type": "number" } } },
+        "2032": { "type": "object", "properties": { "ground": { "type": "number" }, "orbital": { "type": "number" } } },
+        "2040": { "type": "object", "properties": { "ground": { "type": "number" }, "orbital": { "type": "number" } } }
+      }
+    },
+    "validations": {
+      "type": "object",
+      "required": ["agreement2025", "thermalFeasibility", "crossoverDetected"],
+      "properties": {
+        "agreement2025": { 
+          "type": "object",
+          "required": ["passed", "value", "threshold", "myana2025LCOE", "mccalip2025LCOE"]
+        },
+        "thermalFeasibility": {
+          "type": "object",
+          "required": ["passed", "value", "threshold"]
+                },
+        "crossoverDetected": {
+          "type": "object",
+          "required": ["passed", "value"]
+        }
+      }
+    },
+    "sensitivityRankings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+        "required": ["parameter", "impact", "value"],
+            "properties": {
+          "parameter": { "type": "string" },
+          "impact": { "type": "string" },
+          "value": { "type": "number" }
+        }
+      }
+    },
+    "computeEconomicsTrajectory": {
+          "type": "array",
+      "items": {
+      "type": "object",
+        "required": [
+          "year", "groundPFLOPCost", "orbitalPFLOPCost", "isOrbitalCheaper",
+          "orbitalLCOE", "mccalipLCOE", "launchCostKg", "specificPowerWKg"
+        ],
+      "properties": {
+          "year": { "type": "number" },
+          "groundPFLOPCost": { "type": "number" },
+          "orbitalPFLOPCost": { "type": "number" },
+          "isOrbitalCheaper": { "type": "boolean" },
+          "orbitalLCOE": { "type": "number" },
+          "mccalipLCOE": { "type": "number" },
+          "launchCostKg": { "type": "number" },
+          "specificPowerWKg": { "type": "number" }
+        }
+      }
+    }
+  }
+}

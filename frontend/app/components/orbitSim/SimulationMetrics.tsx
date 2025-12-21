@@ -3,6 +3,8 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { getDebugStateEntries, scenarioModeToKey } from "../../lib/orbitSim/debugState";
 import type { YearStep } from "../../lib/orbitSim/simulationConfig";
+import { ExportAllChartsButton } from "./ChartExportButton";
+import type { SLAConfig } from "../../lib/model/orbitalPhysics";
 
 interface SimulationMetricsProps {
   timeline: YearStep[];
@@ -46,23 +48,55 @@ const Sparkline = ({
     );
   }
   
-  // Calculate scale from all values
+  // FIX: Calculate domain to ensure proper visual separation when values are far apart
+  // When orbital and ground start 8x apart, we need to ensure the domain shows this clearly
   const allValues = [...validGround, ...validMix];
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
   
-  // Add padding to range so lines don't touch edges
-  // Also ensure minimum range so close values are still visible
-  const dataRange = dataMax - dataMin;
-  const minRange = dataMax * 0.2; // At least 20% of max value as range
-  const effectiveRange = Math.max(dataRange, minRange);
-  const rangePadding = effectiveRange * 0.15;
+  // CRITICAL: When values are very different (e.g., 8x apart), we need to ensure
+  // the domain doesn't compress them visually. Use absolute padding based on the
+  // larger value, not just relative padding.
+  const ratio = dataMax / Math.max(dataMin, 0.01);
   
-  const min = dataMin - rangePadding;
-  const max = dataMax + rangePadding;
-  const range = max - min || 1;
+  // For large ratios (values far apart), use absolute padding to ensure visual separation
+  // For small ratios (values close), use relative padding
+  let minDomain: number;
+  let maxDomain: number;
   
-  // Convert data to SVG path
+  // CRITICAL FIX: When values are far apart, ensure proper visual separation
+  // The issue is that absolute padding can compress small values to near-zero
+  // Instead, use a minimum domain range to ensure both values are visible
+  if (ratio > 3) {
+    // Values are far apart: ensure minimum visual separation
+    // Use a minimum range of 30% of max to ensure small values are visible
+    const minRange = dataMax * 0.30; // Minimum range is 30% of max
+    const actualRange = dataMax - dataMin;
+    const useRange = Math.max(minRange, actualRange);
+    
+    // Center the domain around the data, but ensure min is not too compressed
+    const center = (dataMin + dataMax) / 2;
+    minDomain = Math.max(0, center - useRange / 2);
+    maxDomain = center + useRange / 2;
+    
+    // Add 10% padding on both sides
+    const padding = useRange * 0.10;
+    minDomain = Math.max(0, minDomain - padding);
+    maxDomain = maxDomain + padding;
+  } else {
+    // Values are close: use relative padding
+    const dataRange = dataMax - dataMin;
+    const paddingFactor = 0.2;
+    minDomain = Math.max(0, dataMin - dataRange * paddingFactor);
+    maxDomain = dataMax + dataRange * paddingFactor;
+  }
+  
+  const effectiveRange = maxDomain - minDomain || 1;
+  const min = minDomain;
+  const max = maxDomain;
+  const range = effectiveRange;
+  
+  // Convert data to SVG path using the calculated domain
   const toPath = (data: number[]) => {
     if (data.length === 0) return '';
     const filtered = data.filter(v => v != null && !isNaN(v) && isFinite(v));
@@ -208,7 +242,8 @@ const MetricCard = ({
   tooltip,
   years,
   onHover,
-  formatFn
+  formatFn,
+  chartId
 }: {
   title: string;
   groundValue: string; 
@@ -221,11 +256,14 @@ const MetricCard = ({
   years?: number[];
   onHover?: (hoverState: { year: number; groundValue: number; mixValue: number; x: number; y: number; formatFn?: (v: number) => string } | null) => void;
   formatFn?: (v: number) => string;
+  chartId?: string;
 }) => {
   const savingsPositive = savings > 0;
   
   return (
-    <div style={{
+    <div 
+      data-chart={chartId}
+      style={{
       background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8))',
       border: '1px solid rgba(0, 240, 255, 0.2)',
       borderRadius: '12px',
@@ -347,15 +385,45 @@ const formatCost = (v: number | null | undefined) => {
   return `$${v.toFixed(0)}/PFLOP`;
 };
 
-const formatComputePerDollar = (costPerPFLOP: number | null | undefined) => {
-  if (costPerPFLOP == null || isNaN(costPerPFLOP) || costPerPFLOP <= 0) return '--';
-  const computePerBillion = 1e9 / costPerPFLOP;
-  if (computePerBillion >= 1e6) {
-    return `${(computePerBillion / 1e6).toFixed(1)}M PFLOPs/$1B`;
-  } else if (computePerBillion >= 1e3) {
-    return `${(computePerBillion / 1e3).toFixed(0)}K PFLOPs/$1B`;
+// Calculate GPU-hour pricing from PFLOP-year cost
+const calculateGpuHourFromPflopYear = (
+  costPerPflopYear: number,
+  sla: SLAConfig = {
+    availabilityTarget: 0.999,
+    maxLatencyToGroundMs: 50,
+    minBandwidthGbps: 10,
+    maxRecoveryTimeMinutes: 15,
+    creditPerViolationPct: 25
   }
-  return `${computePerBillion.toFixed(0)} PFLOPs/$1B`;
+): number => {
+  if (costPerPflopYear == null || isNaN(costPerPflopYear) || costPerPflopYear <= 0) return 0;
+  
+  const pflopsPerGpu = 2.0;
+  const utilizationTarget = 0.85;
+  const operatorMarginPct = 0.20; // 20% margin
+  const hoursPerYear = 8760;
+  
+  const costPerGpuYear = costPerPflopYear * pflopsPerGpu;
+  const effectiveHours = hoursPerYear * utilizationTarget;
+  const basePerHour = costPerGpuYear / effectiveHours;
+  
+  // Add SLA costs
+  const nines = -Math.log10(1 - sla.availabilityTarget);
+  const sparesRatio = 1 + 0.05 * nines;
+  const violationProb = 1 - sla.availabilityTarget;
+  const expectedCreditPerHour = violationProb * sla.creditPerViolationPct / 100;
+  const slaRiskBuffer = basePerHour * expectedCreditPerHour * 2;
+  
+  const totalCostPerHour = basePerHour * sparesRatio + slaRiskBuffer;
+  const margin = totalCostPerHour * operatorMarginPct;
+  const pricePerGpuHour = totalCostPerHour + margin;
+  
+  return pricePerGpuHour;
+};
+
+const formatGpuHour = (v: number | null | undefined) => {
+  if (v == null || isNaN(v) || v <= 0) return '$--/hr';
+  return `$${v.toFixed(2)}/hr`;
 };
 
 const formatLatency = (v: number | null | undefined) => {
@@ -429,14 +497,41 @@ export default function SimulationMetrics({
   // Extract time series for sparklines
   const years = entries.map(e => e.year);
   
+  // Calculate GPU-hour pricing from PFLOP-year costs
+  // Standard SLA: 99.9% availability, 15min recovery, 25% credit
+  const standardSLA: SLAConfig = {
+    availabilityTarget: 0.999,
+    maxLatencyToGroundMs: 50,
+    minBandwidthGbps: 10,
+    maxRecoveryTimeMinutes: 15,
+    creditPerViolationPct: 25
+  };
+  
   const costGround = years.map(y => {
     const entry = entries.find(e => e.year === y);
-    return safeNum(entry?.cost_per_compute_ground);
+    const pflopYearCost = safeNum(entry?.physics_cost_per_pflop_year_ground);
+    return calculateGpuHourFromPflopYear(pflopYearCost, standardSLA);
   });
   const costMix = years.map(y => {
     const entry = entries.find(e => e.year === y);
-    return safeNum(entry?.cost_per_compute_mix);
+    // CRITICAL FIX: Use orbital cost for mix, not mix cost, to show orbital vs ground comparison
+    // In early years, mix = ground (no orbital deployment), so use orbital cost directly
+    const pflopYearCost = safeNum(entry?.physics_cost_per_pflop_year_orbit ?? entry?.physics_cost_per_pflop_year_mix);
+    return calculateGpuHourFromPflopYear(pflopYearCost, standardSLA);
   });
+  
+  // Debug: Log first year values to console (temporary)
+  if (costGround.length > 0 && costMix.length > 0 && typeof window !== 'undefined') {
+    const firstYear = years[0];
+    const firstGround = costGround[0];
+    const firstMix = costMix[0];
+    // Only log once per render to avoid spam
+    if (!(window as any).__gpuHourDebugLogged) {
+      console.log(`[GPU-HOUR DEBUG] Year ${firstYear}: Ground=$${firstGround.toFixed(2)}/hr, Mix/Orbit=$${firstMix.toFixed(2)}/hr, Ratio=${(firstMix / firstGround).toFixed(2)}x`);
+      (window as any).__gpuHourDebugLogged = true;
+      setTimeout(() => { (window as any).__gpuHourDebugLogged = false; }, 1000);
+    }
+  }
   
   const latencyGround = years.map(y => {
     const entry = entries.find(e => e.year === y);
@@ -479,9 +574,11 @@ export default function SimulationMetrics({
     );
   }
   
-  // Safe current values
-  const currentCostGround = safeNum(currentEntry.cost_per_compute_ground);
-  const currentCostMix = safeNum(currentEntry.cost_per_compute_mix);
+  // Safe current values - convert to GPU-hour pricing
+  const currentCostGroundPflop = safeNum(currentEntry.physics_cost_per_pflop_year_ground);
+  const currentCostMixPflop = safeNum(currentEntry.physics_cost_per_pflop_year_mix);
+  const currentCostGround = calculateGpuHourFromPflopYear(currentCostGroundPflop, standardSLA);
+  const currentCostMix = calculateGpuHourFromPflopYear(currentCostMixPflop, standardSLA);
   const currentLatencyGround = safeNum(timeline.find(s => s.year === currentEntry.year)?.latencyGroundMs ?? currentEntry.latency_ground_ms);
   const currentLatencyMix = safeNum(timeline.find(s => s.year === currentEntry.year)?.latencyMixMs ?? currentEntry.latency_mix_ms);
   const currentOpexGround = safeNum(currentEntry.annual_opex_ground_all_ground ?? currentEntry.annual_opex_ground);
@@ -507,24 +604,34 @@ export default function SimulationMetrics({
     <div 
       data-tutorial-metrics-panel
       style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <ExportAllChartsButton />
+        </div>
+        <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
         gap: '16px',
       }}>
         <MetricCard
-          title="Compute Per Dollar"
-          groundValue={formatComputePerDollar(currentCostGround)}
-          mixValue={formatComputePerDollar(currentCostMix)}
-          sparkGround={costGround.map(c => c > 0 ? 1e9 / c : 0)}
-          sparkMix={costMix.map(c => c > 0 ? 1e9 / c : 0)}
+          title="$/GPU-Hour (Standard SLA)"
+          chartId="gpu-hour-pricing-spark"
+          groundValue={formatGpuHour(currentCostGround)}
+          mixValue={formatGpuHour(currentCostMix)}
+          sparkGround={costGround}
+          sparkMix={costMix}
           savings={costSavings}
           years={years}
           onHover={setTooltip}
-          formatFn={(v) => formatComputePerDollar(1e9 / (v > 0 ? v : 1))}
+          formatFn={formatGpuHour}
         />
         
         <MetricCard
           title="Latency"
+            chartId="latency-spark"
           groundValue={formatLatency(currentLatencyGround)}
           mixValue={formatLatency(currentLatencyMix)}
           sparkGround={latencyGround}
@@ -537,6 +644,7 @@ export default function SimulationMetrics({
         
         <MetricCard
           title="Annual OPEX"
+            chartId="opex-spark"
           groundValue={formatOpex(currentOpexGround)}
           mixValue={formatOpex(currentOpexMix)}
           sparkGround={opexGround}
@@ -550,6 +658,7 @@ export default function SimulationMetrics({
         
         <MetricCard
           title="Carbon"
+            chartId="carbon-spark"
           groundValue={formatCarbon(currentCarbonGround)}
           mixValue={formatCarbon(currentCarbonMix)}
           sparkGround={carbonGround}
@@ -559,6 +668,7 @@ export default function SimulationMetrics({
           onHover={setTooltip}
           formatFn={formatCarbon}
         />
+        </div>
         
         {/* Tooltip */}
         {tooltip && tooltip.formatFn && (

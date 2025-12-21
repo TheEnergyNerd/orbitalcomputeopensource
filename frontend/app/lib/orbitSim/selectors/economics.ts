@@ -11,16 +11,16 @@ export interface EconomicsPoint {
 
 /**
  * Build cost per compute series from debug state
- * Uses ground-truth fields: cost_per_compute_ground, cost_per_compute_mix, cost_per_compute_orbit
+ * Uses ground-truth fields: physics_cost_per_pflop_year_ground, physics_cost_per_pflop_year_mix, physics_cost_per_pflop_year_orbit
  */
 export function buildCostPerComputeSeries(years: DebugStateEntry[]): EconomicsPoint[] {
   return years
     .sort((a, b) => a.year - b.year)
     .map(y => ({
       year: y.year,
-      ground: y.cost_per_compute_ground ?? 340, // flat ≈ $340
-      mix: y.cost_per_compute_mix ?? 340, // real mixed cost curve
-      orbit: y.cost_per_compute_orbit, // optional third line
+      ground: y.physics_cost_per_pflop_year_ground ?? 340,
+      mix: y.physics_cost_per_pflop_year_mix ?? 340,
+      orbit: y.physics_cost_per_pflop_year_orbit,
     }));
 }
 
@@ -57,5 +57,8 @@ export function buildAnnualCarbonSeries(years: DebugStateEntry[]): EconomicsPoin
       orbit: y.annual_carbon_orbit,
     }));
 }
+
+
+
 
 

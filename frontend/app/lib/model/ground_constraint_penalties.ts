@@ -58,40 +58,44 @@ export interface GroundConstraintPenalties {
 }
 
 /**
- * Calculate saturating scarcity rent using Hill function (prevents exponential blow-up)
+ * Calculate scarcity multiplier using LOG-BASED function (never fully saturates)
+ * 
+ * Replaces Hill function with log-based approach that can distinguish between
+ * wait=20yr and wait=254yr (unlike Hill which saturates early).
  * 
  * @param waitYears Average wait time (years) - NO CLAMP applied
  * @param utilizationPct Utilization percentage (0-1) - optional threshold gate
- * @param waitThresholdYears Threshold for half-saturation (default 3.0)
- * @param rentMaxFracOfCapexAnnual Maximum rent as fraction of reference base (default 0.65)
- * @param rentShapeP Hill function shape parameter (default 2.0)
- * @returns Scarcity rent per PFLOP-year and debug fields
+ * @param params Optional parameters
+ * @returns Scarcity multiplier (1.0 = no scarcity, 2.0 = 2x price) and debug fields
  */
 export function calculateScarcityRent(
   waitYears: number,
   utilizationPct?: number,
   params?: {
-    waitThresholdYears?: number; // w50 parameter for Hill function
-    rentMaxFracOfCapexAnnual?: number; // rentMax parameter
-    rentShapeP?: number; // n parameter for Hill function
+    waitThresholdYears?: number; // Minimum wait before scarcity activates (default 1.0)
+    rentMaxMultiplier?: number; // Maximum price multiplier (default 2.0 = 2x price)
+    utilizationThreshold?: number; // Utilization threshold (default 0.85)
   }
 ): {
-  scarcityRentPerPflopYear: number;
-  rentFrac: number;
+  scarcityMultiplier: number; // Price multiplier (1.0 = no scarcity, 2.0 = 2x)
+  rentFrac: number; // Rent fraction (0 = no rent, 1.0 = max rent)
   waitEffYears: number;
   // Debug fields
   scarcityHill: {
-    h: number; // Hill function value
+    h: number; // Wait term (log-based)
     rentFrac: number; // Rent fraction after applying rentMax
   };
   avgWaitYearsRaw: number; // Raw wait years (no clamp)
   avgWaitYearsClamped: number; // Same as raw (no clamp applied)
 } {
-  // THRESHOLD GATE: No scarcity rent until utilization > 85%
-  const UTIL_THRESHOLD = 0.85;
-  if (utilizationPct !== undefined && utilizationPct < UTIL_THRESHOLD) {
+  const UTIL_THRESHOLD = params?.utilizationThreshold ?? 0.85;
+  const WAIT_THRESHOLD = params?.waitThresholdYears ?? 1.0;
+  const RENT_MAX = params?.rentMaxMultiplier ?? 2.0; // 2x max price multiplier
+  
+  // Gate: no scarcity if utilization < 85% AND wait < 1 year
+  if (utilizationPct !== undefined && utilizationPct < UTIL_THRESHOLD && waitYears < WAIT_THRESHOLD) {
     return {
-      scarcityRentPerPflopYear: 0,
+      scarcityMultiplier: 1.0,
       rentFrac: 0,
       waitEffYears: waitYears,
       scarcityHill: { h: 0, rentFrac: 0 },
@@ -100,51 +104,32 @@ export function calculateScarcityRent(
     };
   }
   
-  // THRESHOLD GATE: No scarcity rent until wait > 1 year
-  if (waitYears < 1.0) {
-    return {
-      scarcityRentPerPflopYear: 0,
-      rentFrac: 0,
-      waitEffYears: waitYears,
-      scarcityHill: { h: 0, rentFrac: 0 },
-      avgWaitYearsRaw: waitYears,
-      avgWaitYearsClamped: waitYears,
-    };
-  }
+  // Wait term: LOG-BASED (never saturates, but grows slowly)
+  // At wait=1yr: 0, wait=3yr: 0.48, wait=10yr: 1.0, wait=100yr: 2.0, wait=1000yr: 3.0
+  const waitTerm = waitYears > WAIT_THRESHOLD 
+    ? Math.log10(waitYears / WAIT_THRESHOLD) 
+    : 0;
   
-  // Hill function parameters: w50=3.0, n=2.0, rentMax=0.65
-  const w50 = params?.waitThresholdYears ?? 3.0; // Half-saturation point (years) - increased from 2.0
-  const n = params?.rentShapeP ?? 2.0; // Hill coefficient
-  const rentMax = params?.rentMaxFracOfCapexAnnual ?? 0.65; // Max rent = 65% of reference base
+  // Utilization term: sigmoid above threshold
+  const utilExcess = Math.max(0, (utilizationPct ?? 0) - UTIL_THRESHOLD);
+  const utilTerm = utilExcess > 0 
+    ? 1 / (1 + Math.exp(-20 * (utilExcess - 0.05))) // Sharp rise at 90%
+    : 0;
   
-  // Store raw wait years for debug (NO CLAMP)
-  const avgWaitYearsRaw = waitYears;
-  const avgWaitYearsClamped = waitYears; // No clamp - preserves scarcity signal
+  // Combined: scarcity = 1 + min(RENT_MAX - 1, waitTerm * (1 + utilTerm))
+  const rawRent = waitTerm * (1 + utilTerm);
+  const rentFrac = Math.min(RENT_MAX - 1, rawRent);
+  const scarcityMultiplier = 1 + rentFrac;
   
-  // Hill function: h = (w/w50)^n / (1 + (w/w50)^n)
-  // This saturates at 1 as wait increases, preventing exponential growth
-  const w = avgWaitYearsClamped;
-  const x = w / w50;
-  const h = x > 0 ? Math.pow(x, n) / (1 + Math.pow(x, n)) : 0;
-  
-  // Rent fraction: max fraction of reference base
-  const rentFrac = rentMax * h;
-  
-  // FIX: Use fixed reference base that doesn't decline with tech (market clearing price)
-  // This ensures scarcity rent INCREASES with scarcity, not decreases
-  const SCARCITY_RENT_REFERENCE_BASE = 6500; // $/PFLOP-yr (fixed market clearing reference)
-  const scarcityRentPerPflopYear = rentFrac * SCARCITY_RENT_REFERENCE_BASE;
-  
+  // For backward compatibility: return scarcityRentPerPflopYear = 0
+  // (scarcity is now multiplicative, not additive)
   return {
-    scarcityRentPerPflopYear,
+    scarcityMultiplier,
     rentFrac,
-    waitEffYears: avgWaitYearsClamped,
-    scarcityHill: {
-      h,
-      rentFrac,
-    },
-    avgWaitYearsRaw,
-    avgWaitYearsClamped,
+    waitEffYears: waitYears,
+    scarcityHill: { h: waitTerm, rentFrac },
+    avgWaitYearsRaw: waitYears,
+    avgWaitYearsClamped: waitYears,
   };
 }
 

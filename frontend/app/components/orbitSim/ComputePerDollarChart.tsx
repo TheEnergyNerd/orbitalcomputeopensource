@@ -56,8 +56,8 @@ export default function ComputePerDollarChart({ timeline, scenarioMode }: Comput
     return timeline.map(step => {
       const debugEntry = entryMap.get(step.year);
       if (!debugEntry) {
-        const groundCost = step.costPerComputeGround ?? 280;
-        const mixCost = step.costPerComputeMix ?? 280;
+        const groundCost = step.physics_cost_per_pflop_year_ground ?? 280;
+        const mixCost = step.physics_cost_per_pflop_year_mix ?? 280;
         return {
           ...step,
           computePerDollarGround: calculateComputePerDollar(groundCost),
@@ -65,8 +65,8 @@ export default function ComputePerDollarChart({ timeline, scenarioMode }: Comput
         };
       }
 
-      const groundCost = debugEntry.cost_per_compute_ground ?? 280;
-      const mixCost = debugEntry.cost_per_compute_mix ?? 280;
+      const groundCost = debugEntry.physics_cost_per_pflop_year_ground ?? 280;
+      const mixCost = debugEntry.physics_cost_per_pflop_year_mix ?? 280;
       
       return {
         ...step,
@@ -84,7 +84,7 @@ export default function ComputePerDollarChart({ timeline, scenarioMode }: Comput
         </div>
       )}
       <KpiCard
-        title="Compute Per Dollar"
+        title="CALIBRATED COST INDEX"
         timeline={transformedTimeline}
         groundKey="computePerDollarGround"
         mixKey="computePerDollarMix"

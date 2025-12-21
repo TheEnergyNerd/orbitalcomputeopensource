@@ -27,7 +27,7 @@ export default function CeilingStackChart({ debugState, fullScreen = false }: Ce
       if (!entry || typeof entry !== 'object' || !('compute_raw_flops' in entry)) {
         // Only warn if year is a valid number (not NaN)
         if (!isNaN(year)) {
-          console.warn(`[CeilingStackChart] No entry for year ${year}`);
+        console.warn(`[CeilingStackChart] No entry for year ${year}`);
         }
         return null;
       }

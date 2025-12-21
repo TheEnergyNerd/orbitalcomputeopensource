@@ -569,7 +569,7 @@ const injectStyles = () => {
 // COMPONENTS
 // ============================================================================
 
-const Slider = ({ label, value, onChange, min, max, step = 1, unit = '', help = '', disabled = false }: {
+const Slider = ({ label, value, onChange, min, max, step = 1, unit = '', help = '', disabled = false, sourceId }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
@@ -579,13 +579,50 @@ const Slider = ({ label, value, onChange, min, max, step = 1, unit = '', help = 
   unit?: string;
   help?: string;
   disabled?: boolean;
+  sourceId?: string;
 }) => {
   const percentage = ((value - min) / (max - min)) * 100;
+  
+  const scrollToSource = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (sourceId) {
+      const element = document.getElementById(`math-section-${sourceId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Expand the section if collapsed
+        const button = element.querySelector('button');
+        if (button && button.getAttribute('aria-expanded') === 'false') {
+          button.click();
+        }
+      }
+    }
+  };
   
   return (
     <div style={styles.sliderContainer}>
       <div style={styles.sliderLabel}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         <span style={styles.sliderLabelText}>{label}</span>
+          {sourceId && (
+            <a
+              href={`#math-section-${sourceId}`}
+              onClick={scrollToSource}
+              style={{
+                color: '#64748b',
+                fontSize: '10px',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                transition: 'color 0.2s ease',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#00f0ff'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+              title="View source"
+            >
+              ⓘ
+            </a>
+          )}
+        </span>
         <span style={styles.sliderValue}>
           {typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value}
           <span style={{ color: '#64748b', fontWeight: 400 }}>{unit}</span>
@@ -662,7 +699,7 @@ const UtilizationGauge = ({ value, label, thresholds = { warning: 0.7, critical:
   );
 };
 
-const LiveValue = ({ label, value, unit = '' }: { label: string; value: string | number; unit?: string }) => {
+const LiveValue = ({ label, value, unit = '', sourceId }: { label: string; value: string | number; unit?: string; sourceId?: string }) => {
   const [flash, setFlash] = useState(false);
   
   useEffect(() => {
@@ -670,6 +707,22 @@ const LiveValue = ({ label, value, unit = '' }: { label: string; value: string |
     const timer = setTimeout(() => setFlash(false), 300);
     return () => clearTimeout(timer);
   }, [value]);
+  
+  const scrollToSource = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (sourceId) {
+      const element = document.getElementById(`math-section-${sourceId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Expand the section if collapsed
+        const button = element.querySelector('button');
+        if (button && button.getAttribute('aria-expanded') === 'false') {
+          button.click();
+        }
+      }
+    }
+  };
   
   return (
     <div style={{ 
@@ -682,6 +735,7 @@ const LiveValue = ({ label, value, unit = '' }: { label: string; value: string |
       transition: 'background 0.3s ease',
     }}>
       <span style={{ color: '#64748b', fontSize: '10px', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <span style={{ 
         color: '#00f0ff', 
         fontSize: '13px', 
@@ -690,7 +744,250 @@ const LiveValue = ({ label, value, unit = '' }: { label: string; value: string |
       }}>
         {typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 1 }) : value}
         <span style={{ color: '#64748b', fontWeight: 400, marginLeft: '2px' }}>{unit}</span>
+        </span>
+        {sourceId && (
+          <a
+            href={`#math-section-${sourceId}`}
+            onClick={scrollToSource}
+            style={{
+              color: '#64748b',
+              fontSize: '12px',
+              textDecoration: 'none',
+              cursor: 'pointer',
+              marginLeft: '4px',
+              transition: 'color 0.2s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#00f0ff'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+            title="View source"
+          >
+            ⓘ
+          </a>
+        )}
       </span>
+    </div>
+  );
+};
+
+// Equations and sources data organized by section
+const EQUATIONS_AND_SOURCES = {
+  thermal: {
+    equations: `Heat Rejected:     Q = εσAT⁴
+
+                   Q = heat rejected (W)
+                   ε = emissivity (0-1)
+                   σ = 5.67 × 10⁻⁸ W/m²K⁴ (Stefan-Boltzmann constant)
+                   A = radiator area (m²)
+                   T = temperature (K)
+
+Radiator Area:     A_rad = Q_waste / (εσT⁴)
+
+Utilization:       U = Q_generated / Q_max_rejection
+
+Margin:            M = 1 - U`,
+    sources: [
+      { parameter: 'Emissivity', value: '0.85-0.95', source: 'NASA Thermal Control Handbook, Chapter 4' },
+      { parameter: 'Operating Temp', value: '25-80°C', source: 'GPU thermal limits (NVIDIA H100 spec: 83°C max)' },
+      { parameter: 'Stefan-Boltzmann', value: '5.67×10⁻⁸ W/m²K⁴', source: 'Physical constant' },
+      { parameter: 'Thin-film radiators', value: '2-5 kg/m²', source: 'Roccor & NASA deployable radiator studies' },
+    ],
+  },
+  compute: {
+    equations: `Compute per Sat:   C = TDP × efficiency
+                   C = compute (FLOPS)
+                   TDP = thermal design power (W)
+                   efficiency = GFLOPS/W
+
+Efficiency Trend:  η(t) = η₀ × 2^(t/doubling_time)
+                   (Moore's Law for compute efficiency)
+
+Radiation Loss:    C_effective = C × (1 - ECC_overhead) × (1 - failure_rate)^years
+
+Process Scaling:   Radiation sensitivity ∝ 1/node_size
+                   (Smaller = more vulnerable)`,
+    sources: [
+      { parameter: 'GFLOPS/W', value: '3-5 (current)', source: 'NVIDIA H100: 3.9 TFLOPS/W (FP8)' },
+      { parameter: "Moore's Law pace", value: '2-3 yr doubling', source: 'Historical trend 1965-2024; slowing to ~2.5yr' },
+      { parameter: 'ECC overhead', value: '10-15%', source: 'IBM/NASA radiation studies for LEO' },
+      { parameter: 'Failure rate', value: '2-5%/yr', source: 'Starlink failure data, ESA reliability reports' },
+      { parameter: 'Radiation hardening penalty', value: '2-10x perf loss', source: 'BAE, Cobham rad-hard chip specs' },
+    ],
+  },
+  power: {
+    equations: `Power Generated:   P = A × S × η × cos(θ) × (1-d)^t
+                   A = array area (m²)
+                   S = 1,361 W/m² (solar constant, AM0)
+                   η = cell efficiency
+                   θ = sun angle (0° for sun-tracking)
+                   d = degradation rate per year
+                   t = years in orbit
+
+Battery Sizing:    E_batt = P_load × t_eclipse / η_discharge
+                   t_eclipse ≈ 35 min max in LEO
+
+10-Year Power:     P_10yr = P_initial × (1-d)^10`,
+    sources: [
+      { parameter: 'Solar constant', value: '1,361 W/m²', source: 'NASA, measured at 1 AU' },
+      { parameter: 'Triple-junction efficiency', value: '30-32%', source: 'SpectroLab, Azur Space datasheets' },
+      { parameter: 'Perovskite tandem', value: '40%+', source: 'NREL efficiency chart 2024, Oxford PV' },
+      { parameter: 'Degradation rate', value: '1-3%/yr', source: 'NASA LDEF data, Starlink estimates' },
+      { parameter: 'Battery density', value: '250-300 Wh/kg', source: 'Li-ion current; 350+ for solid-state roadmap' },
+      { parameter: 'Battery cost', value: '$100-200/kWh', source: 'BloombergNEF 2024, space-rated 2-3x premium' },
+      { parameter: 'Eclipse duration', value: '35 min max', source: 'Orbital mechanics, LEO worst case' },
+    ],
+  },
+  backhaul: {
+    equations: `Link Capacity:     C_link = N_terminals × BW_per_link × utilization
+
+Latency:           t = 2h/c + t_routing + t_processing
+                   h = altitude (km)
+                   c = 3×10⁸ m/s (speed of light)
+                   t_routing = hops × switch_delay
+
+Aggregate BW:      BW_total = satellites × links_per_sat × capacity_per_link
+
+Ground Coverage:   Must have line-of-sight to ground station
+                   LEO sat visible ~3-5 min per pass`,
+    sources: [
+      { parameter: 'Optical link capacity', value: '100 Gbps', source: 'Starlink laser links (Mynaric, Tesat specs)' },
+      { parameter: 'Roadmap capacity', value: '200+ Gbps', source: 'ESA ScyLight program, CACI studies' },
+      { parameter: 'Starlink laser links', value: '42,000 deployed', source: 'SpaceX FCC filings 2024' },
+      { parameter: 'LEO latency', value: '20-40ms', source: 'Starlink measured performance' },
+      { parameter: 'GEO latency', value: '600ms+', source: 'HughesNet/Viasat measured' },
+      { parameter: 'Ground stations', value: '100+ needed', source: 'Based on coverage geometry' },
+    ],
+  },
+  maintenance: {
+    equations: `Failures per Year: F = N × r
+                   N = fleet size
+                   r = failure rate (%/yr)
+
+Replacement Rate:  R = F - repairs
+
+Steady State:      dN/dt = launches - failures - deorbits
+                   For stable fleet: launches ≥ failures
+
+Fleet Half-life:   t_½ = ln(2) / failure_rate
+
+Survival Rate:     S(t) = (1 - r)^t
+                   10yr survival at 4.5%/yr = 63%`,
+    sources: [
+      { parameter: 'Starlink failure rate', value: '3-5%/yr', source: 'Jonathan McDowell tracking data' },
+      { parameter: 'Design lifetime', value: '5-7 years', source: 'SpaceX FCC filings' },
+      { parameter: 'Deorbit compliance', value: '95%+', source: 'SpaceX reported, FCC requirement' },
+      { parameter: 'Servicer drones', value: 'Concept phase', source: 'Northrop MEV, Astroscale demos' },
+      { parameter: 'Launches per year', value: '100+ possible', source: 'SpaceX 2024 cadence: 100+ launches' },
+    ],
+  },
+  cost: {
+    equations: `Cost per PFLOP:    $/PFLOP = (C_launch + C_hardware + C_ops) / Compute
+
+Launch Cost:       C_launch = mass × $/kg
+
+Learning Curve:    Cost(t) = Cost₀ × (cumulative_units)^(-b)
+                   b ≈ 0.15-0.25 (15-25% reduction per doubling)
+
+                   Or exponential: Cost(t) = Cost₀ × (1-rate)^t
+
+Total OPEX:        OPEX = fleet × (replacement_rate × sat_cost + ops_cost)
+
+Crossover Point:   When $/PFLOP_orbital < $/PFLOP_terrestrial`,
+    sources: [
+      { parameter: 'Falcon 9 cost', value: '~$2,700/kg', source: 'SpaceX public pricing' },
+      { parameter: 'Starship target', value: '$100-200/kg', source: 'Elon Musk statements, Sandy Munro analysis' },
+      { parameter: 'Starship floor', value: '$10-50/kg', source: 'Long-term aspirational (propellant cost ~$10/kg)' },
+      { parameter: 'Starlink sat cost', value: '$250-500k', source: 'Estimated from SpaceX financials' },
+      { parameter: 'Learning rate', value: '15-20%', source: "Wright's Law historical data for aerospace" },
+      { parameter: 'Ground DC cost', value: '$10-15/W', source: 'McKinsey, Uptime Institute data center reports' },
+      { parameter: 'Ground LCOE', value: '$30-50/MWh', source: 'EIA, Lazard LCOE analysis 2024' },
+    ],
+  },
+};
+
+const ShowMathSection = ({ sectionId, title }: { sectionId: keyof typeof EQUATIONS_AND_SOURCES; title: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const data = EQUATIONS_AND_SOURCES[sectionId];
+  
+  if (!data) return null;
+  
+  return (
+    <div id={`math-section-${sectionId}`} style={{ marginTop: '16px', borderTop: '1px solid rgba(0, 240, 255, 0.1)', paddingTop: '16px' }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          background: 'rgba(0, 240, 255, 0.05)',
+          border: '1px solid rgba(0, 240, 255, 0.2)',
+          borderRadius: '4px',
+          color: '#00f0ff',
+          fontSize: '10px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '1px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          transition: 'all 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(0, 240, 255, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(0, 240, 255, 0.05)';
+        }}
+        aria-expanded={isOpen}
+      >
+        <span>Show Math</span>
+        <span style={{ fontSize: '14px', transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          ▼
+        </span>
+      </button>
+      
+      {isOpen && (
+        <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(0, 10, 20, 0.5)', borderRadius: '8px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <h4 style={{ color: '#00f0ff', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
+              Equations
+            </h4>
+            <pre style={{
+              color: '#94a3b8',
+              fontSize: '10px',
+              fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+              margin: 0,
+            }}>
+              {data.equations}
+            </pre>
+          </div>
+          
+          <div>
+            <h4 style={{ color: '#00f0ff', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
+              Sources
+            </h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: "'IBM Plex Mono', 'Courier New', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Parameter</th>
+                  <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Value</th>
+                  <th style={{ textAlign: 'left', padding: '8px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sources.map((source, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.05)' }}>
+                    <td style={{ padding: '8px', color: '#94a3b8' }}>{source.parameter}</td>
+                    <td style={{ padding: '8px', color: '#00f0ff', fontFamily: "'IBM Plex Mono', 'Courier New', monospace" }}>{source.value}</td>
+                    <td style={{ padding: '8px', color: '#64748b', fontSize: '9px' }}>{source.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1196,6 +1493,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={10} max={800} unit=" m²"
             help="Thin-film deployable radiator panels"
             disabled={hasSimulationStarted}
+            sourceId="thermal"
           />
           <Slider
             label="Emissivity"
@@ -1204,6 +1502,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0.7} max={0.95} step={0.01}
             help="Surface coating efficiency (0.95 = state of art)"
             disabled={hasSimulationStarted}
+            sourceId="thermal"
           />
           <Slider
             label="Operating Temp"
@@ -1212,6 +1511,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={-20} max={60} unit="°C"
             help="Higher temp = more heat rejection"
             disabled={hasSimulationStarted}
+            sourceId="thermal"
           />
           <Slider
             label="Bus Power"
@@ -1228,9 +1528,11 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Heat Generated" value={results.heatGenPerSat_kW.toFixed(1)} unit=" kW" />
-            <LiveValue label="Heat Rejected" value={results.heatRejectionPerSat_kW.toFixed(1)} unit=" kW" />
+            <LiveValue label="Heat Generated" value={results.heatGenPerSat_kW.toFixed(1)} unit=" kW" sourceId="thermal" />
+            <LiveValue label="Heat Rejected" value={results.heatRejectionPerSat_kW.toFixed(1)} unit=" kW" sourceId="thermal" />
           </div>
+          
+          <ShowMathSection sectionId="thermal" title="Thermal / Radiators" />
         </Section>
 
         {/* BACKHAUL */}
@@ -1260,6 +1562,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={1} max={1200} unit="/sat"
             help="Laser communication links per satellite"
             disabled={hasSimulationStarted}
+            sourceId="backhaul"
           />
           <Slider
             label="Link Capacity"
@@ -1268,6 +1571,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={10} max={200} unit=" Gbps"
             help="100 Gbps = current tech, 200+ = roadmap"
             disabled={hasSimulationStarted}
+            sourceId="backhaul"
           />
           <Slider
             label="Ground Stations"
@@ -1276,6 +1580,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={20} max={150}
             help="Worldwide receive stations"
             disabled={hasSimulationStarted}
+            sourceId="backhaul"
           />
           
           <UtilizationGauge 
@@ -1284,9 +1589,11 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Capacity/Sat" value={results.backhaulPerSat_Gbps} unit=" Gbps" />
-            <LiveValue label="Coverage" value={(results.groundStationCoverage * 100).toFixed(0)} unit="%" />
+            <LiveValue label="Capacity/Sat" value={results.backhaulPerSat_Gbps} unit=" Gbps" sourceId="backhaul" />
+            <LiveValue label="Coverage" value={(results.groundStationCoverage * 100).toFixed(0)} unit="%" sourceId="backhaul" />
           </div>
+          
+          <ShowMathSection sectionId="backhaul" title="Backhaul / Bandwidth" />
         </Section>
 
         {/* MAINTENANCE */}
@@ -1315,6 +1622,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             onChange={(v) => updateParam('fleetSize', v)}
             min={1000} max={10000} step={100} unit=" sats"
             disabled={hasSimulationStarted}
+            sourceId="maintenance"
           />
           <Slider
             label="Failure Rate"
@@ -1323,6 +1631,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0.5} max={10} step={0.5} unit="%/yr"
             help="Radiation, debris, component wear"
             disabled={hasSimulationStarted}
+            sourceId="maintenance"
           />
           <Slider
             label="Servicer Drones"
@@ -1331,6 +1640,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0} max={100}
             help="Autonomous repair robots"
             disabled={hasSimulationStarted}
+            sourceId="maintenance"
           />
           <Slider
             label="Launches / Year"
@@ -1338,13 +1648,16 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             onChange={(v) => updateParam('launchesPerYear', v)}
             min={6} max={52}
             disabled={hasSimulationStarted}
+            sourceId="maintenance"
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Failures/yr" value={results.failuresPerYear.toFixed(0)} />
-            <LiveValue label="Repairs/yr" value={results.repairsPerYear.toFixed(0)} />
-            <LiveValue label="Replacements/yr" value={results.replacementsPerYear.toFixed(0)} />
+            <LiveValue label="Failures/yr" value={results.failuresPerYear.toFixed(0)} sourceId="maintenance" />
+            <LiveValue label="Repairs/yr" value={results.repairsPerYear.toFixed(0)} sourceId="maintenance" />
+            <LiveValue label="Replacements/yr" value={results.replacementsPerYear.toFixed(0)} sourceId="maintenance" />
           </div>
+          
+          <ShowMathSection sectionId="maintenance" title="Maintenance / Fleet" />
         </Section>
 
         {/* COST ASSUMPTIONS */}
@@ -1364,6 +1677,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={20} max={500} unit=" $/kg"
             help="Starship target: $50-100/kg"
             disabled={hasSimulationStarted}
+            sourceId="cost"
           />
           <Slider
             label="Moore's Law Pace"
@@ -1372,6 +1686,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={1.5} max={5} step={0.5} unit=" yr"
             help="Compute efficiency doubling time"
             disabled={hasSimulationStarted}
+            sourceId="compute"
           />
           <Slider
             label="Satellite Base Cost"
@@ -1379,6 +1694,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             onChange={(v) => updateParam('satelliteBaseCost', v * 1000)}
             min={50} max={500} unit="k $"
             disabled={hasSimulationStarted}
+            sourceId="cost"
           />
           <Slider
             label="Sats per Launch"
@@ -1386,12 +1702,15 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             onChange={(v) => updateParam('satsPerLaunch', v)}
             min={10} max={100}
             disabled={hasSimulationStarted}
+            sourceId="cost"
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Mass/Sat" value={results.totalMassPerSat_kg.toFixed(0)} unit=" kg" />
-            <LiveValue label="Compute/Sat" value={results.computePerSat_TFLOPS.toFixed(0)} unit=" TFLOPS" />
+            <LiveValue label="Mass/Sat" value={results.totalMassPerSat_kg.toFixed(0)} unit=" kg" sourceId="cost" />
+            <LiveValue label="Compute/Sat" value={results.computePerSat_TFLOPS.toFixed(0)} unit=" TFLOPS" sourceId="cost" />
           </div>
+          
+          <ShowMathSection sectionId="cost" title="Cost Assumptions" />
         </Section>
 
         {/* COMPUTE / SILICON */}
@@ -1423,6 +1742,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={3} max={14} unit="nm"
             help="Smaller = more efficient but more radiation sensitive"
             disabled={hasSimulationStarted}
+            sourceId="compute"
           />
           <Slider
             label="Chip TDP"
@@ -1431,6 +1751,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={100} max={500} unit=" W"
             help="Power per compute module"
             disabled={hasSimulationStarted}
+            sourceId="compute"
           />
           <Slider
             label="Radiation Hardening"
@@ -1439,6 +1760,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0} max={2} step={1}
             help={['Soft (consumer)', 'Standard (space-rated)', 'Full (rad-hard)'][params.radiationHardening || 1]}
             disabled={hasSimulationStarted}
+            sourceId="compute"
           />
           <Slider
             label="Memory / Node"
@@ -1447,12 +1769,15 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={64} max={512} unit=" GB"
             help="HBM capacity per satellite"
             disabled={hasSimulationStarted}
+            sourceId="compute"
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Efficiency" value={results.gflopsPerWatt.toFixed(1)} unit=" GFLOPS/W" />
-            <LiveValue label="Compute/Sat" value={results.computePerSat_TFLOPS.toFixed(0)} unit=" TFLOPS" />
+            <LiveValue label="Efficiency" value={results.gflopsPerWatt.toFixed(1)} unit=" GFLOPS/W" sourceId="compute" />
+            <LiveValue label="Compute/Sat" value={results.computePerSat_TFLOPS.toFixed(0)} unit=" TFLOPS" sourceId="compute" />
           </div>
+          
+          <ShowMathSection sectionId="compute" title="Compute / Silicon" />
         </Section>
 
         {/* POWER / SOLAR */}
@@ -1485,6 +1810,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={25} max={45} unit="%"
             help="Triple-junction: 32%, Perovskite tandem: 40%+"
             disabled={hasSimulationStarted}
+            sourceId="power"
           />
           <Slider
             label="Degradation Rate"
@@ -1493,6 +1819,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0.5} max={3} step={0.1} unit="%/yr"
             help="Solar cell degradation from radiation"
             disabled={hasSimulationStarted}
+            sourceId="power"
           />
           <Slider
             label="Battery Buffer"
@@ -1501,6 +1828,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={0} max={60} unit=" min"
             help="Eclipse duration in LEO: ~35 min max"
             disabled={hasSimulationStarted}
+            sourceId="power"
           />
           <Slider
             label="Battery Density"
@@ -1509,6 +1837,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={150} max={400} unit=" Wh/kg"
             help="Li-ion: 250, Solid-state: 350+"
             disabled={hasSimulationStarted}
+            sourceId="power"
           />
           <Slider
             label="Battery Cost"
@@ -1517,6 +1846,7 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
             min={50} max={300} unit=" $/kWh"
             help="Space-rated cells are 2-3x ground cost"
             disabled={hasSimulationStarted}
+            sourceId="power"
           />
           <Slider
             label="Structural Scaling Exponent"
@@ -1536,21 +1866,25 @@ const PhysicsSandbox = ({ baselineData, currentYear = '2033', onApplyToGlobe }: 
           />
           
           <div style={styles.resultBox}>
-            <LiveValue label="Battery Mass" value={(results.batteryMass_kg || 0).toFixed(0)} unit=" kg" />
-            <LiveValue label="10yr Power" value={(results.degradationAfter10yr * 100).toFixed(0)} unit="%" />
+            <LiveValue label="Battery Mass" value={(results.batteryMass_kg || 0).toFixed(0)} unit=" kg" sourceId="power" />
+            <LiveValue label="10yr Power" value={(results.degradationAfter10yr * 100).toFixed(0)} unit="%" sourceId="power" />
             {results.solarPenaltyPercent !== undefined && (
               <LiveValue 
                 label="Solar Penalty" 
                 value={`${results.solarPenaltyPercent.toFixed(1)}%`} 
+                sourceId="power"
               />
             )}
             {results.radiatorPenaltyPercent !== undefined && (
               <LiveValue 
                 label="Radiator Penalty" 
                 value={`${results.radiatorPenaltyPercent.toFixed(1)}%`} 
+                sourceId="power"
               />
             )}
           </div>
+          
+          <ShowMathSection sectionId="power" title="Power / Solar" />
         </Section>
       </div>
 

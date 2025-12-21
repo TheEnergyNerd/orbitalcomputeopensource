@@ -196,6 +196,7 @@ export function calculateLaunchConstraints(
 export interface HeatConstraints {
   utilizationMax: number; // Utilization_max(t) = Q_rad_max(t) / Q_gen(t)
   heatLimited: boolean;  // Whether heat is the limiting factor
+  thermalCapped: boolean; // New flag for Option A (CAP)
   thermalComplexityFactor?: number; // Complexity factor for large radiators
   failureRateMultiplier?: number;   // Failure rate multiplier for complex thermal
   costMultiplier?: number;          // Cost multiplier for complex thermal
@@ -205,19 +206,40 @@ export interface HeatConstraints {
  * Calculate heat generation per satellite
  * Q_gen = P_compute × (1 - electrical_efficiency)
  */
+/**
+ * FIXED: Single thermal regime using Stefan-Boltzmann (Section 3)
+ */
+export function computeThermalLimit(params: {
+  radiatorAreaM2: number;
+  radiatorTempC: number;
+  emissivity?: number;
+  viewFactor?: number;
+}): number {
+  const sigma = 5.670374e-8; // W/m²K⁴
+  const emissivity = params.emissivity ?? 0.9;
+  const viewFactor = params.viewFactor ?? 0.85;
+  const sinkTempK = 250; // LEO thermal environment with Earth IR
+  
+  const T = params.radiatorTempC + 273.15;
+  
+  // net_Wm2 = emissivity * sigma * (T^4 - sinkTempK^4) * viewFactor
+  const net_Wm2 = emissivity * sigma * (Math.pow(T, 4) - Math.pow(sinkTempK, 4)) * viewFactor;
+  const kwPerM2 = net_Wm2 / 1000;
+  
+  return params.radiatorAreaM2 * kwPerM2;
+}
+
 export function calculateHeatGeneration(
   powerKW: number,
   electricalEfficiency: number = 0.85 // 85% electrical efficiency
 ): number {
-  // FIX: 85% of power becomes heat (not 15%)
-  return powerKW * electricalEfficiency; // kW of waste heat (85% of power)
+  // 85% of power becomes heat
+  return powerKW * electricalEfficiency;
 }
 
 /**
  * Calculate maximum radiative heat rejection
- * Q_rad_max = σ × ε × A_radiator × T⁴
- * 
- * Pre-collapsed formula: Q_rad_max = radiator_capacity_factor × radiator_area_m2 × power_scaling
+ * Updated to use the single source of truth (computeThermalLimit)
  */
 export function calculateMaxHeatRejection(
   satelliteClass: "A" | "B",
@@ -225,40 +247,26 @@ export function calculateMaxHeatRejection(
   strategy: StrategyMode,
   year: number
 ): number {
-  // Base radiator capacity (kW per m² at operating temperature)
-  const STEFAN_BOLTZMANN = 5.67e-8; // W/(m²·K⁴)
-  const EMISSIVITY = 0.9; // Typical radiator emissivity
-  const OPERATING_TEMP_K = 300; // 27°C operating temperature
-  
-  // REALITY CHECK: Radiator area per satellite with thermal constraints
-  // Body-mounted: max 20 m², Deployable: max 100 m²
-  // Start conservative with body-mounted radiators
-  const MAX_BODY_MOUNTED_M2 = 20;
-  const MAX_DEPLOYABLE_M2 = 100;
-  const hasDeployable = year >= 2028;
-  const maxRadiatorM2 = hasDeployable ? MAX_DEPLOYABLE_M2 : MAX_BODY_MOUNTED_M2;
-  
-  let radiatorAreaM2 = satelliteClass === "A" ? 5.0 : 12.0; // m² (initial estimate)
-  radiatorAreaM2 = Math.min(radiatorAreaM2, maxRadiatorM2); // Cap at thermal limit
+  // REALITY CHECK: Radiator area per satellite
+  const baseArea = satelliteClass === "A" ? 5.0 : 12.0; // m²
+  let radiatorAreaM2 = baseArea;
   
   // Strategy adjustments
   if (strategy === "CARBON") {
-    radiatorAreaM2 *= 1.3; // Larger radiators for carbon-first
+    radiatorAreaM2 *= 1.3;
   } else if (strategy === "COST") {
-    radiatorAreaM2 *= 0.9; // Smaller radiators for cost-first
+    radiatorAreaM2 *= 0.9;
   } else if (strategy === "LATENCY") {
-    radiatorAreaM2 *= 0.85; // Minimal radiators for latency-first
+    radiatorAreaM2 *= 0.85;
   }
   
-  // Tech improvement: better radiator materials over time
+  // Tech improvement: better radiator materials over time (area efficiency)
   const techFactor = 1.0 + (year - 2025) * 0.02; // 2% improvement per year
   
-  // Calculate max heat rejection (simplified Stefan-Boltzmann)
-  const Q_rad_max_W = STEFAN_BOLTZMANN * EMISSIVITY * radiatorAreaM2 * 
-                      Math.pow(OPERATING_TEMP_K, 4) * techFactor;
-  const Q_rad_max_KW = Q_rad_max_W / 1000;
-  
-  return Q_rad_max_KW;
+  return computeThermalLimit({
+    radiatorAreaM2: radiatorAreaM2 * techFactor,
+    radiatorTempC: 27 // 27°C operating temperature (300K)
+  });
 }
 
 // ============================================================================
@@ -284,31 +292,29 @@ export function calculateHeatUtilizationCeiling(
   const Q_gen = calculateHeatGeneration(powerKW);
   const Q_rad_max = calculateMaxHeatRejection(satelliteClass, powerKW, strategy, year);
   
-  // CRITICAL: Utilization can NEVER exceed 100% (physically impossible)
+  // FIXED: Option A: CAP compute power if requested > maxRejectable
   const utilizationMax = Math.min(1.0, Q_rad_max / Q_gen);
-  const heatLimited = utilizationMax < 1.0;
+  const thermalCapped = Q_gen > Q_rad_max;
   
-  // THERMAL COMPLEXITY RISK FACTOR (per Anno feedback)
-  // Large radiators = complex thermal systems = higher failure rate and cost
-  const RADIATOR_COMPLEXITY_THRESHOLD_M2 = 50; // m² per satellite
-  const radiatorAreaPerSat = calculateMaxHeatRejection(satelliteClass, powerKW, strategy, year) / 0.3; // Approximate area
+  // Calculate approximate area for complexity factor
+  // kwPerM2 at 27C/300K is ~0.35 kW/m2
+  const radiatorAreaPerSat = Q_rad_max / 0.35; 
+  
+  const RADIATOR_COMPLEXITY_THRESHOLD_M2 = 50; 
   let complexityFactor = 1.0;
   let failureRateMultiplier = 1.0;
   let costMultiplier = 1.0;
   
   if (radiatorAreaPerSat > RADIATOR_COMPLEXITY_THRESHOLD_M2) {
     const complexityRatio = radiatorAreaPerSat / RADIATOR_COMPLEXITY_THRESHOLD_M2;
-    
-    // Increase failure rate for complex thermal systems (10% per complexity unit above threshold)
     failureRateMultiplier = 1 + 0.1 * (complexityRatio - 1);
-    
-    // Increase cost for complex deployable radiators (20% per complexity unit above threshold)
     costMultiplier = 1 + 0.2 * (complexityRatio - 1);
   }
   
   return {
     utilizationMax,
-    heatLimited,
+    heatLimited: thermalCapped,
+    thermalCapped, // New flag
     thermalComplexityFactor: complexityFactor,
     failureRateMultiplier,
     costMultiplier,
@@ -681,6 +687,7 @@ export function calculateConstrainedEffectiveCompute(
       heat: {
         utilizationMax: heatUtilization,
         heatLimited,
+        thermalCapped: heatLimited,  // thermalCapped is same as heatLimited
       },
       maintenance: maintenanceConstraints,
     },

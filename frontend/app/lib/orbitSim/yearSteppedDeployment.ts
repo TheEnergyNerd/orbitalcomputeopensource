@@ -24,6 +24,8 @@ import {
   SAT_A_LIFETIME_Y,
   SAT_B_LIFETIME_Y,
 } from "./satelliteClasses";
+import { computePhysicsCost } from "../model/physicsCost";
+import { YearParams } from "../model/types";
 import type { ScenarioMode } from "./simulationConfig";
 import { getScenarioParams, getScenarioKey, type ScenarioParams } from "./scenarioParams";
 import { designComputeBus } from "./physics/designBus";
@@ -97,6 +99,8 @@ export interface YearDeploymentState {
   // Cumulative tracking for survival calculation
   cumulativeSatellitesLaunched?: number;
   cumulativeFailures?: number;
+  cumulativeOrbitalCostUSD?: number;
+  cumulativeExportedPFLOPs?: number;
   failuresByYear?: Map<number, number>; // Track failures by year for debris calculation
   
   // Physics state (single source of truth)
@@ -150,6 +154,10 @@ export interface YearDeploymentResult {
   physicsState?: PhysicsState;
   // Thermal state (LEGACY - kept for compatibility)
   thermalState?: ThermalState;
+  
+  // Cumulative tracking
+  cumulativeOrbitalCostUSD?: number;
+  cumulativeExportedPFLOPs?: number;
 }
 
 const START_YEAR = 2025;
@@ -223,20 +231,7 @@ export function calculateYearDeployment(
   const allowedTotal = launchConstraints.allowed;
   const scaleFactor = totalTarget > 0 ? allowedTotal / totalTarget : 0;
   
-  // Debug logging for fleet growth issues
-  if (year <= 2026 || (year % 5 === 0)) {
-    console.log(`[FLEET GROWTH DEBUG] Year ${year} - Launch Constraints:`, {
-      maxLaunchesPerYear,
-      totalLaunches,
-      targetSatellites,
-      newA_target,
-      newB_target,
-      totalTarget,
-      launchConstraints,
-      allowedTotal,
-      scaleFactor,
-    });
-  }
+  // Debug logging removed for production
   
   // Use let so we can recalculate after we know actual masses
   let newA = Math.round(newA_target * scaleFactor);
@@ -496,9 +491,10 @@ export function calculateYearDeployment(
     // Recalculate total launches with actual constraint
     totalLaunches = Math.ceil((newA + newB) / Math.floor(avgSatsPerLaunchActual));
     
-    // Debug logging for fleet growth issues
-    if (year <= 2026 || (year % 5 === 0)) {
-      console.log(`[FLEET GROWTH DEBUG] Year ${year}:`, {
+    // Debug logging removed for production
+    if (false) { // Disabled debug logging
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _debug = {
         totalTargetSats,
         maxSatellitesPerYearActual,
         scaleFactor,
@@ -507,7 +503,7 @@ export function calculateYearDeployment(
         totalLaunches,
         maxLaunchesPerYear,
         avgSatsPerLaunchActual,
-      });
+      };
     }
   }
   
@@ -551,7 +547,7 @@ export function calculateYearDeployment(
   const RADIATOR_BASE_MASS_PER_KW = 10.0; // kg/kW at small scale
   const radiatorRefMass = structuralScaling.thresholdPowerKW * RADIATOR_BASE_MASS_PER_KW;
   const radiatorMassKg = radiatorRefMass * Math.pow(heatGenPerSatKw / structuralScaling.thresholdPowerKW, structuralScaling.structuralPenaltyExponent);
-
+  
   modifiedBusPhysicsA = {
     orbitEnv: DEFAULT_ORBIT_ENV,
     busPowerKw: powerPerSatKw,
@@ -1304,8 +1300,8 @@ export function calculateYearDeployment(
   // The Compute Per Dollar chart will show orbital starting MORE EXPENSIVE than ground,
   // then crossing over around 2028-2030 as launch costs drop
   // We still track cost parity for the chart, but don't gate deployment on it
-  const prevCostGround = previousEntry?.cost_per_compute_ground ?? 340;
-  const prevCostOrbit = previousEntry?.cost_per_compute_orbit ?? Infinity;
+  const prevCostGround = previousEntry?.CALIBRATED_COST_INDEX_GROUND ?? 340;
+  const prevCostOrbit = previousEntry?.CALIBRATED_COST_INDEX_ORBIT ?? Infinity;
   const cheaperOrbit = prevCostOrbit < prevCostGround * 0.95; // 5% cheaper than ground (for chart only)
   
   // REMOVED: Cost parity gating - deployment now happens on growth curve regardless of cost
@@ -1339,18 +1335,6 @@ export function calculateYearDeployment(
     groundComputeShare * latency_ground_ms +
     orbitComputeShare * latency_orbit_ms;
 
-  // === Cost / compute =================================================
-  // FIXED: Use scenario params for learning rates and initial multiples
-  
-  // 1) Ground cost per compute should decline with tech progress (scenario-dependent)
-  // CRITICAL FIX: Ground cost should decline but approach a floor (power, cooling, land costs)
-  const baseGroundCostPerCompute = 280; // $/PFLOP in 2025 (updated from 340)
-  const annualDecline = scenarioParams.groundLearningRate; // 2-2.5% annual improvement
-  const floor = 120; // Can't go below this (power, cooling, land costs)
-  
-  const projectedGroundCost = baseGroundCostPerCompute * Math.pow(1 - annualDecline, yearIndex);
-  const cost_per_compute_ground = Math.max(projectedGroundCost, floor);
-  
   // 2) Use physics-based derated compute for cost calculation (use modified bus physics)
   const busAvailability = scenarioMode === "ORBITAL_BULL"
     ? 0.95 // Hardcoded availability for ORBITAL_BULL
@@ -1358,156 +1342,120 @@ export function calculateYearDeployment(
   const fleetTotalComputeTflopsDerated = 
     satellitesTotal * physicsComputeTflopsDerated * busAvailability;
   const fleetTotalComputePFLOPsDerated = fleetTotalComputeTflopsDerated * 1e3; // Convert to PFLOPs
-  
-  // 3) Raw orbital unit cost from physics (cumulative amortization)
-  const prevCumulativeOrbitalCostUSD =
-    previousEntry?.cumulativeOrbitalCostUSD ?? 0;
-  const prevCumulativeExportedPFLOPs =
-    previousEntry?.cumulativeExportedPFLOPs ?? 0;
 
-  // === FIXED COSTS (Don't scale with fleet) ===
-  
-  // Cumulative R&D (spent before 2025, amortized over program life)
-  const cumulativeRDBillions = 20; // Starship + satellite R&D
-  const programLifeYears = 20;
-  const annualRDAmortization = cumulativeRDBillions / programLifeYears;
-  
-  // Ground infrastructure (scales slowly)
-  const groundStationCostBillions = 2 + (year - 2025) * 0.3; // $2B in 2025, grows
-  const groundStationAmortization = groundStationCostBillions / 10; // 10 year life
-  
-  // Fixed operations (mission control, engineering, etc)
-  const fixedOpsBillions = 3 + (year - 2025) * 0.2; // Grows slowly
-  
-  // Total fixed costs
-  const totalFixedBillions = annualRDAmortization + groundStationAmortization + fixedOpsBillions;
-  const totalFixedUSD = totalFixedBillions * 1e9;
-  
-  // === VARIABLE COSTS (Scale with fleet) ===
-  
-  // Manufacturing cost follows learning curve
-  const getManufacturingCostPerKg = (year: number): number => {
-    const base2025 = 8000; // $/kg in 2025
-    const floor = 2000;    // Can't go below this
-    const learningRate = 0.12; // 12% annual improvement
+  // Cumulative tracking for economics (Required for DebugExportPanel)
+  const prevCumulativeOrbitalCostUSD = previousEntry?.cumulativeOrbitalCostUSD ?? 0;
+  const cumulativeOrbitalCostUSD = prevCumulativeOrbitalCostUSD + totalOrbitalCostThisYearUSD;
+
+  const prevCumulativeExportedPFLOPs = previousEntry?.cumulativeExportedPFLOPs ?? 0;
+  const cumulativeExportedPFLOPs = prevCumulativeExportedPFLOPs + fleetTotalComputePFLOPsDerated;
+
+  // Calculate base demand in TWh for carbon and physics calculations
+  const baseDemandTWh0 = 10_000;
+  const baseDemandTWh = baseDemandTWh0 * demandGrowthFactor;
+
+  // === PHYSICS-BASED COST WATERFALL (Section 4) =========================
+  const physicsParams: YearParams = {
+    year,
+    isStaticMode: scenarioMode === "MCCALIP_BASELINE",
+    spaceTrafficEnabled: scenarioParams.spaceTrafficEnabled ?? false,
     
-    const yearsFromBase = year - 2025;
-    const projected = base2025 * Math.pow(1 - learningRate, yearsFromBase);
+    launchCostKg: cost_per_kg_to_leo,
+    specificPowerWKg: 1000 * (getClassAPower(year) / (calculateSatelliteMass("A", year, strategy) * 1000)), // Rough estimate
+    flopsPerWattGround: 2000 * Math.pow(1.05, yearIndex), // Modern AI baseline
+    flopsPerWattOrbital: 2000 * Math.pow(1.07, yearIndex),
     
-    return Math.max(projected, floor);
+    orbitalAltitude: DEFAULT_ORBIT_ENV.altitudeKm,
+    pueGround: 1.3,
+    pueOrbital: 1.05,
+    capacityFactorGround: 0.85,
+    capacityFactorOrbital: busAvailability,
+    
+    targetGW: baseDemandTWh / 8.76, // Very rough conversion
+    satellitePowerKW: getClassAPower(year),
+    satelliteCostPerW: 22, // Constant for physics
+    sunFraction: 0.98,
+    cellDegradation: 2.5,
+    gpuFailureRate: 9,
+    nreCost: 100,
+    
+    eccOverhead: 0.15,
+    radiatorAreaM2: modifiedBusPhysicsA?.radiatorAreaM2 ?? 100, // Use physics engine value
+    radiatorTempC: 97, // Match improved thermal model (370K)
+    
+    groundConstraintsEnabled: true,
+    powerGridMultiplier: 1.05,
+    coolingMultiplier: 1.03,
+    waterScarcityEnabled: true,
+    landScarcityEnabled: true,
+    radiationOverheadEnabled: true,
+    
+    // Deployable Radiators (Standardized for simulation)
+    deployableRadiatorsEnabled: true,
+    bodyMountedAreaM2: 25,
+    deployableArea2025M2: 50,
+    deployableArea2040M2: 150,
+    deployableMassPerM2Kg: 2.5,
+    deployableCostPerM2Usd: 500,
+    deploymentFailureRate: 0.02,
+    
+    // Required fields
+    useRadHardChips: false,
+    groundScenario: 'constrained',
+    smrMitigationEnabled: false,
+    workloadType: 'inference',
+    elonScenarioEnabled: false,
+    globalLatencyRequirementEnabled: false,
+    spaceManufacturingEnabled: false,
+    aiWinterEnabled: false,
+    smrToggleEnabled: false,
+    fusionToggleEnabled: false
   };
-  
-  // Calculate manufacturing cost for satellites launched this year
-  const manufacturingCostPerKg = getManufacturingCostPerKg(year);
-  // Use weighted average mass (already calculated above) for satellites launched this year
-  const massLaunchedKg = (newA + newB) * avgMassPerSatelliteKg;
-  const manufacturingCostUSD = massLaunchedKg * manufacturingCostPerKg;
-  
-  // Launch costs (from totalOrbitalCostThisYearUSD, which includes launch + replacement)
-  // Extract launch portion (replacement is already accounted for separately)
-  const launchCostUSD = launchCostThisYearUSD;
-  
-  // Operations (scales with fleet size)
-  const opsPerSatPerYear = 5000; // $/sat/year for monitoring, updates, etc
-  const variableOpsUSD = satellitesTotal * opsPerSatPerYear;
-  
-  // Total variable costs
-  const totalVariableUSD = launchCostUSD + manufacturingCostUSD + variableOpsUSD;
-  
-  // === TOTAL ANNUAL COST ===
-  const totalAnnualCostUSD = totalFixedUSD + totalVariableUSD;
-  const cumulativeOrbitalCostUSD =
-    prevCumulativeOrbitalCostUSD + totalAnnualCostUSD;
-  const cumulativeExportedPFLOPs =
-    prevCumulativeExportedPFLOPs + fleetTotalComputePFLOPsDerated;
 
-  // Raw orbit unit cost (annual cost per annual compute)
-  // Use effective compute (after thermal derating) for cost calculations
-  const effectivePFLOPs = computeExportablePFLOPs;
+  // BUG 1 FIX: Track first cap year across trajectory for post-cap growth
+  // For orbit simulator, we need to track cap year across years
+  // For now, pass null and let computePhysicsCost track it internally
+  // TODO: Pass firstCapYear from previous year's result if available
+  const physicsBreakdown = computePhysicsCost(physicsParams, null);
   
-  // Guard against division by zero in early years
-  let rawOrbitUnitCost: number;
-  if (effectivePFLOPs < 1) {
-    // Effectively infinite cost when no compute
-    rawOrbitUnitCost = 10000;
-  } else {
-    // Annual cost per annual compute
-    rawOrbitUnitCost = totalAnnualCostUSD / effectivePFLOPs;
-  }
-  
-  // For cumulative calculation (used for calibration)
-  const cumulativeEffectivePFLOPs = prevCumulativeExportedPFLOPs + computeExportablePFLOPs;
-  const cumulativeOrbitUnitCost =
-    cumulativeEffectivePFLOPs > 0 && cumulativeOrbitalCostUSD > 0
-      ? cumulativeOrbitalCostUSD / cumulativeEffectivePFLOPs
-      : Infinity;
+  const physics_cost_per_pflop_year_ground = physicsBreakdown.ground.totalCostPerPflopYear;
+  const physics_cost_per_pflop_year_orbit = physicsBreakdown.orbit.totalCostPerPflopYear;
+  const physics_cost_per_pflop_year_mix = 
+    groundComputeShare * physics_cost_per_pflop_year_ground + 
+    orbitComputeShare * physics_cost_per_pflop_year_orbit;
 
-  // 4) One-time calibration: in the first year with non-zero orbit compute,
-  // make orbit cost ≈ initialOrbitCostMultiple × ground cost (scenario-dependent)
-  const orbitCostScaleKey = `orbitCostScale_${scenarioMode}`;
-  const orbitCostScaleInitializedKey = `orbitCostScaleInitialized_${scenarioMode}`;
+  // === Cost / compute (CALIBRATED INDEX - For legacy support only) ====
+  // BLOCKER 3: Ensure ONE source of truth by using the physics breakdown total
   
-  // Use state to persist calibration across years (stored in debug state)
-  let orbitCostScale = previousEntry?.[orbitCostScaleKey as keyof typeof previousEntry] as number | undefined;
-  let orbitCostScaleInitialized = previousEntry?.[orbitCostScaleInitializedKey as keyof typeof previousEntry] as boolean | undefined;
+  const CALIBRATED_COST_INDEX_GROUND = physics_cost_per_pflop_year_ground;
+  const CALIBRATED_COST_INDEX_ORBIT = physics_cost_per_pflop_year_orbit;
   
-  if (!orbitCostScaleInitialized && Number.isFinite(rawOrbitUnitCost) && rawOrbitUnitCost > 0) {
-    const desiredOrbitUnitCost = cost_per_compute_ground * scenarioParams.orbitInitialCostMultiple;
-    orbitCostScale = desiredOrbitUnitCost / rawOrbitUnitCost;
-    orbitCostScaleInitialized = true;
-  }
-
-  const orbitScale = orbitCostScale ?? 1;
-  let cost_per_compute_orbit_raw =
-    Number.isFinite(rawOrbitUnitCost) && rawOrbitUnitCost > 0
-      ? rawOrbitUnitCost * orbitScale
-      : cost_per_compute_ground * scenarioParams.orbitInitialCostMultiple; // Fallback to initial multiple
-
-  // 5) Apply learning rate (scenario-dependent)
-  // Orbit cost improves over time with learning
-  let cost_per_compute_orbit = Number.isFinite(cost_per_compute_orbit_raw)
-    ? cost_per_compute_orbit_raw * Math.pow(1 - scenarioParams.orbitLearningRate, yearIndex)
-    : Infinity;
-  
-  // Add maturity penalty for early years (delays crossover by 1-2 years)
-  // Technology readiness delay: early years have higher costs due to immature tech
-  if (Number.isFinite(cost_per_compute_orbit) && cost_per_compute_orbit > 0) {
-    const maturityPenalty = year < 2028 ? 1.3 :    // 30% penalty before 2028
-                            year < 2030 ? 1.15 :    // 15% penalty 2028-2029
-                            1.0;                     // No penalty after 2030
-    cost_per_compute_orbit = cost_per_compute_orbit * maturityPenalty;
-  }
-
   // Clamp only for display, not for the diagnostic raw value.
-  const orbit_cost_per_compute_display = Math.min(cost_per_compute_orbit, 1e7);
+  const CALIBRATED_COST_INDEX_ORBIT_DISPLAY = Math.min(CALIBRATED_COST_INDEX_ORBIT, 1e7);
 
   // 5) Blended cost per compute
-  let raw_cost_per_compute_mix: number;
+  let CALIBRATED_COST_INDEX_MIX: number;
   if (orbitComputeShare === 0) {
     // Pure ground year (no orbit contribution at all)
-    raw_cost_per_compute_mix = cost_per_compute_ground;
-  } else if (!Number.isFinite(cost_per_compute_orbit)) {
+    CALIBRATED_COST_INDEX_MIX = CALIBRATED_COST_INDEX_GROUND;
+  } else if (!Number.isFinite(CALIBRATED_COST_INDEX_ORBIT)) {
     // If orbit cost blew up, treat orbit as "very bad" but finite
-    const badOrbit = cost_per_compute_ground * scenarioParams.orbitInitialCostMultiple;
-    raw_cost_per_compute_mix =
-      groundComputeShare * cost_per_compute_ground +
+    const badOrbit = CALIBRATED_COST_INDEX_GROUND * (scenarioParams.orbitInitialCostMultiple || 2.0);
+    CALIBRATED_COST_INDEX_MIX =
+      groundComputeShare * CALIBRATED_COST_INDEX_GROUND +
       orbitComputeShare * badOrbit;
   } else {
-    raw_cost_per_compute_mix =
-      groundComputeShare * cost_per_compute_ground +
-      orbitComputeShare * cost_per_compute_orbit;
+    CALIBRATED_COST_INDEX_MIX =
+      groundComputeShare * CALIBRATED_COST_INDEX_GROUND +
+      orbitComputeShare * CALIBRATED_COST_INDEX_ORBIT;
   }
 
-  const cost_per_compute_mix = sane(raw_cost_per_compute_mix, 1e7);
+  const cost_per_compute_mix = sane(CALIBRATED_COST_INDEX_MIX, 1e7);
 
   // === Annual OPEX ====================================================
   // Ground OPEX = Electricity bill + Hardware maintenance
   // Electricity: total_demand_kw * 8760 hours * $0.10/kWh
   // Hardware maintenance: 10% of ground CAPEX
-  
-  // Calculate base demand in TWh for carbon calculations
-  const baseDemandTWh0 = 10_000;
-  const baseDemandTWh = baseDemandTWh0 * demandGrowthFactor;
   
   // Estimate ground power from demand (assume ~8 kW per PFLOP for ground datacenters)
   // This accounts for PUE, cooling, and realistic datacenter power density
@@ -1552,8 +1500,8 @@ export function calculateYearDeployment(
   const shellName = primaryShell;
   
   // Estimate compute value per hour for downtime cost
-  const computeValuePerHour = cost_per_compute_orbit > 0 
-    ? (computeExportablePFLOPs * cost_per_compute_orbit) / (365 * 24) 
+  const computeValuePerHour = CALIBRATED_COST_INDEX_ORBIT > 0 
+    ? (computeExportablePFLOPs * CALIBRATED_COST_INDEX_ORBIT) / (365 * 24) 
     : 1e6; // Fallback: $1M/hour
   
   const congestionMetrics = calculateCongestionMetrics(
@@ -1602,8 +1550,16 @@ export function calculateYearDeployment(
   const typicalEclipseMinutes = 35;
   const batteryReqs = calculateBatteryRequirements(year, powerPerSatKw, typicalEclipseMinutes);
   
-  // Add congestion costs to orbital OPEX
-  const annual_opex_orbit = base_annual_opex_orbit_with_fixed + congestionMetrics.congestionCostAnnual;
+  // Add congestion costs to orbital OPEX (Gated by toggle)
+  let congestion_cost_annual = (scenarioParams.spaceTrafficEnabled ?? false) 
+    ? congestionMetrics.congestionCostAnnual 
+    : 0;
+  
+  // FIXED: Cap congestion cost at 50% of orbit non-traffic cost
+  const orbitNonTrafficCost = base_annual_opex_orbit_with_fixed;
+  congestion_cost_annual = Math.min(congestion_cost_annual, 0.5 * orbitNonTrafficCost);
+  
+  const annual_opex_orbit = base_annual_opex_orbit_with_fixed + congestion_cost_annual;
 
   const raw_annual_opex_mix = annual_opex_ground + annual_opex_orbit;
   // Remove cap - allow OPEX to exceed $1T (actual values go to $1.8T by 2040)
@@ -1685,14 +1641,14 @@ export function calculateYearDeployment(
   const carbon_crossover_triggered = carbon_delta < 0;
 
   // Legacy cost crossover (for compatibility)
-  const cost_orbit = cost_per_compute_orbit;
-  const cost_ground = cost_per_compute_ground;
+  const cost_orbit = CALIBRATED_COST_INDEX_ORBIT;
+  const cost_ground = CALIBRATED_COST_INDEX_GROUND;
   const cost_delta = cost_orbit - cost_ground;
   const cost_crossover_triggered = cost_delta < 0;
   
   // QUICK ASSERTIONS - surface edge-case bugs
-  if (cost_per_compute_orbit < 0) console.warn(`[Cost] Year ${year}: Negative orbit cost/compute: ${cost_per_compute_orbit}`);
-  if (!Number.isFinite(cost_per_compute_orbit)) console.warn(`[Cost] Year ${year}: Orbit cost/compute not finite: ${cost_per_compute_orbit}`);
+  if (CALIBRATED_COST_INDEX_ORBIT < 0) console.warn(`[Cost] Year ${year}: Negative orbit cost/compute: ${CALIBRATED_COST_INDEX_ORBIT}`);
+  if (!Number.isFinite(CALIBRATED_COST_INDEX_ORBIT)) console.warn(`[Cost] Year ${year}: Orbit cost/compute not finite: ${CALIBRATED_COST_INDEX_ORBIT}`);
   // Note: orbit_carbon_intensity is defined later in the carbon section
   if (!Number.isFinite(physicsOutput.temp_core_C)) console.warn(`[Thermal] Year ${year}: temp_core_C not finite: ${physicsOutput.temp_core_C}`);
   
@@ -1845,16 +1801,39 @@ export function calculateYearDeployment(
     // --- Maintenance Debt ---
     global_efficiency: physicsOutput.survival_fraction,
     // --- ECONOMICS (unified debug output) ---
-    cost_per_compute_ground: cost_per_compute_ground,
-    cost_per_compute_orbit: cost_per_compute_orbit,
-    cost_per_compute_mix: cost_per_compute_mix, // DISPLAY: clamped value for charts
-    raw_cost_per_compute_mix: raw_cost_per_compute_mix, // RAW: unclamped for internal calculations
+    CALIBRATED_COST_INDEX_GROUND: CALIBRATED_COST_INDEX_GROUND,
+    CALIBRATED_COST_INDEX_ORBIT: CALIBRATED_COST_INDEX_ORBIT,
+    CALIBRATED_COST_INDEX_MIX: CALIBRATED_COST_INDEX_MIX,
+    CALIBRATED_COST_INDEX_MIX_RAW: CALIBRATED_COST_INDEX_MIX,
+    
+    physics_cost_per_pflop_year_ground,
+    physics_cost_per_pflop_year_orbit,
+    physics_cost_per_pflop_year_mix,
+    
+    physics_ground_energy_cost: physicsBreakdown.ground.energyCostPerPflopYear,
+    physics_ground_hardware_cost: physicsBreakdown.ground.hardwareCapexPerPflopYear,
+    physics_orbit_energy_cost: physicsBreakdown.orbit.energyCostPerPflopYear,
+    physics_orbit_hardware_cost: physicsBreakdown.orbit.hardwareCostPerPflopYear,
+    physics_orbit_congestion_cost: physicsBreakdown.orbit.congestionCostPerPflopYear,
+    physics_orbit_radiation_multiplier: physicsBreakdown.orbit.radiationMultiplier,
+    physics_orbit_thermal_cap_factor: physicsBreakdown.orbit.thermalCapFactor,
+    
+    // Detailed Waterfall (BLOCKER 2)
+    optimisticCostPerPflop: physicsBreakdown.orbit.optimisticCostPerPflop,
+    radiationShieldingCost: physicsBreakdown.orbit.radiationShieldingCost,
+    thermalSystemCost: physicsBreakdown.orbit.thermalSystemCost,
+    replacementRateCost: physicsBreakdown.orbit.replacementRateCost,
+    eccOverheadCost: physicsBreakdown.orbit.eccOverheadCost,
+    redundancyCost: physicsBreakdown.orbit.redundancyCost,
+    realisticCostPerPflop: physicsBreakdown.orbit.realisticCostPerPflop,
+    
+    physics_thermal_requested_kw: physicsBreakdown.orbit.computePowerKw,
+    physics_thermal_max_kw: physicsBreakdown.orbit.maxRejectableKw,
+    physics_thermal_capped: physicsBreakdown.orbit.thermalCapped,
+    
     cumulativeOrbitalCostUSD: cumulativeOrbitalCostUSD,
     cumulativeExportedPFLOPs: cumulativeExportedPFLOPs,
     exportedPFLOPsThisYear: fleetTotalComputePFLOPsDerated,
-    // Store orbit cost scale calibration for persistence across years
-    [orbitCostScaleKey]: orbitCostScale,
-    [orbitCostScaleInitializedKey]: orbitCostScaleInitialized,
     launchMassThisYearKg: launchMassThisYearKg,
     launchCostThisYearUSD: launchCostThisYearUSD,
     totalOrbitalCostThisYearUSD: totalOrbitalCostThisYearUSD,
@@ -1944,9 +1923,6 @@ export function calculateYearDeployment(
     compute_exportable_PFLOPs: computeExportablePFLOPs, // Same as compute_exportable_flops, but explicitly named
     baseDemandTWh: baseDemandTWh, // Growing energy demand
     orbitEnergyServedTwh: orbitEnergyServedTwhThisYear, // For debugging (alias)
-    // Store orbit cost scale calibration for persistence across years
-    [orbitCostScaleKey]: orbitCostScale,
-    [orbitCostScaleInitializedKey]: orbitCostScaleInitialized,
     // --- SOLAR (unified debug output) ---
     ground_full_power_uptime_percent: ground_full_power_uptime_percent,
     solar_plus_storage_uptime_percent: solar_plus_storage_uptime_percent,
@@ -2046,6 +2022,8 @@ export function calculateYearDeployment(
     constraints: effectiveComputeResult.constraints,
     physicsState: nextPhysicsState,
     thermalState: updatedThermalState, // Legacy - kept for compatibility
+    cumulativeOrbitalCostUSD: cumulativeOrbitalCostUSD,
+    cumulativeExportedPFLOPs: cumulativeExportedPFLOPs,
   };
 }
 
@@ -2070,6 +2048,8 @@ export function getInitialDeploymentState(strategy: StrategyMode = "BALANCED"): 
     totalPowerMW: 0,
     physicsState: initialPhysicsState,
     thermalState: initialThermalState, // Legacy
+    cumulativeOrbitalCostUSD: 0,
+    cumulativeExportedPFLOPs: 0,
   };
 }
 
@@ -2112,6 +2092,8 @@ export function runMultiYearDeployment(
       totalPowerMW: result.totalPowerMW,
       physicsState: result.physicsState,
       thermalState: result.thermalState, // Legacy
+      cumulativeOrbitalCostUSD: result.cumulativeOrbitalCostUSD,
+      cumulativeExportedPFLOPs: result.cumulativeExportedPFLOPs,
     };
     
     // Update deployment history (CRITICAL: Track for retirement calculations)

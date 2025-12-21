@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "jest",
     "sim:validate": "node -e \"console.log('Integrity tests: Run via test framework when configured')\"",
     "sim:auto-repair": "node -e \"console.log('Auto-repair: Run via test framework when configured')\""
   },

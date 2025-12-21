@@ -256,3 +256,8 @@ export default function BatteryTechChart({
   );
 }
 
+
+
+
+
+

@@ -1,0 +1,642 @@
+[
+  {
+    "year": 2025,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 120,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2000,
+      "energyCostPerPflopYear": 580.788,
+      "hardwareCapexPerPflopYear": 21000,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 21580.788
+    },
+    "orbit": {
+      "lcoePerMwh": 1.6556806164843594,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2000,
+      "launchCostPerKg": 1500,
+      "specificPowerWPerKg": 36.5,
+      "energyCostPerPflopYear": 7.462185652107338,
+      "hardwareCostPerPflopYear": 20000,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.090053758587234,
+      "congestionCostPerPflopYear": 10003.731092826054,
+      "totalCostPerPflopYear": 37620.88613782701,
+      "thermalCapped": true,
+      "computePowerKw": 27,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.15988059487220418
+    },
+    "crossover": false
+  },
+  {
+    "year": 2026,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 122.4,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2100,
+      "energyCostPerPflopYear": 564.1940571428571,
+      "hardwareCapexPerPflopYear": 20000,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 20564.194057142857
+    },
+    "orbit": {
+      "lcoePerMwh": 1.3893549258651594,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2140,
+      "launchCostPerKg": 1275,
+      "specificPowerWPerKg": 41.5,
+      "energyCostPerPflopYear": 5.852196671002608,
+      "hardwareCostPerPflopYear": 18691.58878504673,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.1990591344459576,
+      "congestionCostPerPflopYear": 9348.720490858866,
+      "totalCostPerPflopYear": 38673.35701481515,
+      "thermalCapped": true,
+      "computePowerKw": 29.700000000000003,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.13673809370811374
+    },
+    "crossover": false
+  },
+  {
+    "year": 2027,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 124.848,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2205,
+      "energyCostPerPflopYear": 548.0742269387755,
+      "hardwareCapexPerPflopYear": 19047.619047619046,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 19595.69327455782
+    },
+    "orbit": {
+      "lcoePerMwh": 1.1914129253058372,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2289.8,
+      "launchCostPerKg": 1083.7499999999998,
+      "specificPowerWPerKg": 46.5,
+      "energyCostPerPflopYear": 4.690123052329386,
+      "hardwareCostPerPflopYear": 17468.77456546423,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.3189650478905532,
+      "congestionCostPerPflopYear": 8736.73234425828,
+      "totalCostPerPflopYear": 39755.88385223791,
+      "thermalCapped": true,
+      "computePowerKw": 32.67,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.11688597539740908
+    },
+    "crossover": false
+  },
+  {
+    "year": 2028,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 127.34496000000001,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2315.2500000000005,
+      "energyCostPerPflopYear": 532.4149633119533,
+      "hardwareCapexPerPflopYear": 18140.589569160995,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 18673.004532472947
+    },
+    "orbit": {
+      "lcoePerMwh": 1.040427296283654,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2450.0860000000007,
+      "launchCostPerKg": 921.1874999999999,
+      "specificPowerWPerKg": 51.5,
+      "energyCostPerPflopYear": 3.8278057446933316,
+      "hardwareCostPerPflopYear": 16325.957537817036,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.450861552679609,
+      "congestionCostPerPflopYear": 8164.8926717808645,
+      "totalCostPerPflopYear": 40869.144564386086,
+      "thermalCapped": true,
+      "computePowerKw": 35.93700000000001,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.09990749736407012
+    },
+    "crossover": false
+  },
+  {
+    "year": 2029,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 129.8918592,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2431.0125000000003,
+      "energyCostPerPflopYear": 517.2031072173261,
+      "hardwareCapexPerPflopYear": 17276.751970629517,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 17793.955077846844
+    },
+    "orbit": {
+      "lcoePerMwh": 0.9227406251201671,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2621.5920200000005,
+      "launchCostPerKg": 783.0093749999999,
+      "specificPowerWPerKg": 56.5,
+      "energyCostPerPflopYear": 3.1727365818187794,
+      "hardwareCostPerPflopYear": 15257.904240950502,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.5959477079475701,
+      "congestionCostPerPflopYear": 7630.53848876616,
+      "totalCostPerPflopYear": 42013.89441985463,
+      "thermalCapped": true,
+      "computePowerKw": 39.53070000000002,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.08541930591088365
+    },
+    "crossover": false
+  },
+  {
+    "year": 2030,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 132.489696384,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2552.5631250000006,
+      "energyCostPerPflopYear": 502.4258755825453,
+      "hardwareCapexPerPflopYear": 16454.049495837633,
+      "constraintMultiplier": 1,
+      "constraintBreakdown": {
+        "grid": 1,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 16956.47537142018
+    },
+    "orbit": {
+      "lcoePerMwh": 0.8292848325223312,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 2805.103461400001,
+      "launchCostPerKg": 665.5579687499999,
+      "specificPowerWPerKg": 61.5,
+      "energyCostPerPflopYear": 2.6648595157409236,
+      "hardwareCostPerPflopYear": 14259.723589673365,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.7555424787423268,
+      "congestionCostPerPflopYear": 7131.194224594553,
+      "totalCostPerPflopYear": 43190.944629760015,
+      "thermalCapped": true,
+      "computePowerKw": 43.483770000000014,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.07307598238292601
+    },
+    "crossover": false
+  },
+  {
+    "year": 2031,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 135.13949031168002,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2680.191281250001,
+      "energyCostPerPflopYear": 488.07085056590114,
+      "hardwareCapexPerPflopYear": 15670.523329369176,
+      "constraintMultiplier": 1.05,
+      "constraintBreakdown": {
+        "grid": 1.05,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 16966.52388893183
+    },
+    "orbit": {
+      "lcoePerMwh": 0.7538380725324375,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 3001.460703698001,
+      "launchCostPerKg": 565.7242734374998,
+      "specificPowerWPerKg": 66.5,
+      "energyCostPerPflopYear": 2.2639398646659745,
+      "hardwareCostPerPflopYear": 13326.844476330245,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 1.9310967266165597,
+      "congestionCostPerPflopYear": 6664.554208097456,
+      "totalCostPerPflopYear": 44401.15091387387,
+      "thermalCapped": true,
+      "computePowerKw": 47.83214700000002,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.06257110837975999
+    },
+    "crossover": false
+  },
+  {
+    "year": 2032,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 137.84228011791362,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2814.200845312501,
+      "energyCostPerPflopYear": 474.12596912116106,
+      "hardwareCapexPerPflopYear": 14924.307932732549,
+      "constraintMultiplier": 1.1025,
+      "constraintBreakdown": {
+        "grid": 1.1025,
+        "cooling": 1,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 16976.773376793717
+    },
+    "orbit": {
+      "lcoePerMwh": 0.6920151312093923,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 3211.5629529568614,
+      "launchCostPerKg": 480.865632421875,
+      "specificPowerWPerKg": 71.5,
+      "energyCostPerPflopYear": 1.9423103842892349,
+      "hardwareCostPerPflopYear": 12454.994837691818,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 2.124206399278216,
+      "congestionCostPerPflopYear": 6228.468574038054,
+      "totalCostPerPflopYear": 45645.4071692284,
+      "thermalCapped": true,
+      "computePowerKw": 52.61536170000003,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.05363610165044286
+    },
+    "crossover": false
+  },
+  {
+    "year": 2033,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 140.5991257202719,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 2954.910887578126,
+      "energyCostPerPflopYear": 460.57951286055646,
+      "hardwareCapexPerPflopYear": 14213.626602602426,
+      "constraintMultiplier": 1.19235375,
+      "constraintBreakdown": {
+        "grid": 1.1576250000000001,
+        "cooling": 1.03,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 17496.84469004522
+    },
+    "orbit": {
+      "lcoePerMwh": 0.6406554816353562,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 3436.372359663842,
+      "launchCostPerKg": 408.7357875585937,
+      "specificPowerWPerKg": 76.5,
+      "energyCostPerPflopYear": 1.6805204830146194,
+      "hardwareCostPerPflopYear": 11640.182091300765,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 2.336627039206038,
+      "congestionCostPerPflopYear": 5820.93130589189,
+      "totalCostPerPflopYear": 46924.64191534226,
+      "thermalCapped": true,
+      "computePowerKw": 57.87689787000004,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.046037728648567255
+    },
+    "crossover": false
+  },
+  {
+    "year": 2034,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 143.41110823467733,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3102.6564319570325,
+      "energyCostPerPflopYear": 447.4200982073977,
+      "hardwareCapexPerPflopYear": 13536.787240573738,
+      "constraintMultiplier": 1.2895305806250001,
+      "constraintBreakdown": {
+        "grid": 1.2155062500000002,
+        "cooling": 1.0609,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 18033.06300915883
+    },
+    "orbit": {
+      "lcoePerMwh": 0.5974380136896298,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 3676.918424840311,
+      "launchCostPerKg": 347.4254194248046,
+      "specificPowerWPerKg": 81.5,
+      "energyCostPerPflopYear": 1.464631392564211,
+      "hardwareCostPerPflopYear": 10878.674851682958,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 2.570289743126642,
+      "congestionCostPerPflopYear": 5440.069741537761,
+      "totalCostPerPflopYear": 48239.81633205997,
+      "thermalCapped": true,
+      "computePowerKw": 63.66458765700005,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.03957492574714405
+    },
+    "crossover": false
+  },
+  {
+    "year": 2035,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 146.27933039937088,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3257.7892535548845,
+      "energyCostPerPflopYear": 434.63666683004345,
+      "hardwareCapexPerPflopYear": 12892.17832435594,
+      "constraintMultiplier": 1.3946273229459378,
+      "constraintBreakdown": {
+        "grid": 1.2762815625000004,
+        "cooling": 1.092727,
+        "water": 1,
+        "land": 1
+      },
+      "totalCostPerPflopYear": 18585.9403145535
+    },
+    "orbit": {
+      "lcoePerMwh": 0.5606305488883205,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 3934.302714579133,
+      "launchCostPerKg": 295.31160651108394,
+      "specificPowerWPerKg": 86.5,
+      "energyCostPerPflopYear": 1.2844833149657306,
+      "hardwareCostPerPflopYear": 10166.98584269435,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 2.827318717439306,
+      "congestionCostPerPflopYear": 5084.135163004658,
+      "totalCostPerPflopYear": 49591.9232538227,
+      "thermalCapped": true,
+      "computePowerKw": 70.03104642270006,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.034075353514947504
+    },
+    "crossover": false
+  },
+  {
+    "year": 2036,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 149.2049170073583,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3420.6787162326286,
+      "energyCostPerPflopYear": 422.21847634918504,
+      "hardwareCapexPerPflopYear": 12278.265070815183,
+      "constraintMultiplier": 1.5384552387613526,
+      "constraintBreakdown": {
+        "grid": 1.3400956406250004,
+        "cooling": 1.1255088100000001,
+        "water": 1,
+        "land": 1.02
+      },
+      "totalCostPerPflopYear": 19539.125447937386
+    },
+    "orbit": {
+      "lcoePerMwh": 0.5289224417513022,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 4209.703904599673,
+      "launchCostPerKg": 251.01486553442135,
+      "specificPowerWPerKg": 91.5,
+      "energyCostPerPflopYear": 1.132556625095299,
+      "hardwareCostPerPflopYear": 9501.85592775173,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 3.1100505891832366,
+      "congestionCostPerPflopYear": 4751.494242188413,
+      "totalCostPerPflopYear": 50981.98676259496,
+      "thermalCapped": true,
+      "computePowerKw": 77.03415106497006,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.02939195665816907
+    },
+    "crossover": false
+  },
+  {
+    "year": 2037,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 152.1890153475055,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3591.7126520442603,
+      "energyCostPerPflopYear": 410.155091310637,
+      "hardwareCapexPerPflopYear": 11693.585781728745,
+      "constraintMultiplier": 1.697116127534811,
+      "constraintBreakdown": {
+        "grid": 1.4071004226562505,
+        "cooling": 1.1592740743,
+        "water": 1,
+        "land": 1.0404
+      },
+      "totalCostPerPflopYear": 20541.453839137408
+    },
+    "orbit": {
+      "lcoePerMwh": 0.5013100157989899,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 4504.38317792165,
+      "launchCostPerKg": 213.3626357042581,
+      "specificPowerWPerKg": 96.5,
+      "energyCostPerPflopYear": 1.0032069556075696,
+      "hardwareCostPerPflopYear": 8880.2391848147,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 3.421055648101561,
+      "congestionCostPerPflopYear": 4440.621195885154,
+      "totalCostPerPflopYear": 52411.06217025532,
+      "thermalCapped": true,
+      "computePowerKw": 84.73756617146708,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.02539969460942393
+    },
+    "crossover": false
+  },
+  {
+    "year": 2038,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 155.23279565445557,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3771.2982846464733,
+      "energyCostPerPflopYear": 398.4363744160473,
+      "hardwareCapexPerPflopYear": 11136.748363551184,
+      "constraintMultiplier": 1.8721397137674762,
+      "constraintBreakdown": {
+        "grid": 1.477455443789063,
+        "cooling": 1.1940522965290001,
+        "water": 1,
+        "land": 1.0612080000000002
+      },
+      "totalCostPerPflopYear": 21595.477453592932
+    },
+    "orbit": {
+      "lcoePerMwh": 0.4770165184634452,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 4819.690000376166,
+      "launchCostPerKg": 181.35824034861938,
+      "specificPowerWPerKg": 101.5,
+      "energyCostPerPflopYear": 0.8921416061519809,
+      "hardwareCostPerPflopYear": 8299.288957770748,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 3.7631612129117173,
+      "congestionCostPerPflopYear": 4150.09054968845,
+      "totalCostPerPflopYear": 53880.23626397369,
+      "thermalCapped": true,
+      "computePowerKw": 93.2113227886138,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.021992533658054092
+    },
+    "crossover": false
+  },
+  {
+    "year": 2039,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 158.3374515675447,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 3959.8631988787974,
+      "energyCostPerPflopYear": 387.0524780041602,
+      "hardwareCapexPerPflopYear": 10606.427012905888,
+      "constraintMultiplier": 2.065213482448316,
+      "constraintBreakdown": {
+        "grid": 1.5513282159785162,
+        "cooling": 1.2298738654248702,
+        "water": 1,
+        "land": 1.08243216
+      },
+      "totalCostPerPflopYear": 22703.882063646477
+    },
+    "orbit": {
+      "lcoePerMwh": 0.45543517018159274,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 5157.068300402498,
+      "launchCostPerKg": 154.15450429632648,
+      "specificPowerWPerKg": 106.5,
+      "energyCostPerPflopYear": 0.7960551620197223,
+      "hardwareCostPerPflopYear": 7756.344820346492,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 4.13947733420289,
+      "congestionCostPerPflopYear": 3878.570437754256,
+      "totalCostPerPflopYear": 55390.62773586627,
+      "thermalCapped": true,
+      "computePowerKw": 102.53245506747518,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.0190807420750142
+    },
+    "crossover": false
+  },
+  {
+    "year": 2040,
+    "mode": "DYNAMIC",
+    "ground": {
+      "electricityPricePerMwh": 161.50420059889558,
+      "pue": 1.3,
+      "capacityFactor": 0.85,
+      "gflopsPerWatt": 4157.856358822737,
+      "energyCostPerPflopYear": 375.9938357754699,
+      "hardwareCapexPerPflopYear": 10101.35905991037,
+      "constraintMultiplier": 2.2781989488932113,
+      "constraintBreakdown": {
+        "grid": 1.6288946267774422,
+        "cooling": 1.2667700813876164,
+        "water": 1,
+        "land": 1.1040808032
+      },
+      "totalCostPerPflopYear": 23869.494354134724
+    },
+    "orbit": {
+      "lcoePerMwh": 0.4360879913571423,
+      "pue": 1.05,
+      "capacityFactor": 0.98,
+      "gflopsPerWatt": 5518.063081430672,
+      "launchCostPerKg": 131.03132865187752,
+      "specificPowerWPerKg": 111.5,
+      "energyCostPerPflopYear": 0.7123721747294277,
+      "hardwareCostPerPflopYear": 7248.920392847189,
+      "launchCostPerPflopYear": 0,
+      "radiationMultiplier": 1.15,
+      "thermalCapFactor": 4.553425067623179,
+      "congestionCostPerPflopYear": 3624.816382510959,
+      "totalCostPerPflopYear": 56943.38774671516,
+      "thermalCapped": true,
+      "computePowerKw": 112.78570057422272,
+      "maxRejectableKw": 24.76942057884686,
+      "collisionRisk": 0.01658849788122474
+    },
+    "crossover": false
+  }
+]

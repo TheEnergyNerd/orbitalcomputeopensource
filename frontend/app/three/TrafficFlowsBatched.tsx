@@ -34,6 +34,7 @@ export function TrafficFlowsBatched() {
   const simPaused = useOrbitSim((s) => s.simPaused);
   const simSpeed = useOrbitSim((s) => s.simSpeed);
   const activeStrategy = useSimulationStore((s) => s.activeStrategy || "balanced");
+  const showComputeRoutes = useOrbitSim((s) => s.showComputeRoutes);
   
   // Refs for batched geometry
   const lineGeometryRef = useRef<BufferGeometry | null>(null);
@@ -489,6 +490,10 @@ export function TrafficFlowsBatched() {
     };
   }, []);
   
+  if (!showComputeRoutes) {
+    return null;
+  }
+
   if (routes.length === 0 || routeDataRef.current.size === 0) {
     return null;
   }

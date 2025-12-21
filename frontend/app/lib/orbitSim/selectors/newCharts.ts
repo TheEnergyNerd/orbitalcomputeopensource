@@ -47,8 +47,15 @@ export function buildThermalConstraintSeries(
   const entries = getDebugStateEntries(scenarioKey)
     .sort((a, b) => a.year - b.year);
 
-  // Thermal model constants
-  const RADIATOR_EFFICIENCY_KW_PER_M2 = 0.2; // 200 W/m² = 0.2 kW/m²
+  // Thermal model (Stefan-Boltzmann)
+  const sigma = 5.670374e-8;
+  const T = 27 + 273.15; // 300K / 27C
+  const sinkTempK = 250;
+  const emissivity = 0.9;
+  const viewFactor = 0.85;
+  const net_Wm2 = emissivity * sigma * (Math.pow(T, 4) - Math.pow(sinkTempK, 4)) * viewFactor;
+  const kwPerM2 = net_Wm2 / 1000;
+
   const HEAT_FRACTION = 0.85; // 85% of power becomes heat
   const MAX_BODY_MOUNTED_M2 = 20;
   const MAX_DEPLOYABLE_M2 = 100;
@@ -61,8 +68,8 @@ export function buildThermalConstraintSeries(
     const totalRadiatorAreaM2 = entry.radiatorArea ?? 0;
     const radiatorAreaPerSatM2 = totalSats > 0 ? totalRadiatorAreaM2 / totalSats : 0;
     
-    // Calculate max power from radiator area
-    const maxPowerFromRadiatorKw = (radiatorAreaPerSatM2 * RADIATOR_EFFICIENCY_KW_PER_M2) / HEAT_FRACTION;
+    // Calculate max power from radiator area using single truth source
+    const maxPowerFromRadiatorKw = (radiatorAreaPerSatM2 * kwPerM2) / HEAT_FRACTION;
     
     // Determine feasibility zone
     let zone: "body_mounted" | "deployable" | "bleeding_edge" | "not_feasible";
@@ -147,23 +154,20 @@ export function buildCostRealityWaterfallSeries(
     .sort((a, b) => a.year - b.year);
 
   return entries.map(entry => {
-    // Base optimistic cost (before reality check constraints)
-    const orbitCostPerCompute = entry.orbit_cost_per_compute ?? 0;
-    const optimisticCostPerPflop = orbitCostPerCompute * 0.7; // Assume 30% reduction from optimistic
+    // Base optimistic cost (Energy + Hardware)
+    const baseEnergy = entry.physics_orbit_energy_cost ?? 0;
+    const baseHardware = entry.physics_orbit_hardware_cost ?? 0;
+    const optimisticCostPerPflop = baseEnergy + baseHardware;
     
-    // Cost adders (as percentages of optimistic cost)
-    const radiationShieldingCost = optimisticCostPerPflop * 0.15; // 15% adder
-    const thermalSystemCost = optimisticCostPerPflop * 0.10; // 10% adder
-    const replacementRateCost = optimisticCostPerPflop * 0.20; // 20% adder (faster replacement)
-    const eccOverheadCost = optimisticCostPerPflop * 0.15; // 15% adder (ECC compute overhead)
-    const redundancyCost = optimisticCostPerPflop * 0.10; // 10% adder (redundancy)
+    // Adders from physics waterfall
+    const radiationShieldingCost = optimisticCostPerPflop * ((entry.physics_orbit_radiation_multiplier ?? 1) - 1);
+    const thermalSystemCost = optimisticCostPerPflop * ((entry.physics_orbit_thermal_cap_factor ?? 1) - 1);
+    const replacementRateCost = entry.physics_orbit_congestion_cost ?? 0; // Use congestion as a proxy for "space reality"
+    const eccOverheadCost = 0; // Already in multipliers
+    const redundancyCost = 0; // Already in multipliers
     
-    const realisticCostPerPflop = optimisticCostPerPflop + 
-      radiationShieldingCost + 
-      thermalSystemCost + 
-      replacementRateCost + 
-      eccOverheadCost + 
-      redundancyCost;
+    const realisticCostPerPflop = entry.physics_cost_per_pflop_year_orbit ?? 
+      (optimisticCostPerPflop + radiationShieldingCost + thermalSystemCost + replacementRateCost);
     
     return {
       year: entry.year,

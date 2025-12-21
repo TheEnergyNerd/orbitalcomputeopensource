@@ -886,19 +886,20 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       groundHardwareCapexPerPflopYear +
       siteCapexAmortPerPflopYear;
     
-    // Calculate scarcity rent using Hill function of avgWaitYears (NOT backlog or utilization)
-    // Uses fixed reference base (doesn't decline with tech) to ensure rent INCREASES with scarcity
-    // Parameters: w50=3.0, n=2.0, rentMax=0.65, utilization threshold=0.85
+    // Calculate scarcity multiplier using LOG-BASED function (never fully saturates)
+    // Returns multiplier (1.0 = no scarcity, 2.0 = 2x price) - MULTIPLICATIVE, not additive
     const scarcityRentResult = calculateScarcityRent(
       currentSupplyState.avgWaitYears,
       currentSupplyState.utilizationPct, // Pass utilization for threshold gate
       {
-        waitThresholdYears: 3.0, // w50 = 3.0 years (half-saturation) - increased from 2.0
-        rentMaxFracOfCapexAnnual: 0.65, // rentMax = 65% of reference base
-        rentShapeP: 2.0, // n = 2.0 (Hill coefficient)
+        waitThresholdYears: 1.0, // Minimum wait before scarcity activates
+        rentMaxMultiplier: 2.0, // Maximum price multiplier (2x = 100% increase)
+        utilizationThreshold: 0.85, // Utilization threshold
       }
     );
-    const scarcityRentPerPflopYear = scarcityRentResult.scarcityRentPerPflopYear;
+    const scarcityMultiplier = scarcityRentResult.scarcityMultiplier;
+    // For backward compatibility: scarcityRentPerPflopYear = 0 (scarcity is now multiplicative)
+    const scarcityRentPerPflopYear = 0;
     
     // Debug: verify queue model consistency
     if (process.env.NODE_ENV === 'development') {
@@ -969,7 +970,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         method: 'adders',
         capacityDeliveryPremium: capacityDeliveryPremiumPerPflopYear * groundLatencyPenalty, // Set to 0 (not used)
         delayPenalty: timeToEnergizePenaltyPerPflopYear * groundLatencyPenalty, // Bounded linear WACC carry
-        scarcityRentPerPflopYear: scarcityRentPerPflopYear * groundLatencyPenalty, // Hill-based (queue + utilization)
+        scarcityRentPerPflopYear: scarcityRentPerPflopYear * groundLatencyPenalty, // Backward compat (now 0, scarcity is multiplicative)
+        scarcityMultiplier: scarcityMultiplier, // Multiplicative scarcity (1.0 = no scarcity, 2.0 = 2x price)
         appliedMultipliers: {
           constraintMultiplierUsed: false,
           energyMultiplierUsed: false,
@@ -1119,20 +1121,21 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       siteCapexAmortPerPflopYear +
       buildoutPremiumPerPflopYear; // Include buildout premium as true engineering capex
     
-    // Calculate scarcity rent using Hill function (saturating, wait-time-based)
-    // Uses fixed reference base (doesn't decline with tech) to ensure rent INCREASES with scarcity
-    // Parameters: w50=3.0, n=2.0, rentMax=0.65, utilization threshold=0.85
+    // Calculate scarcity multiplier using LOG-BASED function (never fully saturates)
+    // Returns multiplier (1.0 = no scarcity, 2.0 = 2x price) - MULTIPLICATIVE, not additive
     const utilizationPct = capacityGW > 0 ? Math.min(1.0, demandNewGW / capacityGW) : 1.0;
     const scarcityRentResult = calculateScarcityRent(
       avgWaitYears,
       utilizationPct, // Pass utilization for threshold gate
       {
-        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 3.0, // w50 = 3.0 years (half-saturation)
-        rentMaxFracOfCapexAnnual: params.scarcityRentMaxFracOfCapexAnnual ?? 0.65, // rentMax = 65% of reference base
-        rentShapeP: params.scarcityRentShapeP ?? 2.0, // n = 2.0 (Hill coefficient)
+        waitThresholdYears: params.scarcityRentWaitThresholdYears ?? 1.0, // Minimum wait before scarcity activates
+        rentMaxMultiplier: params.scarcityRentMaxMultiplier ?? 2.0, // Maximum price multiplier (2x = 100% increase)
+        utilizationThreshold: 0.85, // Utilization threshold
       }
     );
-    const scarcityRentPerPflopYear = scarcityRentResult.scarcityRentPerPflopYear;
+    const scarcityMultiplier = scarcityRentResult.scarcityMultiplier;
+    // For backward compatibility: scarcityRentPerPflopYear = 0 (scarcity is now multiplicative)
+    const scarcityRentPerPflopYear = 0;
     
     // Define three totals:
     // 1. base: energy + siteCapexAmort + buildoutPremium + hardware (no scarcity pricing)
@@ -1258,7 +1261,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
         method: 'adders',
         capacityDeliveryPremium: buildoutPremiumPerPflopYear * groundLatencyPenalty,
         delayPenalty: delayPenaltyPerPflopYear * groundLatencyPenalty,
-        scarcityRentPerPflopYear: scarcityRentPerPflopYear * groundLatencyPenalty, // Saturating wait-time-based rent
+        scarcityRentPerPflopYear: scarcityRentPerPflopYear * groundLatencyPenalty, // Backward compat (now 0, scarcity is multiplicative)
+        scarcityMultiplier: scarcityMultiplier, // Multiplicative scarcity (1.0 = no scarcity, 2.0 = 2x price)
         appliedMultipliers: {
           constraintMultiplierUsed: false,
           energyMultiplierUsed: false,
@@ -1737,19 +1741,17 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   const costAccountingErrorPct = orbitalAccounting.errorPct;
 
   // FIX 5: GPU-hour breakdown must derive from annual cost breakdown
-  // GPU-hour pricing: ONLY convert PFLOP-year costs (no local computation)
-  // Sum PFLOP-year scarcity terms first (delayPenalty + scarcityRent)
-  // capacityDeliveryPremium is engineering cost, not scarcity pricing
+  // GPU-hour pricing: Apply scarcity as MULTIPLICATIVE multiplier (not additive)
+  // delayPenalty remains additive (WACC carry cost), but scarcity rent is now multiplicative
   const delayPenaltyPerPflopYear = groundResult.constraints?.delayPenalty || 0;
-  const scarcityRentPerPflopYear = groundResult.constraints?.scarcityRentPerPflopYear || 0;
-  const scarcityTermsPerPflopYear = delayPenaltyPerPflopYear + scarcityRentPerPflopYear;
+  const scarcityMultiplier = groundResult.constraints?.scarcityMultiplier ?? 1.0; // Multiplier from log-based function
   
-  // Convert scarcity terms to $/GPU-hour (same conversion as PFLOP-year to GPU-hour)
+  // Convert delayPenalty to $/GPU-hour (still additive)
   const pflopsPerGpu = 2.0;
   const utilizationTarget = 0.85;
   const hoursPerYear = 8760;
   const annualGpuHoursPerPFLOP = hoursPerYear * utilizationTarget / pflopsPerGpu;
-  const scarcityAdderPerGpuHour = scarcityTermsPerPflopYear / annualGpuHoursPerPFLOP;
+  const delayPenaltyAdderPerGpuHour = delayPenaltyPerPflopYear / annualGpuHoursPerPFLOP;
   
   // Invariant: GPU-hour scarcity must match PFLOP-year scarcity conversion
   if (process.env.NODE_ENV === 'development' && scarcityTermsPerPflopYear > 0) {
@@ -1786,26 +1788,30 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       // Ground cooling included in energy, interconnect minimal
     });
     
-    // UNIFIED SCARCITY ACCOUNTING: Scarcity (delayPenalty + scarcityRent) is treated purely in GPU-hour pricing
-    // Add scarcity adders to cost breakdown (delayPenalty + scarcityRent only)
-    // This is the saturating wait-time-based rent + linear delay penalty
-    // scarcityAdderPerGpuHour is already computed above (delayPenalty + scarcityRent converted from PFLOP-year)
+    // UNIFIED SCARCITY ACCOUNTING: Scarcity is MULTIPLICATIVE (not additive)
+    // Base cost (hardware + energy + site) - this declines with Moore's Law
+    // Apply scarcity as MULTIPLIER, then add delayPenalty (still additive WACC carry)
     
-    // Preserve tier-dependent costs (spares + slaRiskBuffer) by adjusting pre-margin total.
-    // basePricing.pricePerGpuHour = preMarginBase + margin, so extract preMarginBase
+    // Extract base cost before margin
     const preMarginBase = basePricing.pricePerGpuHour - (basePricing.costBreakdown.margin || 0);
-    const preMarginWithScarcity = preMarginBase + scarcityAdderPerGpuHour;
     
-    // Recompute margin on the updated pre-margin subtotal
-    const margin = preMarginWithScarcity * operatorMargin;
-    const pricePerGpuHour = preMarginWithScarcity + margin;
+    // Apply scarcity MULTIPLIER to base cost
+    const costWithScarcity = preMarginBase * scarcityMultiplier;
+    
+    // Add delayPenalty (still additive - WACC carry cost)
+    const costWithScarcityAndDelay = costWithScarcity + delayPenaltyAdderPerGpuHour;
+    
+    // Then add margin
+    const margin = costWithScarcityAndDelay * operatorMargin;
+    const pricePerGpuHour = costWithScarcityAndDelay + margin;
     
     return {
       ...basePricing,
       pricePerGpuHour,
       costBreakdown: {
         ...basePricing.costBreakdown,
-        scarcity: scarcityAdderPerGpuHour, // Scarcity adder (delayPenalty + scarcityRent) - unified accounting
+        scarcity: (scarcityMultiplier - 1) * preMarginBase, // Scarcity premium (for display)
+        delayPenalty: delayPenaltyAdderPerGpuHour, // Delay penalty (WACC carry)
         margin, // overwrite with recomputed margin
       },
     };
@@ -1839,13 +1845,13 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   // DEBUG INVARIANTS (development mode only)
   // ============================================================================
   if (process.env.NODE_ENV === 'development') {
-    // Invariant 1: If avgWaitYears > 0 then scarcity rent should be > 0 (scarcity is in GPU-hour pricing)
+    // Invariant 1: If avgWaitYears > 0 then scarcity multiplier should be > 1.0 (scarcity is multiplicative in GPU-hour pricing)
     const avgWaitYears = groundResult.supplyMetrics?.avgWaitYears ?? 0;
-    const scarcityRentPerPflopYear = groundResult.constraints?.scarcityRentPerPflopYear ?? 0;
-    if (avgWaitYears > 0.01 && scarcityRentPerPflopYear <= 0) {
+    const scarcityMultiplier = groundResult.constraints?.scarcityMultiplier ?? 1.0;
+    if (avgWaitYears > 1.0 && scarcityMultiplier <= 1.0) {
       console.warn(
-        `[INVARIANT VIOLATION] Year ${year}: avgWaitYears=${avgWaitYears} > 0 but scarcityRentPerPflopYear=${scarcityRentPerPflopYear} <= 0. ` +
-        `Scarcity rent should be > 0 when wait time exists (scarcity is treated in GPU-hour pricing).`
+        `[INVARIANT VIOLATION] Year ${year}: avgWaitYears=${avgWaitYears} > 1.0 but scarcityMultiplier=${scarcityMultiplier} <= 1.0. ` +
+        `Scarcity multiplier should be > 1.0 when wait time exists (scarcity is multiplicative in GPU-hour pricing).`
       );
     }
     
@@ -1859,8 +1865,8 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     const groundEffective = groundResult.totalCostPerPflopYearEffective ?? groundResult.totalCostPerPflopYear;
     const groundHeadline = groundResult.totalCostPerPflopYear;
     const delayPenalty = groundResult.constraints?.delayPenalty ?? 0;
-    const scarcityRent = groundResult.constraints?.scarcityRentPerPflopYear ?? 0;
-    const expectedEffective = groundHeadline + delayPenalty + scarcityRent;
+    // Scarcity is now multiplicative (not additive), so don't add it to effective cost
+    const expectedEffective = groundHeadline + delayPenalty; // Scarcity applied in GPU-hour pricing, not PFLOP-year
     const effectiveError = Math.abs(groundEffective - expectedEffective);
     if (effectiveError > 0.01 && (delayPenalty > 0 || scarcityRent > 0)) {
       console.warn(

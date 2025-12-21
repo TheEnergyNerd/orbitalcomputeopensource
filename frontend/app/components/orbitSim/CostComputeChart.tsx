@@ -57,9 +57,9 @@ export default function CostComputeChart({ timeline, scenarioMode }: CostCompute
 
       return {
         ...step,
-        costPerComputeGround: debugEntry.cost_per_compute_ground ?? 340,
-        costPerComputeMix: debugEntry.cost_per_compute_mix ?? 340,
-        costPerComputeOrbit: debugEntry.cost_per_compute_orbit ?? 340,
+        costPerComputeGround: debugEntry.physics_cost_per_pflop_year_ground ?? 340,
+        costPerComputeMix: debugEntry.physics_cost_per_pflop_year_mix ?? 340,
+        costPerComputeOrbit: debugEntry.physics_cost_per_pflop_year_orbit ?? 340,
       };
     });
   }, [timeline, selectedScenarioKey]);
@@ -72,7 +72,7 @@ export default function CostComputeChart({ timeline, scenarioMode }: CostCompute
         </div>
       )}
       <KpiCard
-        title="Cost / Compute"
+        title="CALIBRATED COST INDEX"
         timeline={transformedTimeline}
         groundKey="costPerComputeGround"
         mixKey="costPerComputeMix"

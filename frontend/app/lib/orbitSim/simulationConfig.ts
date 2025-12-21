@@ -79,7 +79,7 @@ export type LaunchStrategy = "heavy" | "medium" | "light";
 /**
  * Scenario Mode - Assumptions about orbital technology and economics
  */
-export type ScenarioMode = "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
+export type ScenarioMode = "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR" | "MCCALIP_BASELINE";
 
 /**
  * YearPlan - User's decision for a specific year
@@ -116,6 +116,9 @@ export interface YearStep {
   // KPIs (per-year snapshot)
   costPerComputeGround: number;
   costPerComputeMix: number;
+  physics_cost_per_pflop_year_ground: number;
+  physics_cost_per_pflop_year_mix: number;
+  physics_cost_per_pflop_year_orbit: number;
 
   latencyGroundMs: number;
   latencyMixMs: number;
@@ -141,7 +144,7 @@ export interface YearStep {
   stageThroughputs: StageThroughput[];
   
   // Scenario diagnostics (optional, from debug state)
-  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR";
+  scenario_mode?: "BASELINE" | "ORBITAL_BULL" | "ORBITAL_BEAR" | "MCCALIP_BASELINE";
   launch_cost_per_kg?: number;
   tech_progress_factor?: number;
   failure_rate_effective?: number;

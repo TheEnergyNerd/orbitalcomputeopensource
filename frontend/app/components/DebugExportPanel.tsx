@@ -207,6 +207,27 @@ export default function DebugExportPanel() {
       congestion_index: congestionIndex,
       routing_distribution: routingDistribution,
       scenario_diagnostics: scenarioDiagnostics,
+      // CRITICAL FIX: Add explicit compute per dollar calculations to ensure consistency with UI
+      // UI calculates: computePerDollar = 1e9 / costPerPFLOP
+      // Legacy (Renamed to CALIBRATED_COST_INDEX)
+      CALIBRATED_COST_INDEX_GROUND: currentDebugEntry?.CALIBRATED_COST_INDEX_GROUND ?? null,
+      CALIBRATED_COST_INDEX_ORBIT: currentDebugEntry?.CALIBRATED_COST_INDEX_ORBIT ?? null,
+      CALIBRATED_COST_INDEX_MIX: currentDebugEntry?.CALIBRATED_COST_INDEX_MIX ?? null,
+      
+      // Physics-Based $/PFLOP (Section 4)
+      physics_cost_per_pflop_year_ground: currentDebugEntry?.physics_cost_per_pflop_year_ground ?? null,
+      physics_cost_per_pflop_year_orbit: currentDebugEntry?.physics_cost_per_pflop_year_orbit ?? null,
+      physics_cost_per_pflop_year_mix: currentDebugEntry?.physics_cost_per_pflop_year_mix ?? null,
+      
+      physics_waterfall: {
+        ground_energy: currentDebugEntry?.physics_ground_energy_cost,
+        ground_hardware: currentDebugEntry?.physics_ground_hardware_cost,
+        orbit_energy: currentDebugEntry?.physics_orbit_energy_cost,
+        orbit_hardware: currentDebugEntry?.physics_orbit_hardware_cost,
+        orbit_congestion: currentDebugEntry?.physics_orbit_congestion_cost,
+        orbit_radiation_mult: currentDebugEntry?.physics_orbit_radiation_multiplier,
+        orbit_thermal_cap: currentDebugEntry?.physics_orbit_thermal_cap_factor,
+      },
       // Added per CHART_AUDIT_AND_CONGESTION.md
       power_per_sat_kw: powerPerSatKwSnapshot,
       shell_utilization: shellUtilization,
@@ -232,6 +253,9 @@ export default function DebugExportPanel() {
     const orbitCarbon: number[] = [];
     const groundCarbon: number[] = [];
     const satelliteCounts: number[] = [];
+    const physicsCostGround: number[] = [];
+    const physicsCostOrbit: number[] = [];
+    const physicsCostMix: number[] = [];
     // Scenario diagnostics time-series
     const scenarioModes: string[] = [];
     const launchCostsPerKg: (number | null)[] = [];
@@ -292,6 +316,11 @@ export default function DebugExportPanel() {
         // Satellite counts from debug state
         satelliteCounts.push(debugEntry.satellitesTotal || 0);
         
+        // Physics costs from debug state
+        physicsCostGround.push(debugEntry.physics_cost_per_pflop_year_ground ?? 0);
+        physicsCostOrbit.push(debugEntry.physics_cost_per_pflop_year_orbit ?? 0);
+        physicsCostMix.push(debugEntry.physics_cost_per_pflop_year_mix ?? 0);
+        
         // Scenario diagnostics from debug state
         scenarioModes.push(debugEntry.scenario_mode || config.scenarioMode || "BASELINE");
         launchCostsPerKg.push(debugEntry.launch_cost_per_kg ?? null);
@@ -337,6 +366,9 @@ export default function DebugExportPanel() {
         orbitCarbon.push((timelineStep.podsTotal || 0) * 1.19);
         groundCarbon.push(timelineStep.carbonGround || 0);
         satelliteCounts.push(timelineStep.podsTotal || 0);
+        physicsCostGround.push(timelineStep.physics_cost_per_pflop_year_ground || 340);
+        physicsCostOrbit.push(timelineStep.physics_cost_per_pflop_year_orbit || 1e7);
+        physicsCostMix.push(timelineStep.physics_cost_per_pflop_year_mix || 340);
         
         // Scenario diagnostics from timeline
         const stepAny = timelineStep as any;
@@ -402,6 +434,9 @@ export default function DebugExportPanel() {
       orbit_carbon: orbitCarbon,
       ground_carbon: groundCarbon,
       satellite_counts: satelliteCounts,
+      physics_cost_ground: physicsCostGround,
+      physics_cost_orbit: physicsCostOrbit,
+      physics_cost_mix: physicsCostMix,
       // Scenario diagnostics time-series
       scenario_diagnostics: {
         scenario_mode: scenarioModes,
@@ -483,7 +518,17 @@ export default function DebugExportPanel() {
         baseOrbitalCarbonPerTwh: config.baseOrbitalCarbonPerTwh,
       },
       // CRITICAL: Cost/Compute algorithms (physics-based)
-      costPerCompute: {
+      physicsCostPerPflopYear: {
+        ground: {
+          formula: "(electricityPricePerMwh * pue * 8760 * cf / gflopsPerW) * multipliers + hardwareCapex",
+          description: "Truth source for compute economics"
+        },
+        orbit: {
+          formula: "(orbitLcoe * pue * 8760 * cf / gflopsPerW) * radiationMultiplier + congestionCost",
+          description: "Truth source for compute economics"
+        }
+      },
+      CALIBRATED_COST_INDEX: {
         description: "Cost per compute unit ($/PFLOP) derived from physics-based satellite costs",
         ground: {
           formula: "baseGroundCostPerCompute * (1 - groundLearningRate)^yearIndex",
@@ -661,7 +706,6 @@ export default function DebugExportPanel() {
   };
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 pointer-events-auto">
       <button
         onClick={handleExport}
         className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition shadow-lg"
@@ -669,7 +713,6 @@ export default function DebugExportPanel() {
       >
         📥 Export Debug Data
       </button>
-    </div>
   );
 }
 

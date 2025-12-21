@@ -83,3 +83,8 @@
 - **Reason**: 50 Gbps per satellite = 0.05 TBps per satellite (not 0.5 TBps)
 
 
+
+
+
+
+

@@ -50,6 +50,7 @@ interface OrbitSimState {
   simPaused: boolean;
   simSpeed: number; // 1 = normal, 2 = 2x, etc.
   simTime: number; // Accumulated simulation time in seconds
+  showComputeRoutes: boolean; // Toggle for compute routes visualization (auto off)
   recompute: () => void;
   updateSatellites: (sats: SimSatellite[]) => void;
   updateRoutes: (policy: RouterPolicy | null, satellites: Satellite[]) => void;
@@ -57,6 +58,7 @@ interface OrbitSimState {
   setSimPaused: (paused: boolean) => void;
   setSimSpeed: (speed: number) => void;
   updateSimTime: (delta: number) => void;
+  setShowComputeRoutes: (show: boolean) => void;
 }
 
 export const useOrbitSim = create<OrbitSimState>((set, get) => ({
@@ -67,6 +69,7 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
   simPaused: false,
   simSpeed: 1.0,
   simTime: 0,
+  showComputeRoutes: false, // Auto off by default
   recompute: () => {
     // recompute sats → routes → futures → charts
     set((state) => ({ ...state }));
@@ -82,6 +85,9 @@ export const useOrbitSim = create<OrbitSimState>((set, get) => ({
     if (!simPaused) {
       set((state) => ({ simTime: state.simTime + delta * simSpeed }));
     }
+  },
+  setShowComputeRoutes: (show: boolean) => {
+    set({ showComputeRoutes: show });
   },
   updateSatellites: (sats: SimSatellite[]) => {
     const currentState = get();

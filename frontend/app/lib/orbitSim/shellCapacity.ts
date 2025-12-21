@@ -81,3 +81,8 @@ export function calculateTotalCapacity(
   return { totalSats, totalPowerGW, breakdown };
 }
 
+
+
+
+
+

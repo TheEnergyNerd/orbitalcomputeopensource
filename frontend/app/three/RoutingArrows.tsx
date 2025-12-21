@@ -21,6 +21,7 @@ export function RoutingArrows() {
   const spawnQueueRef = useRef<Array<{ id: string; x: number; y: number; z: number }>>([]);
   const spawnStartTimeRef = useRef<number>(performance.now());
   const spawnDurationRef = useRef<number>(500); // Match SatellitesOptimized
+  const showComputeRoutes = useOrbitSim((s) => s.showComputeRoutes);
 
   // Get visible satellites using same streaming spawn logic as SatellitesOptimized
   const getVisibleSatellites = () => {
@@ -186,6 +187,10 @@ export function RoutingArrows() {
 
     toRemove.forEach(id => arrowsRef.current.delete(id));
   });
+
+  if (!showComputeRoutes) {
+    return null;
+  }
 
   return (
     <>

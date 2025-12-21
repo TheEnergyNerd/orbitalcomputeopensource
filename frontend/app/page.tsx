@@ -36,6 +36,8 @@ import ErrorPanel from "./components/ErrorPanel";
 import { logGpuEvent } from "./lib/debugGpu";
 import OrbitalScene from "./three/OrbitalScene";
 import DebugHud from "./components/DebugHud";
+import DebugExportPanel from "./components/DebugExportPanel";
+import { ExportAllChartsButton } from "./components/orbitSim/ChartExportButton";
 import YearCounter from "./components/YearCounter";
 import TutorialSystem from "./components/TutorialSystem";
 import { SatelliteCounters } from "./components/SatelliteCounters";
@@ -46,9 +48,11 @@ import { VisualGlossary } from "./components/VisualGlossary";
 export default function Home() {
   // Cesium removed - using Three.js OrbitalScene only
   const [activeSurface, setActiveSurface] = useState<SurfaceType>("overview");
+  const [mounted, setMounted] = useState(false);
   
-  // Log GPU event on mount
+  // Ensure we're mounted before rendering client-only content
   useEffect(() => {
+    setMounted(true);
     logGpuEvent("app_mounted", {});
   }, []);
 
@@ -73,6 +77,11 @@ export default function Home() {
   // New OrbitSim doesn't need backend - don't block UI if backend is down
   // Only show loading if we're actually waiting for backend AND it's not a 500/404 error
   const shouldShowLoading = loading && !error;
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return null; // Return null during SSR to prevent hydration mismatch
+  }
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, overflow: 'auto' }}>
@@ -160,6 +169,13 @@ export default function Home() {
         {/* Visual Glossary - show only in world view */}
         {activeSurface === "world" && <VisualGlossary activeSurface={activeSurface} />}
         
+        {/* Floating Debug & Export controls */}
+        <div className="fixed bottom-4 left-4 z-[9999] flex flex-col gap-3 pointer-events-auto">
+          <DebugExportPanel />
+          <div className="ml-0">
+            <ExportAllChartsButton />
+          </div>
+        </div>
       </>
       </main>
     </div>

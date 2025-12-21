@@ -180,12 +180,12 @@ export function buildBottleneckSeries(years: DebugStateEntry[]): PhysicsSeriesPo
   }));
 }
 
-// 13. Physics-limited orbit vs Texas compute
+// 13. Physics-limited orbit vs Ground compute
 export function buildPhysicsVsGroundSeries(years: DebugStateEntry[]): PhysicsSeriesPoint[] {
   return sortByYear(years).map(y => ({
     year: y.year,
-    cost_ground: y.cost_per_compute_ground ?? 0,
-    cost_orbit_physics: y.cost_per_compute_orbit ?? 0,
+    cost_ground: y.physics_cost_per_pflop_year_ground ?? 0,
+    cost_orbit_physics: y.physics_cost_per_pflop_year_orbit ?? 0,
   }));
 }
 

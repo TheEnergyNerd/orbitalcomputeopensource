@@ -24,6 +24,7 @@ export interface ScenarioParams {
   launchCadenceMultiplier: number;    // Multiplier for launch cadence (affects fleet size)
   busPowerMultiplier: number;         // Multiplier for bus power (affects kW/sat)
   lifetimeMultiplier: number;         // Multiplier for satellite lifetime (affects retirements)
+  spaceTrafficEnabled?: boolean;      // Toggle for congestion costs
 }
 
 export const SCENARIOS: ScenarioParams[] = [
@@ -46,6 +47,7 @@ export const SCENARIOS: ScenarioParams[] = [
     launchCadenceMultiplier: 1.0,      // BASELINE: full launch cadence
     busPowerMultiplier: 0.92,         // Was 1.0 - 8% slower power scaling
     lifetimeMultiplier: 1.0,           // Unchanged
+    spaceTrafficEnabled: false,
   },
   {
     key: "orbitalBear",
@@ -66,6 +68,7 @@ export const SCENARIOS: ScenarioParams[] = [
     launchCadenceMultiplier: 0.6,     // Was 0.5 - 40% reduction instead of 50%
     busPowerMultiplier: 0.75,         // Was 0.7 - 25% reduction instead of 30%
     lifetimeMultiplier: 0.75,         // Was 0.7 - 5.25 years instead of 5
+    spaceTrafficEnabled: false,
   },
   {
     key: "orbitalBull",
@@ -86,6 +89,7 @@ export const SCENARIOS: ScenarioParams[] = [
     launchCadenceMultiplier: 1.5,      // 50% more launches
     busPowerMultiplier: 1.3,           // Faster power scaling (200 kW by 2040 instead of 150)
     lifetimeMultiplier: 1.3,           // 9 years instead of 7
+    spaceTrafficEnabled: false,
   },
 ];
 

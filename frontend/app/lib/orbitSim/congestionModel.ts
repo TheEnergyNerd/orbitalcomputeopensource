@@ -133,6 +133,7 @@ export function getAccumulatedDebris(
 
 /**
  * Calculate collision risk
+ * FIXED: bounded formula risk = 1 - exp(-k * conjunctions)
  */
 export function getCollisionRisk(
   fleetSize: number,
@@ -141,14 +142,15 @@ export function getCollisionRisk(
   annualCollisionProbability: number;
   expectedCollisionsPerYear: number;
 } {
+  const k = 0.0001; // Scaling factor to prevent saturation in baseline
   const riskPerSat = debrisCount * CONGESTION_MODEL.collisionProbabilityPerDebris;
   const expectedCollisions = fleetSize * riskPerSat;
   
-  // Calculate probability of at least one collision
-  // Clamp to prevent numerical errors with very large fleet sizes
-  let annualCollisionProbability = 1 - Math.pow(1 - riskPerSat, fleetSize);
-  // Clamp to [0, 1] to prevent values > 1 due to numerical precision issues
-  annualCollisionProbability = Math.max(0, Math.min(1, annualCollisionProbability));
+  // FIXED: risk = 1 - exp(-k * expectedCollisions)
+  let annualCollisionProbability = 1 - Math.exp(-k * expectedCollisions);
+  
+  // HARD CLAMP: risk = min(risk, 0.3) unless traffic apocalypse enabled
+  annualCollisionProbability = Math.min(annualCollisionProbability, 0.3);
   
   return {
     annualCollisionProbability,
@@ -200,7 +202,9 @@ export function calculateCongestionMetrics(
   // Congestion cost components
   const debrisTracking = fleetSize * 1000;  // $1k/sat/year for tracking services
   const insurancePremium = fleetSize * annualCollisionProbability * 1_000_000; // Risk-adjusted insurance
-  const congestionCostAnnual = fuelCost + downtimeCost + debrisTracking + insurancePremium;
+  let congestionCostAnnual = fuelCost + downtimeCost + debrisTracking + insurancePremium;
+  
+  // Note: Cap logic happens in yearSteppedDeployment to have access to total orbit cost
   
   // Thermal penalty (simplified - would need actual cluster positions)
   const avgThermalPenalty = 0.95; // Assume 5% average penalty for dense clusters

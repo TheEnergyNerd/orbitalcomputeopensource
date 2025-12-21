@@ -71,10 +71,10 @@ export function buildConeSeries(
 }
 
 /**
- * Build cone series for cost per compute
+ * Build cone series for cost per compute (Physics-based)
  */
 export function buildCostConeSeries(): ConePoint[] {
-  return buildConeSeries("cost_per_compute_mix");
+  return buildConeSeries("physics_cost_per_pflop_year_mix");
 }
 
 /**

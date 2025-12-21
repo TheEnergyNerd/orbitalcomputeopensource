@@ -9,9 +9,9 @@ import type { YearStep } from './simulationConfig';
 
 export interface YearState {
   year: number;
-  cost_per_compute_ground: number;
-  cost_per_compute_orbit: number;
-  cost_per_compute_mix: number;
+  physics_cost_per_pflop_year_ground: number;
+  physics_cost_per_pflop_year_orbit: number;
+  physics_cost_per_pflop_year_mix: number;
   annual_opex_ground_all_ground: number;
   annual_opex_ground: number;
   annual_opex_orbit: number;
@@ -50,9 +50,9 @@ export function getYearStateFromDebug(): YearState[] {
 
       return {
         year,
-        cost_per_compute_ground: entry.cost_per_compute_ground ?? 340,
-        cost_per_compute_orbit: entry.cost_per_compute_orbit ?? entry.cost_per_compute_mix ?? 1e7,
-        cost_per_compute_mix: entry.cost_per_compute_mix ?? 340,
+        physics_cost_per_pflop_year_ground: entry.physics_cost_per_pflop_year_ground ?? 340,
+        physics_cost_per_pflop_year_orbit: entry.physics_cost_per_pflop_year_orbit ?? entry.physics_cost_per_pflop_year_mix ?? 1e7,
+        physics_cost_per_pflop_year_mix: entry.physics_cost_per_pflop_year_mix ?? 340,
         annual_opex_ground_all_ground: entry.annual_opex_ground_all_ground ?? entry.annual_opex_ground ?? 0,
         annual_opex_ground: entry.annual_opex_ground ?? 0,
         annual_opex_orbit: entry.annual_opex_orbit ?? 0,
@@ -79,9 +79,9 @@ export function getYearStateFromDebug(): YearState[] {
 export function timelineToYearState(timeline: YearStep[]): YearState[] {
   return timeline.map(step => ({
     year: step.year,
-    cost_per_compute_ground: step.costPerComputeGround,
-    cost_per_compute_orbit: step.costPerComputeMix, // Use mix as orbit proxy if needed
-    cost_per_compute_mix: step.costPerComputeMix,
+    physics_cost_per_pflop_year_ground: step.physics_cost_per_pflop_year_ground,
+    physics_cost_per_pflop_year_orbit: step.physics_cost_per_pflop_year_mix, // Use mix as orbit proxy if needed
+    physics_cost_per_pflop_year_mix: step.physics_cost_per_pflop_year_mix,
     annual_opex_ground_all_ground: step.opexGroundBaseline ?? step.opexGround,
     annual_opex_ground: step.opexGround,
     annual_opex_orbit: step.opexMix - step.opexGround, // Approximate
@@ -120,9 +120,9 @@ export function buildCostPanelMetrics(
   if (state.length === 0) return [];
 
   const base = state.find(s => s.year === baselineYear);
-  if (!base) return state.map(s => ({ year: s.year, cost_ground: s.cost_per_compute_ground, cost_mix: s.cost_per_compute_mix }));
+  if (!base) return state.map(s => ({ year: s.year, cost_ground: s.physics_cost_per_pflop_year_ground, cost_mix: s.physics_cost_per_pflop_year_mix }));
 
-  const baseGroundCost = base.cost_per_compute_ground; // 340
+  const baseGroundCost = base.physics_cost_per_pflop_year_ground; // 340
   const targetMixEnd = baseGroundCost * 0.7; // ~30% cheaper by the end
 
   const lastYear = Math.max(...state.map(s => s.year));
@@ -138,9 +138,9 @@ export function buildCostPanelMetrics(
 
     // 2) mix: enforce a nice convex improvement curve
     //    start at base sim value, end at targetMixEnd, with extra early improvement
-    const rawMix = s.cost_per_compute_mix;
-    const startRawMix = base.cost_per_compute_mix || rawMix;
-    const endRawMix = state[state.length - 1].cost_per_compute_mix;
+    const rawMix = s.physics_cost_per_pflop_year_mix;
+    const startRawMix = base.physics_cost_per_pflop_year_mix || rawMix;
+    const endRawMix = state[state.length - 1].physics_cost_per_pflop_year_mix;
 
     // normalize raw mix over horizon
     const rawNorm = (rawMix - startRawMix) / Math.max(1e-6, endRawMix - startRawMix);

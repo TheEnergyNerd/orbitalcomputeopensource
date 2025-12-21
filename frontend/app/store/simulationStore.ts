@@ -82,6 +82,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     chipsTotal: 0,
     costPerComputeGround: 400,
     costPerComputeMix: 400,
+    physics_cost_per_pflop_year_ground: 400,
+    physics_cost_per_pflop_year_mix: 400,
+    physics_cost_per_pflop_year_orbit: 1e7,
     latencyGroundMs: 120,
     latencyMixMs: 120,
     opexGround: 0,
@@ -402,8 +405,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       const updatedWorldState: WorldState = {
         ...state.worldState,
         year: lastStep?.year || state.worldState.year,
-        orbitCost: lastStep ? (lastStep.costPerComputeMix || state.worldState.orbitCost) : state.worldState.orbitCost,
-        groundCost: lastStep?.costPerComputeGround || state.worldState.groundCost,
+        orbitCost: lastStep ? (lastStep.physics_cost_per_pflop_year_mix || state.worldState.orbitCost) : state.worldState.orbitCost,
+        groundCost: lastStep?.physics_cost_per_pflop_year_ground || state.worldState.groundCost,
         orbitCapacity: lastStep?.podsTotal || state.worldState.orbitCapacity,
       };
       

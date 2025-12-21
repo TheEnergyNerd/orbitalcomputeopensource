@@ -587,7 +587,7 @@ export default function SimpleModeView() {
                 const maintenanceUtil = (lastStep as any).maintenance_utilization_percent;
                 const backhaulUtil = (lastStep as any).backhaul_utilization_percent;
                 const orbitCarbon = (lastStep as any).orbit_carbon_intensity;
-                const orbitCost = (lastStep as any).orbit_cost_per_compute;
+                const orbitCost = (lastStep as any).physics_cost_per_pflop_year_orbit;
                 const orbitComputeShare = (lastStep as any).orbit_compute_share;
                 const orbitEnergyShare = (lastStep as any).orbit_energy_share_twh;
                 
@@ -630,8 +630,8 @@ export default function SimpleModeView() {
                         )}
                         {orbitCost !== undefined && (
                           <div>
-                            <div className="text-slate-400">Orbit cost/compute</div>
-                            <div className="text-slate-100 font-medium">${orbitCost.toFixed(0)}</div>
+                            <div className="text-slate-400">Orbit $/PFLOP-year</div>
+                            <div className="text-slate-100 font-medium">${orbitCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                           </div>
                         )}
                         {orbitComputeShare !== undefined && (

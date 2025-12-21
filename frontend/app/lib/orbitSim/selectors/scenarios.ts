@@ -60,7 +60,7 @@ function buildScenarioSeries(
 }
 
 export function buildScenarioCostSeries(): ScenarioSeriesPoint[] {
-  return buildScenarioSeries("cost_per_compute_mix");
+  return buildScenarioSeries("physics_cost_per_pflop_year_mix");
 }
 
 export function buildScenarioOpexSeries(): ScenarioSeriesPoint[] {
@@ -121,8 +121,8 @@ export function buildCostCrossoverSeries(scenarioKey: ScenarioKey): CostCrossove
     .sort((a, b) => a.year - b.year)
     .map(entry => ({
       year: entry.year,
-      cost_orbit: entry.cost_per_compute_orbit ?? 0,
-      cost_ground: entry.cost_per_compute_ground ?? 340,
+      cost_orbit: entry.physics_cost_per_pflop_year_orbit ?? 0,
+      cost_ground: entry.physics_cost_per_pflop_year_ground ?? 340,
     }));
   
   // Find crossover year (first year where orbit < ground)

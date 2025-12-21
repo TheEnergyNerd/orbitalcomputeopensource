@@ -451,7 +451,7 @@ export function stepPhysics(state: PhysicsState, satellite_count: number = 1, sc
   let thermalDeratedCompute = compute_raw_flops;
   if (raw_radiator_utilization > 100) {
     thermalDeratedCompute = compute_raw_flops * thermalDeratingFactor;
-    console.log(`[THERMAL HARD CAP] Year ${year || 'unknown'}: Utilization ${raw_radiator_utilization.toFixed(1)}% → Derating compute by ${((1-thermalDeratingFactor)*100).toFixed(1)}%`);
+    // Log removed for production
   }
   
   // Apply thermal derating to thermal-limited compute

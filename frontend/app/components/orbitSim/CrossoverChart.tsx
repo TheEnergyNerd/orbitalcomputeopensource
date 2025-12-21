@@ -28,8 +28,8 @@ export default function CrossoverChart({ timeline, scenarioMode }: CrossoverChar
       const debugEntry = entryMap.get(step.year);
       return {
         year: step.year,
-        ground: debugEntry?.cost_per_compute_ground ?? 340,
-        orbit: debugEntry?.cost_per_compute_orbit ?? Infinity,
+        ground: debugEntry?.physics_cost_per_pflop_year_ground ?? 340,
+        orbit: debugEntry?.physics_cost_per_pflop_year_orbit ?? Infinity,
       };
     }).filter(d => isFinite(d.orbit));
   }, [timeline, selectedScenarioKey]);

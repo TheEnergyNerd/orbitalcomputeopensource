@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { SurfaceType } from "./SurfaceTabs";
+import { useOrbitSim } from "../state/orbitStore";
 
 interface GlossaryItem {
   id: string;
@@ -17,6 +18,8 @@ interface VisualGlossaryProps {
 
 export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const showComputeRoutes = useOrbitSim((s) => s.showComputeRoutes);
+  const setShowComputeRoutes = useOrbitSim((s) => s.setShowComputeRoutes);
   
   // Debug: Log when component renders (before early return)
   useEffect(() => {
@@ -251,20 +254,35 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
 
   if (!isOpen) {
     return (
-      <button
-        onClick={() => {
-          console.log('[VisualGlossary] Button clicked, opening glossary');
-          setIsOpen(true);
-        }}
-        className="fixed top-[180px] right-6 z-[100] px-4 py-2.5 bg-gray-900/95 hover:bg-gray-800/95 border-2 border-cyan-500/50 rounded-lg text-sm font-semibold text-white transition-colors shadow-xl pointer-events-auto"
-        style={{ 
-          backdropFilter: 'blur(8px)',
-          boxShadow: '0 4px 12px rgba(0, 212, 255, 0.3)'
-        }}
-        aria-label="Open visual glossary"
-      >
-        📖 Visual Guide
-      </button>
+      <div className="fixed top-[180px] right-6 z-[100] flex flex-col gap-2 pointer-events-auto">
+        <button
+          onClick={() => {
+            console.log('[VisualGlossary] Button clicked, opening glossary');
+            setIsOpen(true);
+          }}
+          className="px-4 py-2.5 bg-gray-900/95 hover:bg-gray-800/95 border-2 border-cyan-500/50 rounded-lg text-sm font-semibold text-white transition-colors shadow-xl"
+          style={{ 
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 4px 12px rgba(0, 212, 255, 0.3)'
+          }}
+          aria-label="Open visual glossary"
+        >
+          📖 Visual Guide
+        </button>
+        <label className="px-4 py-2 bg-gray-900/95 hover:bg-gray-800/95 border-2 border-cyan-500/50 rounded-lg text-sm font-semibold text-white transition-colors shadow-xl cursor-pointer flex items-center gap-2"
+          style={{ 
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 4px 12px rgba(0, 212, 255, 0.3)'
+          }}>
+          <input
+            type="checkbox"
+            checked={showComputeRoutes}
+            onChange={(e) => setShowComputeRoutes(e.target.checked)}
+            className="w-4 h-4 text-cyan-500 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500"
+          />
+          <span>Show AI Job Routing</span>
+        </label>
+      </div>
     );
   }
 
@@ -305,7 +323,16 @@ export function VisualGlossary({ activeSurface }: VisualGlossaryProps) {
         ))}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-700">
+      <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showComputeRoutes}
+            onChange={(e) => setShowComputeRoutes(e.target.checked)}
+            className="w-4 h-4 text-cyan-500 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500"
+          />
+          <span className="text-sm text-white font-medium">Show AI Job Routing</span>
+        </label>
         <p className="text-xs text-gray-500">
           All visual encodings are state-triggered and reflect actual simulation data. Effects activate based on year, strategy, and system state.
         </p>
