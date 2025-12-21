@@ -1858,11 +1858,12 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     // Scarcity is now multiplicative (not additive), so don't add it to effective cost
     const expectedEffective = groundHeadline + delayPenalty; // Scarcity applied in GPU-hour pricing, not PFLOP-year
     const effectiveError = Math.abs(groundEffective - expectedEffective);
-    if (effectiveError > 0.01 && (delayPenalty > 0 || scarcityRent > 0)) {
+    const scarcityMultiplier = groundResult.constraints?.scarcityMultiplier ?? 1.0;
+    if (effectiveError > 0.01 && (delayPenalty > 0 || scarcityMultiplier > 1.0)) {
       console.warn(
         `[INVARIANT VIOLATION] Year ${year}: groundEffective=${groundEffective} != expected=${expectedEffective} ` +
-        `(headline=${groundHeadline}, delayPenalty=${delayPenalty}, scarcityRent=${scarcityRent}). ` +
-        `Crossover should use effective cost.`
+        `(headline=${groundHeadline}, delayPenalty=${delayPenalty}, scarcityMultiplier=${scarcityMultiplier}). ` +
+        `Crossover should use effective cost. Note: scarcity is multiplicative in GPU-hour pricing, not additive in PFLOP-year.`
       );
     }
   }
