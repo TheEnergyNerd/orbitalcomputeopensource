@@ -836,17 +836,32 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
   };
   
   const useRegionalModel = params.useRegionalGroundModel === true && params.groundConstraintsEnabled && !params.isStaticMode;
-  // RECOMMENDED: Make buildout model the default (it correctly uses responsive demand)
-  // Only use queue model if explicitly enabled
+  
+  // FIX: Make buildout model the default (it correctly uses responsive demand)
+  // Queue model requires full demand trajectory to work correctly, so it's opt-in only
+  // Only use queue model if explicitly enabled (useQueueBasedConstraint === true)
   const useQueueModel = params.useQueueBasedConstraint === true && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel;
+  // Buildout model is the default (defaults to true unless explicitly disabled)
   const useBuildoutModel = (params.useBuildoutModel !== false) && params.groundConstraintsEnabled && !params.isStaticMode && !useRegionalModel && !useQueueModel;
   
   if (useQueueModel) {
+    // WARNING: Queue model requires full demand trajectory to work correctly
+    // Currently only receives current year's responsive demand, so previous years use hardcoded demand
+    // RECOMMENDED: Use buildout model instead (default) which correctly handles responsive demand
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        `[QUEUE MODEL] Year ${year}: Queue model is enabled but only receives current year's responsive demand. ` +
+        `Previous years (2025-${year-1}) will use hardcoded exponential demand. ` +
+        `For accurate S-curve behavior, use buildout model (default) instead.`
+      );
+    }
+    
     // Pass responsive demand and orbital substitution to queue model (if available from trajectory.ts)
     const responsiveDemandGW = (params as any).responsiveDemandGW as number | undefined;
     const orbitalSubstitutionGW = (params as any).orbitalSubstitutionGW as number | undefined;
     
     // Build demand map if responsive demand is provided
+    // NOTE: Only current year is passed - previous years will use hardcoded demand
     const demandByYear = responsiveDemandGW !== undefined 
       ? new Map([[year, responsiveDemandGW]])
       : undefined;
@@ -857,13 +872,13 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     const supplyTrajectory = generateGroundSupplyTrajectory(2025, year, demandByYear, orbitalSubstitutionByYear);
     const currentSupplyState = supplyTrajectory[supplyTrajectory.length - 1];
     
-    // Debug: Log if responsive demand is being ignored
+    // Debug: Log if responsive demand is being used
     if (process.env.NODE_ENV === 'development' && responsiveDemandGW !== undefined) {
       const hardcodedDemand = getGlobalDemandGw(year);
       if (Math.abs(currentSupplyState.demandGw - hardcodedDemand) < 1e-6) {
         console.warn(
-          `[QUEUE MODEL DEBUG] Year ${year}: Responsive demand (${responsiveDemandGW.toFixed(2)} GW) may be ignored. ` +
-          `Queue model using: ${currentSupplyState.demandGw.toFixed(2)} GW (hardcoded: ${hardcodedDemand.toFixed(2)} GW)`
+          `[QUEUE MODEL DEBUG] Year ${year}: Responsive demand (${responsiveDemandGW.toFixed(2)} GW) was ignored. ` +
+          `Queue model using hardcoded: ${currentSupplyState.demandGw.toFixed(2)} GW`
         );
       } else {
         console.log(
