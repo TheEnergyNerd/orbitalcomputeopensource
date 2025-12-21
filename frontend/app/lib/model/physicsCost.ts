@@ -1265,10 +1265,10 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
       totalCostPerPflopYearAllIn: groundTotalCost, // Same as base (scarcity in GPU-hour, not PFLOP-year)
       // Debug: show pricing components
       pricingComponents: {
-        delayPenaltyWeighted: delayPenaltyWeighted * groundLatencyPenalty,
+        delayPenaltyWeighted: delayPenaltyPerPflopYear * groundLatencyPenalty, // Delay penalty (already weighted)
         scarcityRentPerPflopYear: scarcityRentPerPflopYear * groundLatencyPenalty,
-        pricingMode,
-        delayPenaltyWeight,
+        pricingMode: params.groundConstraintPricingMode ?? 'partial', // Pricing mode from params
+        delayPenaltyWeight: params.groundDelayPenaltyWeight ?? 0.6, // Delay penalty weight from params
         rentFrac: scarcityRentResult.rentFrac,
         waitEffYears: scarcityRentResult.waitEffYears,
         // Debug fields for scarcity rent calculation
