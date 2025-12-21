@@ -1837,19 +1837,18 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     });
     
     // UNIFIED SCARCITY ACCOUNTING: Scarcity is MULTIPLICATIVE (not additive)
-    // CRITICAL FIX: Apply scarcity as premium on FIXED reference base, not declining base
-    // This prevents Moore's Law from eroding scarcity dollar amounts
+    // CRITICAL FIX: Apply scarcity as MULTIPLIER on base cost, not fixed premium
+    // This ensures scarcity creates visible price hump even as base cost declines
     
     // Extract base cost before margin (this declines with Moore's Law)
     const preMarginBase = basePricing.pricePerGpuHour - (basePricing.costBreakdown.margin || 0);
     
-    // Scarcity premium based on FIXED reference, not declining base
-    // This ensures scarcity doesn't get eroded by Moore's Law
-    const SCARCITY_REFERENCE_BASE = 3.50; // Fixed 2025 market reference ($/GPU-hr)
-    const scarcityPremium = (scarcityMultiplier - 1) * SCARCITY_REFERENCE_BASE;
+    // Scarcity is MULTIPLICATIVE: multiply base cost by scarcity multiplier
+    // This ensures scarcity creates a visible hump: if base=$3 and multiplier=2.0, price=$6
+    // As base declines to $1.50, with multiplier=2.0, price=$3 (still 2x, visible hump)
+    const costWithScarcity = preMarginBase * scarcityMultiplier;
     
-    // Total cost = base (declining with Moore's Law) + scarcity (fixed) + delay
-    const costWithScarcity = preMarginBase + scarcityPremium;
+    // Delay penalty is still additive (WACC carry cost)
     const costWithScarcityAndDelay = costWithScarcity + delayPenaltyAdderPerGpuHour;
     
     // Then add margin
