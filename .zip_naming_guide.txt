@@ -1,0 +1,15 @@
+ZIP FILE NAMING SYSTEM
+======================
+
+When creating zip files for orbitalcomputeopensource, use incremental naming:
+
+1. First zip: orbitalcomputeopensource1.zip
+2. Second zip: orbitalcomputeopensource2.zip
+3. Third zip: orbitalcomputeopensource3.zip
+... and so on
+
+To find the next number:
+  ls -la orbitalcomputeopensource*.zip 2>/dev/null | tail -1 | awk '{print $NF}' | sed 's/orbitalcomputeopensource//' | sed 's/.zip//' | awk '{if ($1 == "") print "1"; else print $1+1}'
+
+Current zip: orbitalcomputeopensource1.zip
+Next zip will be: orbitalcomputeopensource2.zip

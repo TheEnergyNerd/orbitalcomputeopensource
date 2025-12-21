@@ -661,6 +661,8 @@ export default function ComparePage() {
     a.click();
   }, [trajectoryData, years, targetGW, launchCost2025, specificPower2025, gflopsPerWattGround2025, workloadType, slaTier]);
 
+  const [isExportingCharts, setIsExportingCharts] = useState(false);
+  
   const handleExportCharts = useCallback(async () => {
     const chartIds = [
       'gpu-hour-pricing-chart',
@@ -668,6 +670,7 @@ export default function ComparePage() {
       'ground-buildout-chart'
     ];
     
+    setIsExportingCharts(true);
     const zip = new JSZip();
     
     try {
@@ -695,6 +698,8 @@ export default function ComparePage() {
     } catch (error) {
       console.error('Error exporting charts:', error);
       alert('Failed to export charts. Please try again.');
+    } finally {
+      setIsExportingCharts(false);
     }
   }, []);
 
@@ -718,9 +723,10 @@ export default function ComparePage() {
               </div>
               <button
                 onClick={handleExportCharts}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-colors"
+                disabled={isExportingCharts}
+                className={`${isExportingCharts ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-colors`}
               >
-                Export Charts
+                {isExportingCharts ? 'Exporting...' : 'Export Charts'}
               </button>
             </div>
           </div>
