@@ -1858,7 +1858,7 @@ export function computePhysicsCost(rawParams: YearParams, firstCapYear: number |
     // Scarcity is now multiplicative (not additive), so don't add it to effective cost
     const expectedEffective = groundHeadline + delayPenalty; // Scarcity applied in GPU-hour pricing, not PFLOP-year
     const effectiveError = Math.abs(groundEffective - expectedEffective);
-    const scarcityMultiplier = groundResult.constraints?.scarcityMultiplier ?? 1.0;
+    // Reuse scarcityMultiplier from Invariant 1 above
     if (effectiveError > 0.01 && (delayPenalty > 0 || scarcityMultiplier > 1.0)) {
       console.warn(
         `[INVARIANT VIOLATION] Year ${year}: groundEffective=${groundEffective} != expected=${expectedEffective} ` +
